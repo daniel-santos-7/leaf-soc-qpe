@@ -8,10 +8,11 @@ entity down_counter is
     );
 
     port (
-        clr:  in std_logic;
-        en:   in std_logic;
-        mode: in std_logic;
-        load: in std_logic_vector(BITS-1 downto 0);
+        clk:  in  std_logic;
+        clr:  in  std_logic;
+        en:   in  std_logic;
+        mode: in  std_logic;
+        load: in  std_logic_vector(BITS-1 downto 0);
         val:  out std_logic_vector(BITS-1 downto 0)
     );
 end entity down_counter;
