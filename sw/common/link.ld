@@ -5,7 +5,7 @@ MEMORY
 {
     IOP (rw)  : ORIGIN = 0x00000000, LENGTH = 0x00000010
 	ROM (rx)  : ORIGIN = 0x00000100, LENGTH = 0x00000100
-    MEM (rwx) : ORIGIN = 0x00010000, LENGTH = 0x00010000
+    RAM (rwx) : ORIGIN = 0x00010000, LENGTH = 0x00010000
 }
 
 SECTIONS
@@ -17,7 +17,7 @@ SECTIONS
 		*(.text*)
 		. = ALIGN(4);
 		__text_end = .;
-	} > MEM
+	} > RAM
 
 	.rodata :
 	{
@@ -25,7 +25,7 @@ SECTIONS
 		*(.rodata*)
 		. = ALIGN(4);
 		__rodata_end = .;
-	} > MEM
+	} > RAM
 
 	.data :
 	{
@@ -34,7 +34,7 @@ SECTIONS
 		*(.eh_frame*)
 		. = ALIGN(4);
 		__data_end = .;
-	} > MEM
+	} > RAM
 
 	.bss :
 	{
@@ -43,9 +43,9 @@ SECTIONS
 		*(.sbss*)
 		. = ALIGN(4);
 		__bss_end = .;
-	} > MEM
+	} > RAM
 
-	__stack_top = 0x00020000;
+	__stack_top = ORIGIN(RAM) + LENGTH(RAM);
 	__end = .;
 
 	/DISCARD/ :
