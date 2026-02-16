@@ -2,16 +2,16 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 
-entity soc_syscon is
+entity wb_syscon is
     port (
         clk   : in  std_logic;
         rst   : in  std_logic;
         clk_o : out std_logic;
         rst_o : out std_logic
     );
-end entity soc_syscon;
+end entity wb_syscon;
 
-architecture rtl of soc_syscon is
+architecture rtl of wb_syscon is
     
     signal dly    : std_logic;
     signal in_rst : std_logic;

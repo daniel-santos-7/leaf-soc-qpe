@@ -3,14 +3,14 @@ use IEEE.std_logic_1164.all;
 
 package leaf_soc_pkg is
     
-    component soc_syscon is
+    component wb_syscon is
         port (
             clk   : in  std_logic;
             rst   : in  std_logic;
             clk_o : out std_logic;
             rst_o : out std_logic
         );
-    end component soc_syscon;
+    end component wb_syscon;
 
     component ram is
         generic (

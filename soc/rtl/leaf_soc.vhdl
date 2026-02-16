@@ -24,8 +24,8 @@ end entity leaf_soc;
 
 architecture arch of leaf_soc is
 
-    signal sys_clk : std_logic;
-    signal sys_rst : std_logic;
+    signal soc_wb_syscon_clk : std_logic;
+    signal soc_wb_syscon_rst : std_logic;
 
     signal soc_cpu_cyc : std_logic;
     signal soc_cpu_stb : std_logic;
@@ -76,18 +76,18 @@ architecture arch of leaf_soc is
     
 begin
     
-    syscon: soc_syscon port map (
+    soc_wb_syscon: wb_syscon port map (
         clk   => clk,
         rst   => rst,
-        clk_o => sys_clk,
-        rst_o => sys_rst
+        clk_o => soc_wb_syscon_clk,
+        rst_o => soc_wb_syscon_rst
     );
 
     soc_cpu: leaf generic map (
         RESET_ADDR => x"00000100"
     ) port map (
-        clk_i  => sys_clk,
-        rst_i  => sys_rst,
+        clk_i  => soc_wb_syscon_clk,
+        rst_i  => soc_wb_syscon_rst,
         ex_irq => '0',
         sw_irq => '0',
         tm_irq => '0',
@@ -151,8 +151,8 @@ begin
     );
 
     soc_uart: uart_wbsl port map (
-        clk_i => sys_clk,
-        rst_i => sys_rst,
+        clk_i => soc_wb_syscon_clk,
+        rst_i => soc_wb_syscon_rst,
         dat_i => soc_wb_intercon_uart_dat,
         cyc_i => soc_wb_intercon_uart_cyc,
         stb_i => soc_wb_intercon_uart_stb,
@@ -168,8 +168,8 @@ begin
     soc_rom: rom generic map (
         BITS  => 8
     ) port map (
-        clk_i => sys_clk,
-        rst_i => sys_rst,
+        clk_i => soc_wb_syscon_clk,
+        rst_i => soc_wb_syscon_rst,
         cyc_i => soc_wb_intercon_rom_cyc,
         stb_i => soc_wb_intercon_rom_stb,
         adr_i => soc_wb_intercon_rom_adr,
@@ -181,8 +181,8 @@ begin
     soc_ram: ram generic map (
         BITS  => 16
     ) port map (
-        clk_i => sys_clk,
-        rst_i => sys_rst,
+        clk_i => soc_wb_syscon_clk,
+        rst_i => soc_wb_syscon_rst,
         dat_i => soc_wb_intercon_ram_dat,
         cyc_i => soc_wb_intercon_ram_cyc,
         stb_i => soc_wb_intercon_ram_stb,
@@ -195,8 +195,8 @@ begin
 
     -- debug register --
     soc_dbg: debug_reg port map (
-        clk_i => sys_clk,
-        rst_i => sys_rst,
+        clk_i => soc_wb_syscon_clk,
+        rst_i => soc_wb_syscon_rst,
         dat_i => soc_wb_intercon_dbg_dat,
         cyc_i => soc_wb_intercon_dbg_cyc,
         stb_i => soc_wb_intercon_dbg_stb,
