@@ -8,10 +8,10 @@ GHDLXOPTS = --ieee-asserts=disable --max-stack-alloc=0
 WORKDIR  = work
 WAVESDIR = waves
 
-CPU_RTL  = $(wildcard ./cpu/rtl/*.vhdl)
-CPU_TBS  = $(wildcard ./cpu/tbs/*.vhdl)
-UART_RTL = $(wildcard ./uart/rtl/*.vhdl)
-UART_TBS = $(wildcard ./uart/rtl/*.vhdl)
+CPU_RTL  = $(wildcard ./ips/cpu/rtl/*.vhdl)
+CPU_TBS  = $(wildcard ./ips/cpu/tbs/*.vhdl)
+UART_RTL = $(wildcard ./ips/uart/rtl/*.vhdl)
+UART_TBS = $(wildcard ./ips/uart/tbs/*.vhdl)
 SOC_RTL  = $(wildcard ./soc/rtl/*.vhdl)
 SOC_TBS  = $(wildcard ./soc/tbs/*.vhdl)
 SIM_RTL  = $(wildcard ./sim/rtl/*.vhdl)
@@ -20,7 +20,7 @@ SIM_TBS  = $(wildcard ./sim/tbs/*.vhdl)
 RTL_SRC  = $(CPU_RTL) $(UART_RTL) $(SOC_RTL) $(SIM_RTL)
 TBS_SRC  = $(CPU_TBS) $(UART_TBS) $(SOC_TBS) $(SIM_TBS)
 
-PROGRAM ?= ./sw/hello_world/hello_world.bin
+PROGRAM ?= ./sw/c/hello_world/hello_world.bin
 
 $(WORKDIR):
 	mkdir $@
@@ -55,4 +55,5 @@ leaf_sim: $(WORKDIR)/work-obj93.cf
 
 .PHONY: clean
 clean:
+	$(GHDL) clean --workdir=$(WORKDIR)
 	rm -rf $(WORKDIR) $(WAVESDIR)
