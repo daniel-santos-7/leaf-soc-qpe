@@ -2,7 +2,7 @@
 -- Leaf project
 -- developed by: Daniel Santos
 -- module: leaf system (SOC)
--- 2022
+-- 2026
 ----------------------------------------------------------------------
 
 library IEEE;
@@ -24,60 +24,58 @@ end entity leaf_soc;
 
 architecture arch of leaf_soc is
 
-    -- system clock and reset --
     signal sys_clk : std_logic;
     signal sys_rst : std_logic;
 
-    -- cpu signals --
-    signal cpu_ack : std_logic;
-    signal cpu_cyc : std_logic;
-    signal cpu_stb : std_logic;
-    signal cpu_we  : std_logic;
-    signal cpu_sel : std_logic_vector(3  downto 0);
-    signal cpu_adr : std_logic_vector(31 downto 0);
-    signal cpu_drd : std_logic_vector(31 downto 0);
-    signal cpu_dwr : std_logic_vector(31 downto 0);
+    signal soc_cpu_cyc : std_logic;
+    signal soc_cpu_stb : std_logic;
+    signal soc_cpu_we  : std_logic;
+    signal soc_cpu_sel : std_logic_vector(3  downto 0);
+    signal soc_cpu_adr : std_logic_vector(31 downto 0);
+    signal soc_cpu_dat : std_logic_vector(31 downto 0);
 
-    -- uart signals --
-    signal uart_acmp: std_logic;
-    signal uart_stb : std_logic;
-    signal uart_ack : std_logic;
-    signal uart_dat : std_logic_vector(31 downto 0);
+    signal soc_wb_intercon_cpu_ack  : std_logic;
+    signal soc_wb_intercon_cpu_err  : std_logic;
+    signal soc_wb_intercon_uart_stb : std_logic;
+    signal soc_wb_intercon_rom_stb  : std_logic;
+    signal soc_wb_intercon_ram_stb  : std_logic;
+    signal soc_wb_intercon_dbg_stb  : std_logic;
+    signal soc_wb_intercon_uart_cyc : std_logic;
+    signal soc_wb_intercon_rom_cyc  : std_logic;
+    signal soc_wb_intercon_ram_cyc  : std_logic;
+    signal soc_wb_intercon_dbg_cyc  : std_logic;
+    signal soc_wb_intercon_uart_we  : std_logic;
+    signal soc_wb_intercon_rom_we   : std_logic;
+    signal soc_wb_intercon_ram_we   : std_logic;
+    signal soc_wb_intercon_dbg_we   : std_logic;
+    signal soc_wb_intercon_uart_sel : std_logic_vector(3 downto 0);
+    signal soc_wb_intercon_rom_sel  : std_logic_vector(3 downto 0);
+    signal soc_wb_intercon_ram_sel  : std_logic_vector(3 downto 0);
+    signal soc_wb_intercon_dbg_sel  : std_logic_vector(3 downto 0);
+    signal soc_wb_intercon_uart_adr : std_logic_vector(1 downto 0);
+    signal soc_wb_intercon_rom_adr  : std_logic_vector(5 downto 0);
+    signal soc_wb_intercon_ram_adr  : std_logic_vector(13 downto 0);
+    signal soc_wb_intercon_dbg_adr  : std_logic_vector(31 downto 0);
+    signal soc_wb_intercon_cpu_dat  : std_logic_vector(31 downto 0);
+    signal soc_wb_intercon_uart_dat : std_logic_vector(31 downto 0);
+    signal soc_wb_intercon_rom_dat  : std_logic_vector(31 downto 0);
+    signal soc_wb_intercon_ram_dat  : std_logic_vector(31 downto 0);
+    signal soc_wb_intercon_dbg_dat  : std_logic_vector(7  downto 0);
 
-    -- rom signals --
-    signal rom_acmp : std_logic;
-    signal rom_stb  : std_logic;
-    signal rom_ack  : std_logic;
-    signal rom_dat  : std_logic_vector(31 downto 0);
+    signal soc_uart_ack : std_logic;
+    signal soc_uart_dat : std_logic_vector(31 downto 0);
 
-    -- ram signals --
-    signal ram_acmp : std_logic;
-    signal ram_stb  : std_logic;
-    signal ram_ack  : std_logic;
-    signal ram_dat  : std_logic_vector(31 downto 0);
+    signal soc_rom_ack : std_logic;
+    signal soc_rom_dat : std_logic_vector(31 downto 0);
 
-    -- debug register signals --
-    signal dbg_acmp : std_logic;
-    signal dbg_stb  : std_logic;
-    signal dbg_ack  : std_logic;
-    signal dbg_dat  : std_logic_vector(7 downto 0);
+    signal soc_ram_ack : std_logic;
+    signal soc_ram_dat : std_logic_vector(31 downto 0);
 
+    signal soc_dbg_ack : std_logic;
+    signal soc_dbg_dat : std_logic_vector(7 downto 0);
+    
 begin
     
-    -- address docode --
-    uart_acmp <= '1' when cpu_adr(31 downto  4) = x"0000000" else '0';
-    dbg_acmp  <= '1' when cpu_adr(31 downto  4) = x"0000001" else '0';
-    rom_acmp  <= '1' when cpu_adr(31 downto  8) = x"000001" else '0';
-    ram_acmp  <= '1' when cpu_adr(31 downto 16) = x"0001" else '0';
-
-    uart_stb <= uart_acmp and cpu_stb;
-    rom_stb  <= rom_acmp  and cpu_stb;
-    ram_stb  <= ram_acmp  and cpu_stb;
-    dbg_stb  <= dbg_acmp  and cpu_stb;
-
-    cpu_ack <= uart_ack or rom_ack or ram_ack or dbg_ack;
-    cpu_drd <= uart_dat when uart_acmp = '1' else rom_dat when rom_acmp = '1' else ram_dat when ram_acmp = '1' else  (31 downto 8 => '0') & dbg_dat when dbg_acmp = '1' else (others => '0');
-
     syscon: soc_syscon port map (
         clk   => clk,
         rst   => rst,
@@ -93,29 +91,77 @@ begin
         ex_irq => '0',
         sw_irq => '0',
         tm_irq => '0',
-        ack_i  => cpu_ack,
-        err_i  => '0',
-        dat_i  => cpu_drd,
-        cyc_o  => cpu_cyc,
-        stb_o  => cpu_stb,
-        we_o   => cpu_we,
-        sel_o  => cpu_sel,
-        adr_o  => cpu_adr,
-        dat_o  => cpu_dwr
+        ack_i  => soc_wb_intercon_cpu_ack,
+        err_i  => soc_wb_intercon_cpu_err,
+        dat_i  => soc_wb_intercon_cpu_dat,
+        cyc_o  => soc_cpu_cyc,
+        stb_o  => soc_cpu_stb,
+        we_o   => soc_cpu_we,
+        sel_o  => soc_cpu_sel,
+        adr_o  => soc_cpu_adr,
+        dat_o  => soc_cpu_dat
     );
 
-    soc_io: uart_wbsl port map (
+    soc_wb_intercon: wb_intercon port map (
+        cpu_cyc_i  => soc_cpu_cyc,
+        cpu_stb_i  => soc_cpu_stb,
+        cpu_we_i   => soc_cpu_we,
+        cpu_sel_i  => soc_cpu_sel,
+        cpu_adr_i  => soc_cpu_adr,
+        cpu_dat_i  => soc_cpu_dat,
+        uart_ack_i => soc_uart_ack,
+        rom_ack_i  => soc_rom_ack,
+        ram_ack_i  => soc_ram_ack,
+        dbg_ack_i  => soc_dbg_ack,
+        uart_err_i => '0',
+        rom_err_i  => '0',
+        ram_err_i  => '0',
+        dbg_err_i  => '0',
+        uart_dat_i => soc_uart_dat,
+        rom_dat_i  => soc_rom_dat,
+        ram_dat_i  => soc_ram_dat,
+        dbg_dat_i  => soc_dbg_dat,
+        cpu_ack_o  => soc_wb_intercon_cpu_ack,
+        cpu_err_o  => soc_wb_intercon_cpu_err,
+        uart_cyc_o => soc_wb_intercon_uart_cyc,
+        rom_cyc_o  => soc_wb_intercon_rom_cyc,
+        ram_cyc_o  => soc_wb_intercon_ram_cyc,
+        dbg_cyc_o  => soc_wb_intercon_dbg_cyc,
+        uart_stb_o => soc_wb_intercon_uart_stb,
+        rom_stb_o  => soc_wb_intercon_rom_stb,
+        ram_stb_o  => soc_wb_intercon_ram_stb,
+        dbg_stb_o  => soc_wb_intercon_dbg_stb,
+        uart_we_o  => soc_wb_intercon_uart_we,
+        rom_we_o   => soc_wb_intercon_rom_we,
+        ram_we_o   => soc_wb_intercon_ram_we,
+        dbg_we_o   => soc_wb_intercon_dbg_we,
+        uart_sel_o => soc_wb_intercon_uart_sel,
+        rom_sel_o  => soc_wb_intercon_rom_sel,
+        ram_sel_o  => soc_wb_intercon_ram_sel,
+        dbg_sel_o  => soc_wb_intercon_dbg_sel,
+        uart_adr_o => soc_wb_intercon_uart_adr,
+        rom_adr_o  => soc_wb_intercon_rom_adr,
+        ram_adr_o  => soc_wb_intercon_ram_adr,
+        dbg_adr_o  => soc_wb_intercon_dbg_adr,
+        cpu_dat_o  => soc_wb_intercon_cpu_dat,
+        uart_dat_o => soc_wb_intercon_uart_dat,
+        rom_dat_o  => soc_wb_intercon_rom_dat,
+        ram_dat_o  => soc_wb_intercon_ram_dat,
+        dbg_dat_o  => soc_wb_intercon_dbg_dat
+    );
+
+    soc_uart: uart_wbsl port map (
         clk_i => sys_clk,
         rst_i => sys_rst,
-        dat_i => cpu_dwr,
-        cyc_i => cpu_cyc,
-        stb_i => uart_stb,
-        we_i  => cpu_we,
-        sel_i => cpu_sel,
-        adr_i => cpu_adr(3 downto 2),     
+        dat_i => soc_wb_intercon_uart_dat,
+        cyc_i => soc_wb_intercon_uart_cyc,
+        stb_i => soc_wb_intercon_uart_stb,
+        we_i  => soc_wb_intercon_uart_we,
+        sel_i => soc_wb_intercon_uart_sel,
+        adr_i => soc_wb_intercon_uart_adr,     
         rx    => rx,
-        ack_o => uart_ack,
-        dat_o => uart_dat,
+        ack_o => soc_uart_ack,
+        dat_o => soc_uart_dat,
         tx    => tx
     );
 
@@ -124,11 +170,11 @@ begin
     ) port map (
         clk_i => sys_clk,
         rst_i => sys_rst,
-        cyc_i => cpu_cyc,
-        stb_i => rom_stb,
-        adr_i => cpu_adr(7 downto 2),
-        ack_o => rom_ack,
-        dat_o => rom_dat
+        cyc_i => soc_wb_intercon_rom_cyc,
+        stb_i => soc_wb_intercon_rom_stb,
+        adr_i => soc_wb_intercon_rom_adr,
+        ack_o => soc_rom_ack,
+        dat_o => soc_rom_dat
     );
 
     -- memory 64 kB --
@@ -137,29 +183,29 @@ begin
     ) port map (
         clk_i => sys_clk,
         rst_i => sys_rst,
-        dat_i => cpu_dwr,
-        cyc_i => cpu_cyc,
-        stb_i => ram_stb,
-        we_i  => cpu_we,
-        sel_i => cpu_sel,
-        adr_i => cpu_adr(15 downto 2),
-        ack_o => ram_ack,
-        dat_o => ram_dat
+        dat_i => soc_wb_intercon_ram_dat,
+        cyc_i => soc_wb_intercon_ram_cyc,
+        stb_i => soc_wb_intercon_ram_stb,
+        we_i  => soc_wb_intercon_ram_we,
+        sel_i => soc_wb_intercon_ram_sel,
+        adr_i => soc_wb_intercon_ram_adr,
+        ack_o => soc_ram_ack,
+        dat_o => soc_ram_dat
     );
 
     -- debug register --
     soc_dbg: debug_reg port map (
         clk_i => sys_clk,
         rst_i => sys_rst,
-        dat_i => cpu_dwr(7 downto 0),
-        cyc_i => cpu_cyc,
-        stb_i => dbg_stb,
-        we_i  => cpu_we,
-        ack_o => dbg_ack,
-        dat_o => dbg_dat
+        dat_i => soc_wb_intercon_dbg_dat,
+        cyc_i => soc_wb_intercon_dbg_cyc,
+        stb_i => soc_wb_intercon_dbg_stb,
+        we_i  => soc_wb_intercon_dbg_we,
+        ack_o => soc_dbg_ack,
+        dat_o => soc_dbg_dat
     );
 
     -- debug register output --
-    dbg <= dbg_dat;
+    dbg <= soc_dbg_dat;
 
 end architecture arch;

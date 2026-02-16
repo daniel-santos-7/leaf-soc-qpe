@@ -67,5 +67,55 @@ package leaf_soc_pkg is
             dat_o : out std_logic_vector(7 downto 0)
         );
     end component debug_reg;
+
+    component wb_intercon is
+        port (
+            cpu_cyc_i  : in   std_logic;
+            cpu_stb_i  : in   std_logic;
+            cpu_we_i   : in   std_logic;
+            cpu_sel_i  : in   std_logic_vector(3  downto 0);
+            cpu_adr_i  : in   std_logic_vector(31 downto 0);
+            cpu_dat_i  : in   std_logic_vector(31 downto 0);
+            uart_ack_i : in   std_logic;
+            rom_ack_i  : in   std_logic;
+            ram_ack_i  : in   std_logic;
+            dbg_ack_i  : in   std_logic;
+            uart_err_i : in   std_logic;
+            rom_err_i  : in   std_logic;
+            ram_err_i  : in   std_logic;
+            dbg_err_i  : in   std_logic;
+            uart_dat_i : in   std_logic_vector(31 downto 0);
+            rom_dat_i  : in   std_logic_vector(31 downto 0);
+            ram_dat_i  : in   std_logic_vector(31 downto 0);
+            dbg_dat_i  : in   std_logic_vector(7  downto 0);
+            cpu_ack_o  : out  std_logic;
+            cpu_err_o  : out  std_logic;
+            uart_cyc_o : out  std_logic;
+            rom_cyc_o  : out  std_logic;
+            ram_cyc_o  : out  std_logic;
+            dbg_cyc_o  : out  std_logic;
+            uart_stb_o : out  std_logic;
+            rom_stb_o  : out  std_logic;
+            ram_stb_o  : out  std_logic;
+            dbg_stb_o  : out  std_logic;
+            uart_we_o  : out  std_logic;
+            rom_we_o   : out  std_logic;
+            ram_we_o   : out  std_logic;
+            dbg_we_o   : out  std_logic;
+            uart_sel_o : out  std_logic_vector(3  downto 0);
+            rom_sel_o  : out  std_logic_vector(3  downto 0);
+            ram_sel_o  : out  std_logic_vector(3  downto 0);
+            dbg_sel_o  : out  std_logic_vector(3  downto 0);
+            uart_adr_o : out  std_logic_vector(1  downto 0);
+            ram_adr_o  : out  std_logic_vector(13 downto 0);
+            rom_adr_o  : out  std_logic_vector(5  downto 0);
+            dbg_adr_o  : out  std_logic_vector(31 downto 0);
+            cpu_dat_o  : out  std_logic_vector(31 downto 0);
+            uart_dat_o : out  std_logic_vector(31 downto 0);
+            rom_dat_o  : out  std_logic_vector(31 downto 0);
+            ram_dat_o  : out  std_logic_vector(31 downto 0);
+            dbg_dat_o  : out  std_logic_vector(7  downto 0)
+        );
+    end component wb_intercon;
     
 end package leaf_soc_pkg;
