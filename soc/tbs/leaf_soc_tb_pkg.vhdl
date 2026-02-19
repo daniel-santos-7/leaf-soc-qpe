@@ -12,14 +12,18 @@ package leaf_soc_tb_pkg is
 
     impure function load_mem_data(constant file_path : string) return byte_array;
 
+    constant UART_9600_BAUD_RATE : time := 104167 ns;
+
+    constant UART_115200_BAUD_RATE : time := 8680 ns;
+
     procedure uart_tx(
-        constant baud : natural;
+        constant baud : time;
         constant data : std_logic_vector(7 downto 0);
         signal tx : out std_logic
     );
 
     procedure uart_rx(
-        constant baud : natural;
+        constant baud : time;
         signal data : out std_logic_vector(7 downto 0);
         signal rx : in std_logic
     );
@@ -156,34 +160,34 @@ package body leaf_soc_tb_pkg is
     end function load_mem_data;
 
     procedure uart_tx(
-        constant baud : natural;
+        constant baud : time;
         constant data : std_logic_vector(7 downto 0);
         signal tx : out std_logic
     ) is
     begin
         tx <= '0';
-        wait for baud*CLK_PERIOD;
-        for i in 7 downto 0 loop
+        wait for baud;
+        for i in 0 to 7 loop
             tx <= data(i);
-            wait for baud*CLK_PERIOD;
+            wait for baud;
         end loop;
         tx <= '1';
-        wait for baud*CLK_PERIOD;
+        wait for baud;
     end procedure uart_tx;
 
     procedure uart_rx(
-        constant baud : natural;
+        constant baud : time;
         signal data : out std_logic_vector(7 downto 0);
         signal rx : in std_logic
     ) is
     begin
         wait until rx = '0';
-        wait for baud*CLK_PERIOD/2;
-        for i in 7 downto 0 loop
-            wait for baud*CLK_PERIOD;
+        wait for baud/2;
+        for i in 0 to 7 loop
+            wait for baud;
             data(i) <= rx;
         end loop;
-        wait for baud*CLK_PERIOD;
+        wait for baud;
     end procedure uart_rx;
 
 end package body leaf_soc_tb_pkg;

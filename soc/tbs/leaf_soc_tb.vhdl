@@ -78,6 +78,13 @@ begin
             wait until rising_edge(clk);
         end loop;
 
+        uart_tx(UART_9600_BAUD_RATE, x"CA", rx);
+        uart_tx(UART_9600_BAUD_RATE, x"FE", rx);
+
+        for i in 0 to 1024 loop
+            wait until rising_edge(clk);
+        end loop;
+
         clk_en <= '0';
         wait;
     end process test;
