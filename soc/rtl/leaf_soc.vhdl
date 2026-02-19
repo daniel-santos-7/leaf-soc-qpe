@@ -18,11 +18,19 @@ entity leaf_soc is
         rst : in  std_logic;
         rx  : in  std_logic;
         tx  : out std_logic;
-        dbg : out std_logic_vector(7 downto 0)
+        xip_ack_i : in  std_logic;
+        xip_err_i : in  std_logic;
+        xip_dat_i : in  std_logic_vector(31 downto 0);
+        xip_cyc_o : out std_logic;
+        xip_stb_o : out std_logic;
+        xip_we_o  : out std_logic;
+        xip_sel_o : out std_logic_vector(3  downto 0);
+        xip_adr_o : out std_logic_vector(31 downto 0);
+        xip_dat_o : out std_logic_vector(31 downto 0)
     );
 end entity leaf_soc;
 
-architecture arch of leaf_soc is
+architecture rtl of leaf_soc is
 
     signal soc_wb_syscon_clk : std_logic;
     signal soc_wb_syscon_rst : std_logic;
@@ -39,28 +47,28 @@ architecture arch of leaf_soc is
     signal soc_wb_intercon_uart_stb : std_logic;
     signal soc_wb_intercon_rom_stb  : std_logic;
     signal soc_wb_intercon_ram_stb  : std_logic;
-    signal soc_wb_intercon_dbg_stb  : std_logic;
+    signal soc_wb_intercon_xip_stb  : std_logic;
     signal soc_wb_intercon_uart_cyc : std_logic;
     signal soc_wb_intercon_rom_cyc  : std_logic;
     signal soc_wb_intercon_ram_cyc  : std_logic;
-    signal soc_wb_intercon_dbg_cyc  : std_logic;
+    signal soc_wb_intercon_xip_cyc  : std_logic;
     signal soc_wb_intercon_uart_we  : std_logic;
     signal soc_wb_intercon_rom_we   : std_logic;
     signal soc_wb_intercon_ram_we   : std_logic;
-    signal soc_wb_intercon_dbg_we   : std_logic;
+    signal soc_wb_intercon_xip_we   : std_logic;
     signal soc_wb_intercon_uart_sel : std_logic_vector(3 downto 0);
     signal soc_wb_intercon_rom_sel  : std_logic_vector(3 downto 0);
     signal soc_wb_intercon_ram_sel  : std_logic_vector(3 downto 0);
-    signal soc_wb_intercon_dbg_sel  : std_logic_vector(3 downto 0);
+    signal soc_wb_intercon_xip_sel  : std_logic_vector(3 downto 0);
     signal soc_wb_intercon_uart_adr : std_logic_vector(1 downto 0);
     signal soc_wb_intercon_rom_adr  : std_logic_vector(5 downto 0);
     signal soc_wb_intercon_ram_adr  : std_logic_vector(13 downto 0);
-    signal soc_wb_intercon_dbg_adr  : std_logic_vector(31 downto 0);
+    signal soc_wb_intercon_xip_adr  : std_logic_vector(31 downto 0);
     signal soc_wb_intercon_cpu_dat  : std_logic_vector(31 downto 0);
     signal soc_wb_intercon_uart_dat : std_logic_vector(31 downto 0);
     signal soc_wb_intercon_rom_dat  : std_logic_vector(31 downto 0);
     signal soc_wb_intercon_ram_dat  : std_logic_vector(31 downto 0);
-    signal soc_wb_intercon_dbg_dat  : std_logic_vector(7  downto 0);
+    signal soc_wb_intercon_xip_dat  : std_logic_vector(31 downto 0);
 
     signal soc_uart_ack : std_logic;
     signal soc_uart_dat : std_logic_vector(31 downto 0);
@@ -71,11 +79,8 @@ architecture arch of leaf_soc is
     signal soc_ram_ack : std_logic;
     signal soc_ram_dat : std_logic_vector(31 downto 0);
 
-    signal soc_dbg_ack : std_logic;
-    signal soc_dbg_dat : std_logic_vector(7 downto 0);
-    
 begin
-    
+
     soc_wb_syscon: wb_syscon port map (
         clk   => clk,
         rst   => rst,
@@ -112,42 +117,42 @@ begin
         uart_ack_i => soc_uart_ack,
         rom_ack_i  => soc_rom_ack,
         ram_ack_i  => soc_ram_ack,
-        dbg_ack_i  => soc_dbg_ack,
+        xip_ack_i  => xip_ack_i,
         uart_err_i => '0',
         rom_err_i  => '0',
         ram_err_i  => '0',
-        dbg_err_i  => '0',
+        xip_err_i  => xip_err_i,
         uart_dat_i => soc_uart_dat,
         rom_dat_i  => soc_rom_dat,
         ram_dat_i  => soc_ram_dat,
-        dbg_dat_i  => soc_dbg_dat,
+        xip_dat_i  => xip_dat_i,
         cpu_ack_o  => soc_wb_intercon_cpu_ack,
         cpu_err_o  => soc_wb_intercon_cpu_err,
         uart_cyc_o => soc_wb_intercon_uart_cyc,
         rom_cyc_o  => soc_wb_intercon_rom_cyc,
         ram_cyc_o  => soc_wb_intercon_ram_cyc,
-        dbg_cyc_o  => soc_wb_intercon_dbg_cyc,
+        xip_cyc_o  => soc_wb_intercon_xip_cyc,
         uart_stb_o => soc_wb_intercon_uart_stb,
         rom_stb_o  => soc_wb_intercon_rom_stb,
         ram_stb_o  => soc_wb_intercon_ram_stb,
-        dbg_stb_o  => soc_wb_intercon_dbg_stb,
+        xip_stb_o  => soc_wb_intercon_xip_stb,
         uart_we_o  => soc_wb_intercon_uart_we,
         rom_we_o   => soc_wb_intercon_rom_we,
         ram_we_o   => soc_wb_intercon_ram_we,
-        dbg_we_o   => soc_wb_intercon_dbg_we,
+        xip_we_o   => soc_wb_intercon_xip_we,
         uart_sel_o => soc_wb_intercon_uart_sel,
         rom_sel_o  => soc_wb_intercon_rom_sel,
         ram_sel_o  => soc_wb_intercon_ram_sel,
-        dbg_sel_o  => soc_wb_intercon_dbg_sel,
+        xip_sel_o  => soc_wb_intercon_xip_sel,
         uart_adr_o => soc_wb_intercon_uart_adr,
         rom_adr_o  => soc_wb_intercon_rom_adr,
         ram_adr_o  => soc_wb_intercon_ram_adr,
-        dbg_adr_o  => soc_wb_intercon_dbg_adr,
+        xip_adr_o  => soc_wb_intercon_xip_adr,
         cpu_dat_o  => soc_wb_intercon_cpu_dat,
         uart_dat_o => soc_wb_intercon_uart_dat,
         rom_dat_o  => soc_wb_intercon_rom_dat,
         ram_dat_o  => soc_wb_intercon_ram_dat,
-        dbg_dat_o  => soc_wb_intercon_dbg_dat
+        xip_dat_o  => soc_wb_intercon_xip_dat
     );
 
     soc_uart: uart_wbsl port map (
@@ -158,7 +163,7 @@ begin
         stb_i => soc_wb_intercon_uart_stb,
         we_i  => soc_wb_intercon_uart_we,
         sel_i => soc_wb_intercon_uart_sel,
-        adr_i => soc_wb_intercon_uart_adr,     
+        adr_i => soc_wb_intercon_uart_adr,
         rx    => rx,
         ack_o => soc_uart_ack,
         dat_o => soc_uart_dat,
@@ -193,19 +198,11 @@ begin
         dat_o => soc_ram_dat
     );
 
-    -- debug register --
-    soc_dbg: debug_reg port map (
-        clk_i => soc_wb_syscon_clk,
-        rst_i => soc_wb_syscon_rst,
-        dat_i => soc_wb_intercon_dbg_dat,
-        cyc_i => soc_wb_intercon_dbg_cyc,
-        stb_i => soc_wb_intercon_dbg_stb,
-        we_i  => soc_wb_intercon_dbg_we,
-        ack_o => soc_dbg_ack,
-        dat_o => soc_dbg_dat
-    );
+    xip_cyc_o <= soc_wb_intercon_xip_cyc;
+    xip_stb_o <= soc_wb_intercon_xip_stb;
+    xip_we_o  <= soc_wb_intercon_xip_we;
+    xip_sel_o <= soc_wb_intercon_xip_sel;
+    xip_adr_o <= soc_wb_intercon_xip_adr;
+    xip_dat_o <= soc_wb_intercon_xip_dat;
 
-    -- debug register output --
-    dbg <= soc_dbg_dat;
-
-end architecture arch;
+end architecture rtl;
