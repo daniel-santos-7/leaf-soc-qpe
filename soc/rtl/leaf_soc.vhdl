@@ -180,13 +180,12 @@ begin
         tx    => tx
     );
 
-    soc_rom: rom generic map (
-        BITS  => 8
-    ) port map (
+    soc_rom: wb_rom port map (
         clk_i => soc_wb_syscon_clk,
         rst_i => soc_wb_syscon_rst,
         cyc_i => soc_intercon_rom_cyc,
         stb_i => soc_intercon_rom_stb,
+        sel_i => soc_intercon_rom_sel,
         adr_i => soc_intercon_rom_adr,
         ack_o => soc_rom_ack,
         dat_o => soc_rom_dat

@@ -47,20 +47,18 @@ package leaf_soc_pkg is
         );
     end component ram;
 
-    component rom is
-        generic (
-            BITS : natural := 8
-        );
+    component wb_rom is
         port (
             clk_i : in  std_logic;
             rst_i : in  std_logic;
             cyc_i : in  std_logic;
             stb_i : in  std_logic;
-            adr_i : in  std_logic_vector(BITS-3 downto 0);
+            sel_i : in  std_logic_vector(3 downto 0);
+            adr_i : in  std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
             ack_o : out std_logic;
-            dat_o : out std_logic_vector(31 downto 0)
+            dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
         );
-    end component rom;
+    end component wb_rom;
 
     component wb_intercon is
         port (
