@@ -1,16 +1,26 @@
-with open("../boot/boot.bin", "rb") as f:
-    data = f.read()
+import sys
 
-with open("rom_pkg.vhdl", "w") as vhd:
-    vhd.write("library IEEE;\n")
-    vhd.write("use IEEE.std_logic_1164.all;\n")
-    vhd.write("use IEEE.numeric_std.all;\n\n")
-    vhd.write("package rom_pkg is\n")
-    vhd.write(f"\tconstant ROM_SIZE : integer := {len(data)};\n")
-    vhd.write("\ttype rom_t is array (0 to ROM_SIZE-1) of std_logic_vector(7 downto 0);\n")
-    vhd.write("\tconstant ROM : rom_t := (\n")
-    for i, b in enumerate(data):
-        sep = "," if i < len(data)-1 else ""
-        vhd.write(f'\t\t{i} => x"{b:02X}"{sep}\n')
-    vhd.write("\t);\n")
-    vhd.write("end package rom_pkg;\n")
+PACKAGE_TEMPLATE ='''library IEEE;
+use IEEE.std_logic_1164.all;
+
+package boot_pkg is
+
+    constant BOOT_SIZE : natural := {boot_size};
+
+    type byte_array is array (0 to BOOT_SIZE-1) of std_logic_vector(7 downto 0);
+
+    constant BOOT_DATA : byte_array := ({boot_data}\n\t);
+
+end package boot_pkg;'''
+
+if __name__ == '__main__':
+    argv_len = len(sys.argv)
+    if argv_len == 1:
+        print("Usage: python boot.py")
+        exit(1)
+    bin_file = sys.argv[1]
+    with open(bin_file, "rb") as f:
+        data = f.read()
+        boot_data = ",".join([f'\n\t{i} => x"{b:02X}"' for i, b in enumerate(data)])
+        package = PACKAGE_TEMPLATE.format(boot_size=len(data), boot_data=boot_data)
+        print(package)
