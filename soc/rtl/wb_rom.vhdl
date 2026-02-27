@@ -35,6 +35,8 @@ architecture rtl of wb_rom is
 
 begin
 
+    assert (2 ** adr_i'length = BOOT_DATA'length) report "ROM: The bootloader and ROM memory sizes must be the same." severity failure;
+
     rom_req <= cyc_i and stb_i;
 
     ack_reg_proc: process(clk_i)
@@ -50,49 +52,20 @@ begin
         end if;
 	end process ack_reg_proc;
 
-    dat_reg_0_proc: process(clk_i)
+    dat_reg_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                dat_reg(7  downto  0) <= (others => '0');
-            elsif ack_reg = '0' and rom_req = '1' and sel_i(0) = '1' then
-                dat_reg(7  downto  0) <= BOOT_DATA_0(to_integer(unsigned(adr_i)));
+                dat_reg <= (others => '0');
+            elsif ack_reg = '0' and rom_req = '1' then
+                for i in 0 to 3 loop
+                    if sel_i(i) = '1' then
+                        dat_reg(8*i+7 downto 8*i) <= BOOT_DATA(to_integer(unsigned(adr_i)))(8*i+7 downto 8*i);
+                    end if;
+                end loop;
             end if;
         end if;
-    end process dat_reg_0_proc;
-
-    dat_reg_1_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                dat_reg(15 downto  8) <= (others => '0');
-            elsif ack_reg = '0' and rom_req = '1' and sel_i(1) = '1' then
-                dat_reg(15 downto  8) <= BOOT_DATA_1(to_integer(unsigned(adr_i)));
-            end if;
-        end if;
-    end process dat_reg_1_proc;
-
-    dat_reg_2_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                dat_reg(23 downto 16) <= (others => '0');
-            elsif ack_reg = '0' and rom_req = '1' and sel_i(2) = '1' then
-                dat_reg(23 downto 16) <= BOOT_DATA_2(to_integer(unsigned(adr_i)));
-            end if;
-        end if;
-    end process dat_reg_2_proc;
-
-    dat_reg_3_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                dat_reg(31 downto 24) <= (others => '0');
-            elsif ack_reg = '0' and rom_req = '1' and sel_i(3) = '1' then
-                dat_reg(31 downto 24) <= BOOT_DATA_3(to_integer(unsigned(adr_i)));
-            end if;
-        end if;
-    end process dat_reg_3_proc;
+    end process dat_reg_proc;
 
     ack_o <= ack_reg;
     dat_o <= dat_reg;

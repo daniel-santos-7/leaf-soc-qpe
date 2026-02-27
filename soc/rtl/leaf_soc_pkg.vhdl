@@ -1,9 +1,8 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
+library work;
 
 package leaf_soc_pkg is
-
-    constant RESET_ADDR : std_logic_vector(31 downto 0) := x"00000100";
 
     constant SOC_ADDR_WIDTH : natural := 32;
     constant SOC_DATA_WIDTH : natural := 32;
@@ -121,13 +120,13 @@ package leaf_soc_pkg is
             tx  : out std_logic;
             xip_ack_i : in  std_logic;
             xip_err_i : in  std_logic;
-            xip_dat_i : in  std_logic_vector(31 downto 0);
+            xip_dat_i : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             xip_cyc_o : out std_logic;
             xip_stb_o : out std_logic;
             xip_we_o  : out std_logic;
             xip_sel_o : out std_logic_vector(3  downto 0);
-            xip_adr_o : out std_logic_vector(31 downto 0);
-            xip_dat_o : out std_logic_vector(31 downto 0)
+            xip_adr_o : out std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+            xip_dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
         );
     end component leaf_soc;
 

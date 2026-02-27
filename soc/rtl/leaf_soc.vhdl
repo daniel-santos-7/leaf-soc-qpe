@@ -168,15 +168,15 @@ begin
     soc_uart: uart_wbsl port map (
         clk_i => soc_wb_syscon_clk,
         rst_i => soc_wb_syscon_rst,
-        dat_i => soc_intercon_io1_dat,
-        cyc_i => soc_intercon_io1_cyc,
-        stb_i => soc_intercon_io1_stb,
-        we_i  => soc_intercon_io1_we,
-        sel_i => soc_intercon_io1_sel,
-        adr_i => soc_intercon_io1_adr,
+        dat_i => soc_intercon_io0_dat,
+        cyc_i => soc_intercon_io0_cyc,
+        stb_i => soc_intercon_io0_stb,
+        we_i  => soc_intercon_io0_we,
+        sel_i => soc_intercon_io0_sel,
+        adr_i => soc_intercon_io0_adr,
         rx    => rx,
-        ack_o => soc_io1_ack,
-        dat_o => soc_io1_dat,
+        ack_o => soc_io0_ack,
+        dat_o => soc_io0_dat,
         tx    => tx
     );
 
