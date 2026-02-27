@@ -1,6 +1,28 @@
+RISCV_PREFIX  = riscv32-unknown-elf
+RISCV_GCC     = $(RISCV_PREFIX)-gcc
+RISCV_OBJDUMP = $(RISCV_PREFIX)-objdump
+RISCV_OBJCOPY = $(RISCV_PREFIX)-objcopy
+
+MARCH = rv32i
+MABI  = ilp32
+
 APP_EXE  = boot
-APP_SRC  = start.S
+APP_SRC  = start.S uart.S crc.S
 
-RISCV_GCC_OPTS = -nostartfiles -nostdlib -Ttext 0x00000100 -march=$(MARCH) -mabi=$(MABI) -O0
+RISCV_GCC_OPTS = -nostartfiles -nostdlib -Ttext 0x00001000 -march=$(MARCH) -mabi=$(MABI) -O0
 
-include ../common/common.mk
+.PHONY: all
+all: $(APP_EXE).elf $(APP_EXE).bin $(APP_EXE).debug
+
+$(APP_EXE).elf: $(APP_SRC)
+	$(RISCV_GCC) $(RISCV_GCC_OPTS) $^ -o $@
+
+$(APP_EXE).bin: $(APP_EXE).elf
+	$(RISCV_OBJCOPY) -O binary $^ $@
+
+$(APP_EXE).debug: $(APP_EXE).elf
+	$(RISCV_OBJDUMP) $^ --source > $@
+
+.PHONY: clean
+clean:
+	rm -f $(APP_EXE).elf $(APP_EXE).bin $(APP_EXE).debug
