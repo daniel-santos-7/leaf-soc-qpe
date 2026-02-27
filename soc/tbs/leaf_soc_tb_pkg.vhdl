@@ -36,7 +36,7 @@ package leaf_soc_tb_pkg is
             stb_i : in  std_logic;
             we_i  : in  std_logic;
             sel_i : in  std_logic_vector(3  downto 0);
-            adr_i : in  std_logic_vector(31 downto 0);
+            adr_i : in  std_logic_vector(23 downto 2);
             dat_i : in  std_logic_vector(31 downto 0);
             ack_o : out std_logic;
             err_o : out std_logic;

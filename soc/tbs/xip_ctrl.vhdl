@@ -12,7 +12,7 @@ entity xip_ctrl is
         stb_i : in  std_logic;
         we_i  : in  std_logic;
         sel_i : in  std_logic_vector(3  downto 0);
-        adr_i : in  std_logic_vector(31 downto 0);
+        adr_i : in  std_logic_vector(23 downto 2);
         dat_i : in  std_logic_vector(31 downto 0);
         ack_o : out std_logic;
         err_o : out std_logic;
@@ -28,7 +28,7 @@ architecture rtl of xip_ctrl is
 
 begin
 
-    addr <= to_integer(unsigned(adr_i(31 downto 2)));
+    addr <= to_integer(unsigned(adr_i(23 downto 2)));
 
     process(clk, rst)
     begin

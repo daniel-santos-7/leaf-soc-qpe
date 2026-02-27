@@ -25,10 +25,12 @@ architecture tb of leaf_soc_tb is
     signal xip_stb_o : std_logic;
     signal xip_we_o  : std_logic;
     signal xip_sel_o : std_logic_vector(3  downto 0);
-    signal xip_adr_o : std_logic_vector(31 downto 0);
+    signal xip_adr_o : std_logic_vector(23 downto 2);
     signal xip_dat_o : std_logic_vector(31 downto 0);
 
     signal clk_en : std_logic := '0';
+
+    signal rx_data : std_logic_vector(7 downto 0);
 
 begin
 
@@ -74,14 +76,14 @@ begin
         rst <= '0';
         wait until rising_edge(clk);
 
-        for i in 0 to 1024 loop
+        for i in 0 to 511 loop
             wait until rising_edge(clk);
         end loop;
 
-        uart_tx(UART_9600_BAUD_RATE, x"CA", rx);
-        uart_tx(UART_9600_BAUD_RATE, x"FE", rx);
+        uart_tx(UART_115200_BAUD_RATE, x"4C", rx);
+        uart_rx(UART_115200_BAUD_RATE, rx_data, tx);
 
-        for i in 0 to 1024 loop
+        for i in 0 to 2047 loop
             wait until rising_edge(clk);
         end loop;
 
