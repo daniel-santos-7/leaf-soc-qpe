@@ -10,3 +10,4 @@ leaf_soc_tb
 sw/**/*.elf
 sw/**/*.bin
 sw/**/*.debug
+sw/**/*.vhdl

@@ -11,8 +11,8 @@ APP_SRC  = start.S uart.S crc.S
 
 RISCV_GCC_OPTS = -nostartfiles -nostdlib -Ttext 0x00001000 -march=$(MARCH) -mabi=$(MABI) -O0
 
-.PHONY: all
-all: $(APP_EXE).elf $(APP_EXE).bin $(APP_EXE).debug
+.PHONY: all clean
+all: $(APP_EXE).elf $(APP_EXE).bin $(APP_EXE).debug $(APP_EXE)_pkg.vhdl
 
 $(APP_EXE).elf: $(APP_SRC)
 	$(RISCV_GCC) $(RISCV_GCC_OPTS) $^ -o $@
@@ -23,6 +23,9 @@ $(APP_EXE).bin: $(APP_EXE).elf
 $(APP_EXE).debug: $(APP_EXE).elf
 	$(RISCV_OBJDUMP) $^ --source > $@
 
+$(APP_EXE)_pkg.vhdl: boot.py $(APP_EXE).bin
+	python3 boot.py $(APP_EXE).bin 512 > $@
+
 .PHONY: clean
 clean:
-	rm -f $(APP_EXE).elf $(APP_EXE).bin $(APP_EXE).debug
+	rm -f $(APP_EXE).elf $(APP_EXE).bin $(APP_EXE).debug $(APP_EXE)_pkg.vhdl

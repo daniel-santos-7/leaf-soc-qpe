@@ -14,7 +14,7 @@
 # --------------------------------------------------
 uart_set_baud:
     li t1, UART_BASE_ADDR       # load UART base address
-    sh t0, 0x0(t1)    # write baud rate divisor
+    sh a0, 0x8(t1)              # write baud rate divisor
     ret
 
 # --------------------------------------------------
