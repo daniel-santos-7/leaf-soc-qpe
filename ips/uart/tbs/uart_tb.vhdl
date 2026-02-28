@@ -2,101 +2,95 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 use work.uart_pkg.all;
+use work.uart_tb_pkg.all;
 
 entity uart_tb is
 end entity uart_tb;
 
-architecture uart_arch of uart_tb is
+architecture tb of uart_tb is
 
-    signal clk:     std_logic;
-    signal reset:   std_logic;
-    signal rd:      std_logic;
-    signal rd_addr: std_logic_vector(1 downto 0);
-    signal rd_data: std_logic_vector(15 downto 0);
-    signal wr:      std_logic;
-    signal wr_addr: std_logic_vector(1 downto 0);
-    signal wr_data: std_logic_vector(15 downto 0);
-    signal rx:      std_logic;
-    signal tx:      std_logic;
+    signal clk_i : std_logic;
+    signal rst_i : std_logic;
+
+    signal wb_bus : wishbone_bus_t;
+
+    signal rx_i  : std_logic;
+    signal tx_o  : std_logic;
+
+    signal clk_en : std_logic := '0';
+
+    signal uart_rx_data : std_logic_vector(7 downto 0);
+
+    type byte_array is array (natural range <>) of std_logic_vector(7 downto 0);
+
+    constant test_data : byte_array := (
+        x"AA",
+        x"55",
+        x"CA",
+        x"FE"
+    );
 
 begin
 
-    rx <= tx;
-
-    uut: uart port map(
-        clk     => clk,
-        reset   => reset,
-        rd      => rd,
-        rd_addr => rd_addr,
-        rd_data => rd_data,
-        wr      => wr,
-        wr_addr => wr_addr,
-        wr_data => wr_data,
-        rx      => rx,
-        tx      => tx
+    uut: uart_wbsl port map (
+        clk_i => clk_i,
+        rst_i => rst_i,
+        dat_i => wb_bus.dat_o,
+        cyc_i => wb_bus.cyc_o,
+        stb_i => wb_bus.stb_o,
+        we_i  => wb_bus.we_o,
+        sel_i => wb_bus.sel_o,
+        adr_i => wb_bus.adr_o,
+        rx    => rx_i,
+        ack_o => wb_bus.ack_i,
+        dat_o => wb_bus.dat_i,
+        tx    => tx_o
     );
 
-    test: process
+    clk_i <= not clk_i after (CLK_PERIOD/2) when clk_en = '1' else '0';
 
-        constant PERIOD: time := 20 ns;
-        constant UART_BAUD: natural := 5208;
-
+    uart_rx_proc: process
     begin
-        
-        clk     <= '0';
-        reset   <= '1';
-        rd      <= '0';
-        wr      <= '0';
-        rd_addr <= (others => '0');
-        wr_addr <= (others => '0');
-        wr_data <= (others => '0');
+        clk_en <= '1';
+        for i in test_data'range loop
+            uart_expect(tx_o, test_data(i));
+        end loop;
+        clk_en <= '0';
+        wait for 10 * CLK_PERIOD;
+        wait;
+     end process uart_rx_proc;
 
-        wait for PERIOD;
+    test_proc: process
+        variable wb_data : std_logic_vector(31 downto 0) := (others => '0');
+    begin
+        rst_i <= '1';
 
-        clk <= not clk;
-        wait for PERIOD/2;
-        
-        clk <= not clk;
-        wait for PERIOD/2;
+        wb_init(wb_bus);
+        rx_i  <= '1';
 
-        reset   <= '0';
-        rd      <= '0';
-        wr      <= '1';
-        wr_addr <= b"10";
-        wr_data <= x"1458";
+        wait until rising_edge(clk_i);
+        rst_i <= '0';
 
-        clk <= not clk;
-        wait for PERIOD/2;
-        
-        clk <= not clk;
-        wait for PERIOD/2;
+        wb_read(b"00", wb_data, clk_i, wb_bus);
+        wb_read(b"01", wb_data, clk_i, wb_bus);
+        wb_read(b"10", wb_data, clk_i, wb_bus);
+        wb_read(b"11", wb_data, clk_i, wb_bus);
 
-        wr_addr <= b"11";
-        wr_data <= x"0041";
+        wb_write(b"10", std_logic_vector(UART_115200_BAUD_RATE_DIVIDER), clk_i, wb_bus);
 
-        clk <= not clk;
-        wait for PERIOD/2;
-        
-        clk <= not clk;
-        wait for PERIOD/2;
+        for i in test_data'range loop
+            uart_transmit(rx_i, test_data(i));
+        end loop;
 
-        wr <= '0';
+        for i in test_data'range loop
+            wb_check(b"11", x"000000" & test_data(i), clk_i, wb_bus);
+        end loop;
 
-        clk <= not clk;
-        wait for PERIOD/2;
-        
-        clk <= not clk;
-        wait for PERIOD/2;
-
-        for i in 0 to 20*UART_BAUD loop
-            
-            clk <= not clk;
-            wait for PERIOD/2;
-        
+        for i in test_data'range loop
+            wb_write(b"11", x"000000" & test_data(i), clk_i, wb_bus);
         end loop;
 
         wait;
-        
-    end process test;
-    
-end architecture uart_arch;
+    end process test_proc;
+
+end architecture tb;
