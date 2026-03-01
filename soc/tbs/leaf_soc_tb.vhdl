@@ -65,6 +65,14 @@ begin
     );
 
     clk <= not clk after (CLK_PERIOD/2) when clk_en = '1' else '0';
+    
+    uart_rx_proc: process
+    begin
+        rx_data <= (others => '0');
+        rx_loop : loop
+            uart_rx(UART_115200_BAUD_RATE, rx_data, tx);
+        end loop;
+    end process uart_rx_proc;
 
     test: process
     begin
@@ -81,9 +89,14 @@ begin
         end loop;
 
         uart_tx(UART_115200_BAUD_RATE, x"4C", rx);
-        uart_rx(UART_115200_BAUD_RATE, rx_data, tx);
 
-        for i in 0 to 2047 loop
+        for i in 0 to 5 * 1024 - 1 loop
+            wait until rising_edge(clk);
+        end loop;
+
+        uart_tx(UART_115200_BAUD_RATE, x"4C", rx);
+
+        for i in 0 to 5 * 1024 - 1 loop
             wait until rising_edge(clk);
         end loop;
 
