@@ -19,8 +19,6 @@ architecture tb of uart_tb is
 
     signal clk_en : std_logic := '0';
 
-    signal uart_rx_data : std_logic_vector(7 downto 0);
-
     type byte_array is array (natural range <>) of std_logic_vector(7 downto 0);
 
     constant test_data : byte_array := (
@@ -55,8 +53,8 @@ begin
         for i in test_data'range loop
             uart_expect(tx_o, test_data(i));
         end loop;
-        clk_en <= '0';
         wait for 10 * CLK_PERIOD;
+        clk_en <= '0';
         wait;
      end process uart_rx_proc;
 

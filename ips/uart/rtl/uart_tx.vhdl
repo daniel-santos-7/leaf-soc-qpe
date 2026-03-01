@@ -1,194 +1,144 @@
 library IEEE;
+library work;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 use work.uart_pkg.all;
 
 entity uart_tx is
     port (
-        clk:      in  std_logic;
-        reset:    in  std_logic;
-        baud_div: in  std_logic_vector(15 downto 0);
-        rd:       out std_logic;
-        rd_en:    in  std_logic;
-        rd_data:  in  std_logic_vector(7 downto 0);
-        busy:     out std_logic;
-        tx:       out std_logic
+        clk_i: in  std_logic;
+        rst_i: in  std_logic;
+        div_i: in  std_logic_vector(15 downto 0);
+        vld_i: in  std_logic;
+        dat_i: in  std_logic_vector(7 downto 0);
+        rdy_o: out std_logic;
+        tx_o:  out std_logic
     );
 end entity uart_tx;
 
-architecture uart_tx_arch of uart_tx is
+architecture rtl of uart_tx is
 
-    type state is (START, IDLE, TX_START, TX_DATA, TX_STOP);
+    constant TX_COUNTER_MAX : unsigned(2 downto 0) := (others => '1');
 
-    signal curr_state: state;
-    signal next_state: state;
+    type state_t is (IDLE, TX_START, TX_DATA, TX_STOP);
 
-    signal baud_counter_tc:   std_logic;
-    signal baud_counter_clr:  std_logic;
-    signal baud_counter_en:   std_logic;
-    signal baud_counter_mode: std_logic;
-    signal baud_counter_val:  std_logic_vector(15 downto 0);
-    signal baud_counter_load: std_logic_vector(15 downto 0);
+    signal state_reg: state_t;
 
-    signal tx_counter_tc:   std_logic;
-    signal tx_counter_clr:  std_logic;
-    signal tx_counter_en:   std_logic;
-    signal tx_counter_val:  std_logic_vector(2 downto 0);
-    signal tx_counter_load: std_logic_vector(2 downto 0);
+    signal rdy_reg : std_logic;
+    signal tx_reg  : std_logic;
 
-    signal tx_piso_clr:  std_logic;
-    signal tx_piso_en:   std_logic;
-    signal tx_piso_mode: std_logic;
-    signal tx_piso_ser:  std_logic;
-    signal tx_piso_load: std_logic_vector(7 downto 0);
+    signal baud_cnt_en : std_logic;
+    signal tx_cnt_en : std_logic;
+    signal data_reg_en : std_logic;
 
-    signal tx_bit: std_logic;
+    signal baud_cnt : unsigned(15 downto 0);
+    signal tx_cnt : unsigned(2 downto 0);
+    signal next_tx_cnt : unsigned(2 downto 0);
+
+    signal data_reg : std_logic_vector(7 downto 0);
+
+    signal baud_cnt_done : std_logic;
+    signal tx_cnt_done : std_logic;
 
 begin
-    
-    fsm: process(clk)
+
+    ----------------------- Control Logic (FSM) --------------------------
+
+    state_reg_proc: process(clk_i)
     begin
-        
-        if rising_edge(clk) then
-            
-            if reset = '1' then
-            
-                curr_state <= START;
-            
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                state_reg <= IDLE;
+                rdy_reg <= '1';
+                tx_reg <= '1';
             else
-
-                curr_state <= next_state;
-
+                case state_reg is
+                    when IDLE =>
+                        if vld_i = '1' then
+                            state_reg <= TX_START;
+                            rdy_reg <= '0';
+                            tx_reg <= '0';
+                        end if;
+                    when TX_START =>
+                        if baud_cnt_done = '1' then
+                            state_reg <= TX_DATA;
+                            tx_reg <= data_reg(to_integer(tx_cnt));
+                        end if;
+                    when TX_DATA =>
+                        if baud_cnt_done = '1' then
+                            if tx_cnt_done = '1' then
+                                state_reg <= TX_STOP;
+                                tx_reg <= '1';
+                            else
+                                tx_reg <= data_reg(to_integer(next_tx_cnt));
+                            end if;
+                        end if;
+                    when TX_STOP =>
+                        if baud_cnt_done = '1' then
+                            state_reg <= IDLE;
+                            rdy_reg <= '1';
+                            tx_reg <= '1';
+                        end if;
+                end case;
             end if;
-
         end if;
+    end process state_reg_proc;
 
-    end process fsm;
+    baud_cnt_en <= '0' when state_reg = IDLE else '1';
+    tx_cnt_en <= baud_cnt_done when state_reg = TX_DATA else '0';
+    data_reg_en <= vld_i when state_reg = IDLE else '0';
 
-    fsm_next_state: process(curr_state, rd_en, baud_counter_tc, tx_counter_tc)
+    ----------------------- Datapath Logic -----------------------------
+
+    baud_cnt_proc: process(clk_i)
     begin
-        
-        case curr_state is
-            
-            when START =>
-                
-                next_state <= IDLE;
-        
-            when IDLE =>
-                
-                if rd_en = '1' then
-                    
-                    next_state <= TX_START;
-
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                baud_cnt <= (others => '0');
+            elsif baud_cnt_en = '1' then
+                if baud_cnt_done = '1' then
+                    baud_cnt <= (others => '0');
                 else
-
-                    next_state <= IDLE;
-
+                    baud_cnt <= (baud_cnt + 1);
                 end if;
+            end if;
+        end if;
+    end process baud_cnt_proc;
 
-            when TX_START =>
-
-                if baud_counter_tc = '1' then
-                    
-                    next_state <= TX_DATA;
-                    
+    tx_cnt_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                tx_cnt <= (others => '0');
+            elsif tx_cnt_en = '1' then
+                if tx_cnt_done = '1' then
+                    tx_cnt <= (others => '0');
                 else
-
-                    next_state <= TX_START;
-
+                    tx_cnt <= next_tx_cnt;
                 end if;
+            end if;
+        end if;
+    end process tx_cnt_proc;
 
-            when TX_DATA =>
+    next_tx_cnt <= tx_cnt + 1;
 
-                if baud_counter_tc = '1' and tx_counter_tc = '1' then
-                    
-                    next_state <= TX_STOP;
+    data_reg_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                data_reg <= (others => '0');
+            elsif data_reg_en = '1' then
+                data_reg <= dat_i;
+            end if;
+        end if;
+    end process data_reg_proc;
 
-                else
+    baud_cnt_done <= '1' when baud_cnt = (unsigned(div_i) - 1) else '0';
+    tx_cnt_done <= '1' when tx_cnt = TX_COUNTER_MAX else '0';
 
-                    next_state <= TX_DATA;
+    ------------------------------ Outputs  ------------------------------
 
-                end if;
+    rdy_o <= rdy_reg;
+    tx_o <= tx_reg;
 
-            when TX_STOP => 
-
-                if baud_counter_tc = '1' then
-                    
-                    next_state <= IDLE;
-
-                else
-
-                    next_state <= TX_STOP;
-
-                end if;
-        
-        end case;
-
-    end process fsm_next_state;
-
-    baud_counter_load <= baud_div;
-
-    baud_counter_tc   <= '1' when baud_counter_val = x"0000" else '0';
-
-    baud_counter_clr  <= '1' when curr_state = START else '0';
-
-    baud_counter_en   <= '0' when curr_state = START else '1';
-
-    baud_counter_mode <= '1' when curr_state = IDLE or baud_counter_tc = '1' else '0';
-
-    baud_counter: down_counter generic map (
-        BITS => 16
-    ) port map (
-        clk  => clk,
-        clr  => baud_counter_clr,
-        en   => baud_counter_en,
-        mode => baud_counter_mode,
-        load => baud_counter_load,
-        val  => baud_counter_val
-    );
-
-    tx_counter_tc  <= '1' when tx_counter_val = b"000" else '0';
-
-    tx_counter_clr <= '1' when curr_state = START else '0';
-
-    tx_counter_en  <= baud_counter_tc when curr_state = TX_DATA else '0';
-
-    tx_counter: down_counter generic map (
-        BITS => 3
-    ) port map (
-        clk  => clk,
-        clr  => tx_counter_clr,
-        en   => tx_counter_en,
-        mode => '0',
-        load => (others => '1'),
-        val  => tx_counter_val
-    );
-
-    tx_piso_clr <= '1' when curr_state = START else '0';
-
-    tx_piso_en  <= baud_counter_tc when curr_state = TX_START or curr_state = TX_DATA else '0';
-
-    tx_piso_mode <= '1' when curr_state = TX_START else '0';
-
-    tx_piso_load <= rd_data;
-
-    tx_piso: piso generic map (
-        BITS => 8
-    ) port map (
-        clk  => clk,
-        clr  => tx_piso_clr,
-        en   => tx_piso_en,
-        mode => tx_piso_mode,
-        load => tx_piso_load,
-        ser  => tx_piso_ser
-    );
-
-    rd <= '1' when curr_state = IDLE and next_state = TX_START else '0';
-
-    tx_bit <= '0' when curr_state = TX_START else '1';
-
-    tx <= tx_piso_ser when curr_state = TX_DATA else tx_bit;
-
-    busy <= '0' when curr_state = IDLE else '1';
-
-end architecture uart_tx_arch;
+end architecture rtl;

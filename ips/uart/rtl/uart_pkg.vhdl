@@ -3,11 +3,14 @@ use IEEE.std_logic_1164.all;
 
 package uart_pkg is
 
+    constant UART_DATA_WIDTH : natural := 8;
+    constant UART_BAUD_WIDTH : natural := 16;
+
     component down_counter is
         generic(
             BITS: natural := 16
         );
-        
+
         port (
             clk:  in std_logic;
             clr:  in std_logic;
@@ -20,21 +23,18 @@ package uart_pkg is
 
     component fifo is
         generic (
-            SIZE: natural := 32;
-            BITS: natural := 8 
+            FIFO_DEPTH : natural := 8;
+            DATA_WIDTH : natural := 8
         );
-    
         port (
-            clk:   in std_logic;
-            reset: in std_logic;
-    
-            wr:      in  std_logic;
-            wr_en:   out std_logic;
-            wr_data: in  std_logic_vector(BITS-1 downto 0);
-    
-            rd:       in  std_logic;
-            rd_en:    out std_logic;
-            rd_data:  out std_logic_vector(BITS-1 downto 0)
+            clk_i : in  std_logic;
+            rst_i : in  std_logic;
+            vld_i : in  std_logic;
+            rdy_i : in  std_logic;
+            dat_i : in  std_logic_vector(DATA_WIDTH-1 downto 0);
+            vld_o : out std_logic;
+            rdy_o : out std_logic;
+            dat_o : out std_logic_vector(DATA_WIDTH-1 downto 0)
         );
     end component fifo;
 
@@ -42,7 +42,7 @@ package uart_pkg is
         generic(
             BITS: natural
         );
-    
+
         port (
             clk:  in  std_logic;
             clr:  in  std_logic;
@@ -57,7 +57,7 @@ package uart_pkg is
         generic(
             BITS: natural
         );
-    
+
         port (
             clk:  in  std_logic;
             clr:  in  std_logic;
@@ -66,17 +66,16 @@ package uart_pkg is
             val:  out std_logic_vector(BITS-1 downto 0)
         );
     end component sipo;
-    
+
     component uart_tx is
         port (
-            clk:      in  std_logic;
-            reset:    in  std_logic;
-            baud_div: in  std_logic_vector(15 downto 0);
-            rd:       out std_logic;
-            rd_en:    in  std_logic;
-            rd_data:  in  std_logic_vector(7 downto 0);
-            busy:     out std_logic;
-            tx:       out std_logic
+            clk_i: in  std_logic;
+            rst_i: in  std_logic;
+            div_i: in  std_logic_vector(UART_BAUD_WIDTH-1 downto 0);
+            vld_i: in  std_logic;
+            dat_i: in  std_logic_vector(UART_DATA_WIDTH-1 downto 0);
+            rdy_o: out std_logic;
+            tx_o:  out std_logic
         );
     end component uart_tx;
 
@@ -119,7 +118,7 @@ package uart_pkg is
             cyc_i : in  std_logic;
             stb_i : in  std_logic;
             we_i  : in  std_logic;
-            sel_i : in  std_logic_vector(3  downto 0);        
+            sel_i : in  std_logic_vector(3  downto 0);
             adr_i : in  std_logic_vector(1 downto 0);
             rx    : in  std_logic;
             ack_o : out std_logic;
@@ -127,5 +126,5 @@ package uart_pkg is
             tx    : out std_logic
         );
     end component uart_wbsl;
-    
+
 end package uart_pkg;

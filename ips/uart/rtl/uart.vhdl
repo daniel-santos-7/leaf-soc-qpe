@@ -54,28 +54,20 @@ architecture uar_arch of uart is
     signal tx_rd_en:   std_logic;
     signal tx_busy:    std_logic;
     signal tx_rd_data: std_logic_vector(7 downto 0);
-    
+
 begin
 
     ------------------ baud rate divider register ------------------------
 
     baud_div_reg: process(reset, clk)
     begin
-        
         if reset = '1' then
-
             baud_div <= (others => '1');
-
         elsif rising_edge(clk) then
-            
             if wr = '1' and wr_addr = BRDV_ADDR then
-               
                 baud_div <= wr_data;
-
             end if;
-
         end if;
-
     end process baud_div_reg;
 
     -------------------------- receiver buffer ----------------------------
@@ -83,17 +75,17 @@ begin
     rx_fifo_rd <= '1' when rd = '1' and rd_addr = TXRX_ADDR else '0';
 
     rx_fifo: fifo generic map (
-        SIZE => 8,
-        BITS => 8 
+        FIFO_DEPTH => 8,
+        DATA_WIDTH => 8
     ) port map (
-        clk     => clk,
-        reset   => reset,
-        wr      => rx_fifo_wr,
-        wr_en   => rx_fifo_wr_en,
-        wr_data => rx_fifo_wr_data,
-        rd      => rx_fifo_rd,
-        rd_en   => rx_fifo_rd_en,
-        rd_data => rx_fifo_rd_data
+        clk_i => clk,
+        rst_i => reset,
+        vld_i => rx_fifo_wr,
+        rdy_i => rx_fifo_rd,
+        dat_i => rx_fifo_wr_data,
+        vld_o => rx_fifo_rd_en,
+        rdy_o => rx_fifo_wr_en,
+        dat_o => rx_fifo_rd_data
     );
 
     ---------------------------- receiver --------------------------------
@@ -119,17 +111,17 @@ begin
     tx_fifo_wr_data <= wr_data(7 downto 0);
 
     tx_fifo: fifo generic map (
-        SIZE => 8,
-        BITS => 8 
+        FIFO_DEPTH => 8,
+        DATA_WIDTH => 8
     ) port map (
-        clk     => clk,
-        reset   => reset,
-        wr      => tx_fifo_wr,
-        wr_en   => tx_fifo_wr_en,
-        wr_data => tx_fifo_wr_data,
-        rd      => tx_fifo_rd,
-        rd_en   => tx_fifo_rd_en,
-        rd_data => tx_fifo_rd_data
+        clk_i => clk,
+        rst_i => reset,
+        vld_i => tx_fifo_wr,
+        rdy_i => tx_fifo_rd,
+        dat_i => tx_fifo_wr_data,
+        vld_o => tx_fifo_rd_en,
+        rdy_o => tx_fifo_wr_en,
+        dat_o => tx_fifo_rd_data
     );
 
     --------------------------- transmitter ------------------------------
@@ -139,14 +131,13 @@ begin
     tx_rd_data <= tx_fifo_rd_data;
 
     transmitter: uart_tx port map (
-        clk       => clk,
-        reset     => reset,
-        baud_div  => baud_div,
-        rd        => tx_rd,
-        rd_en     => tx_rd_en,
-        rd_data   => tx_rd_data,
-        busy      => tx_busy,
-        tx        => tx
+        clk_i => clk,
+        rst_i => reset,
+        div_i => baud_div,
+        rdy_o => tx_rd,
+        vld_i => tx_rd_en,
+        dat_i => tx_rd_data,
+        tx_o  => tx
     );
 
     -------------------------- module status -----------------------------
@@ -159,41 +150,24 @@ begin
 
     rd_reg: process(rd, rd_addr, status, baud_div, rx_fifo_rd_data)
     begin
-        
         if rd = '1' then
-            
             case rd_addr is
-                
-                when STAT_ADDR => 
-                
+                when STAT_ADDR =>
                     rd_data(5  downto 0) <= status;
                     rd_data(15 downto 6) <= (others => '0');
-                
-                when CTRL_ADDR => 
-                    
+                when CTRL_ADDR =>
                     rd_data <= (1 downto 0 => '1', others => '0');
-                
-                when BRDV_ADDR => 
-                    
+                when BRDV_ADDR =>
                     rd_data <= baud_div;
-                
-                when TXRX_ADDR => 
-                    
+                when TXRX_ADDR =>
                     rd_data(7  downto 0) <= rx_fifo_rd_data;
                     rd_data(15 downto 8) <= (others => '0');
-                
-                when others => 
-                
+                when others =>
                     rd_data <= (others => '0');
-                
             end case;
-            
-        else 
-
+        else
             rd_data <= (others => '0');
-
         end if;
-
     end process rd_reg;
 
 end architecture uar_arch;

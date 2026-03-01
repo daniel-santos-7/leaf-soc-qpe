@@ -11,44 +11,42 @@ use IEEE.numeric_std.all;
 
 entity fifo is
     generic (
-        SIZE: natural := 32;
-        BITS: natural := 8 
+        FIFO_DEPTH : natural := 8;
+        DATA_WIDTH : natural := 8
     );
-
     port (
-        clk:   in std_logic;
-        reset: in std_logic;
-
-        wr:      in  std_logic;
-        wr_en:   out std_logic;
-        wr_data: in  std_logic_vector(BITS-1 downto 0);
-
-        rd:       in  std_logic;
-        rd_en:    out std_logic;
-        rd_data:  out std_logic_vector(BITS-1 downto 0)
+        clk_i : in  std_logic;
+        rst_i : in  std_logic;
+        vld_i : in  std_logic;
+        rdy_i : in  std_logic;
+        dat_i : in  std_logic_vector(DATA_WIDTH-1 downto 0);
+        vld_o : out std_logic;
+        rdy_o : out std_logic;
+        dat_o : out std_logic_vector(DATA_WIDTH-1 downto 0)
     );
 end entity fifo;
 
-architecture fifo_arch of fifo is
-    
+architecture rtl of fifo is
+
     ----------------------------- types ----------------------------------
 
-    type fifo_data_array is array (0 to SIZE-1) of std_logic_vector(BITS-1 downto 0);
-    
-    type fifo_op is (READ_OP, WRITE_OP);
+    type fifo_data_array is array (0 to FIFO_DEPTH-1) of std_logic_vector(DATA_WIDTH-1 downto 0);
+
+    constant READ_OP  : std_logic := '0';
+    constant WRITE_OP : std_logic := '1';
 
     ---------------------------- fifo data -------------------------------
 
     signal fifo_data: fifo_data_array;
 
     --------------------- fifo last op register --------------------------
-    
-    signal last_op: fifo_op;
 
-    ------------------------- external flags -----------------------------
+    signal last_op: std_logic;
 
-    signal wr_pointer: integer range 0 to SIZE-1;
-    signal rd_pointer: integer range 0 to SIZE-1;
+    ---------------------------- pointers --------------------------------
+
+    signal wr_pointer: integer range 0 to FIFO_DEPTH-1;
+    signal rd_pointer: integer range 0 to FIFO_DEPTH-1;
 
     ------------------------- internal flags -----------------------------
 
@@ -56,78 +54,50 @@ architecture fifo_arch of fifo is
     signal full:  std_logic;
 
 begin
-    
+
     ---------------------- read data from fifo ---------------------------
 
-    rd_data <= fifo_data(rd_pointer);
+    dat_o <= fifo_data(rd_pointer);
 
-    read_data: process(clk, reset)
+    read_data: process(clk_i, rst_i)
     begin
-        
-        if reset = '1' then
-            
+        if rst_i = '1' then
             rd_pointer <= 0;
-
-        elsif rising_edge(clk) then
-
-            if rd = '1' and empty = '0' then
-                
-                rd_pointer <= (rd_pointer + 1) mod SIZE;
-                
+        elsif rising_edge(clk_i) then
+            if rdy_i = '1' and empty = '0' then
+                rd_pointer <= (rd_pointer + 1) mod FIFO_DEPTH;
             end if;
-            
         end if;
-
     end process read_data;
 
     ------------------------ write data on fifo --------------------------
 
-    write_data: process(clk, reset)
+    write_data: process(clk_i, rst_i)
     begin
-        
-        if reset = '1' then
-            
+        if rst_i = '1' then
             fifo_data <= (others => (others => '0'));
-            
             wr_pointer <= 0;
-
-        elsif rising_edge(clk) then
-
-            if wr = '1' and full = '0' then
-                
-                fifo_data(wr_pointer) <= wr_data;
-                
-                wr_pointer <= (wr_pointer + 1) mod SIZE;
-
+        elsif rising_edge(clk_i) then
+            if vld_i = '1' and full = '0' then
+                fifo_data(wr_pointer) <= dat_i;
+                wr_pointer <= (wr_pointer + 1) mod FIFO_DEPTH;
             end if;
-
         end if;
-
     end process write_data;
 
     --------------------- last operation storage -------------------------
 
-    save_last_op: process(clk, reset)
+    save_last_op: process(clk_i, rst_i)
     begin
-        
-        if reset = '1' then
-            
+        if rst_i = '1' then
             last_op <= READ_OP;
-
-        elsif rising_edge(clk) then
-
-            if rd = '1' and wr = '0' then
-                
+        elsif rising_edge(clk_i) then
+            if rdy_i = '1' and vld_i = '0' then
                 last_op <= READ_OP;
-
-            elsif rd = '0' and wr = '1' then
-
+            elsif rdy_i = '0' and vld_i = '1' then
                 last_op <= WRITE_OP;
-
             end if;
-
         end if;
-
     end process save_last_op;
 
     ------------------------- internal flags -----------------------------
@@ -137,8 +107,7 @@ begin
 
     -------------------------- output flags -------------------------------
 
-    rd_en <= not empty;
-    wr_en <= not full;
+    vld_o <= not empty;
+    rdy_o <= not full;
 
-end architecture fifo_arch;
-
+end architecture rtl;

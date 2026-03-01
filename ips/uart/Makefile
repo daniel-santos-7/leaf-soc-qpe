@@ -1,7 +1,7 @@
 # VHDL simulator
 GHDL = ghdl
 GHDLFLAGS = --workdir=$(WORKDIR) --ieee=synopsys
-GHDLXOPTS = --stop-time=1000ms
+GHDLXOPTS = --ieee-asserts=disable --stop-time=10ms
 
 WORKDIR  = work
 WAVESDIR = waves
