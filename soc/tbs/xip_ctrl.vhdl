@@ -43,7 +43,7 @@ begin
 
     process(clk, rst)
 
-        variable mem : byte_array;
+        variable mem : byte_array_t(0 to 2**24 - 1);
 
     begin
         if rising_edge(clk) then

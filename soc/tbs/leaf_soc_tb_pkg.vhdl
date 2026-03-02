@@ -1,32 +1,12 @@
 library IEEE;
+library work;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
+use work.uart_tb_pkg.all;
 
 package leaf_soc_tb_pkg is
 
-    constant CLK_PERIOD : time := 20 ns;
-
-    constant MEM_SIZE : natural := 4 * 1024;
-
-    type byte_array is array (0 to MEM_SIZE-1) of std_logic_vector(7 downto 0);
-
-    impure function load_mem_data(constant file_path : string) return byte_array;
-
-    constant UART_9600_BAUD_RATE : time := 104167 ns;
-
-    constant UART_115200_BAUD_RATE : time := 8680 ns;
-
-    procedure uart_tx(
-        constant baud : time;
-        constant data : std_logic_vector(7 downto 0);
-        signal tx : out std_logic
-    );
-
-    procedure uart_rx(
-        constant baud : time;
-        signal data : out std_logic_vector(7 downto 0);
-        signal rx : in std_logic
-    );
+    type byte_array_t is array (natural range <>) of std_logic_vector(7 downto 0);
 
     component xip_ctrl is
         port (
@@ -44,150 +24,113 @@ package leaf_soc_tb_pkg is
         );
     end component xip_ctrl;
 
-    -- constant BITS       : natural := 24;
-    -- constant MEM_SIZE   : natural := 2**BITS;
-    -- constant UART_BAUD  : natural := 434;
-    -- constant WM_CMD     : std_logic_vector(7 downto 0) := x"31";
+    procedure load_bin_file (
+        constant path : in string;
+        variable data : out byte_array_t;
+        variable size : out natural
+    );
 
-    -- ld_program: process
-    --     variable byte  : byte_type;
-    --     variable addr  : integer;
-    --     variable size  : std_logic_vector(31 downto 0);
-    --     variable frame : std_logic_vector(9 downto 0);
-    -- begin
-    --     rx <= '1';
-    --     wait for 25*CLK_PERIOD;
+    function calc_crc (
+        data       : std_logic_vector;
+        crc_in     : std_logic_vector;
+        polynomial : std_logic_vector
+    ) return std_logic_vector;
 
-    --     file_open(bin, PROGRAM);
-    --     addr := 0;
-    --     while not endfile(bin) loop
-    --         read(bin, byte);
-    --         mem(addr) := std_logic_vector(to_unsigned(byte_type'pos(byte), 8));
-    --         addr := addr + 1;
-    --     end loop;
-    --     file_close(bin);
-
-    --     frame := '1' & WM_CMD & '0';
-    --     for i in 0 to 9 loop
-    --         rx <= frame(i);
-    --         wait for UART_BAUD*CLK_PERIOD;
-    --     end loop;
-
-    --     size := std_logic_vector(to_unsigned(addr, 32));
-
-    --     frame := '1' & size(31 downto 24) & '0';
-    --     for i in 0 to 9 loop
-    --         rx <= frame(i);
-    --         wait for UART_BAUD*CLK_PERIOD;
-    --     end loop;
-
-    --     frame := '1' & size(23 downto 16) & '0';
-    --     for i in 0 to 9 loop
-    --         rx <= frame(i);
-    --         wait for UART_BAUD*CLK_PERIOD;
-    --     end loop;
-
-    --     frame := '1' & size(15 downto  8) & '0';
-    --     for i in 0 to 9 loop
-    --         rx <= frame(i);
-    --         wait for UART_BAUD*CLK_PERIOD;
-    --     end loop;
-
-    --     frame := '1' & size(7  downto  0) & '0';
-    --     for i in 0 to 9 loop
-    --         rx <= frame(i);
-    --         wait for UART_BAUD*CLK_PERIOD;
-    --     end loop;
-
-    --     for i in 0 to addr loop
-    --         frame := '1' & mem(i) & '0';
-    --         for j in 0 to 9 loop
-    --             rx <= frame(j);
-    --             wait for UART_BAUD*CLK_PERIOD;
-    --         end loop;
-    --         report integer'image(i);
-    --     end loop;
-
-    --     rx <= '1';
-    --     wait;
-    -- end process ld_program;
-
-    -- wr_output: process
-    --     variable data : std_logic_vector(7 downto 0);
-    --     type charfile is file of character;
-    --     file out_file: charfile;
-    -- begin
-    --     data := x"FF";
-    --     file_open(out_file, "STD_OUTPUT", write_mode);
-    --     while true loop
-    --         wait until tx = '0';
-    --         wait for UART_BAUD*CLK_PERIOD;
-    --         wait for UART_BAUD*CLK_PERIOD/2;
-    --         for i in 0 to 7 loop
-    --             data(i) := tx;
-    --             wait for UART_BAUD*CLK_PERIOD;
-    --         end loop;
-    --         write(out_file, character'val(to_integer(unsigned(data))));
-    --     end loop;
-    --     file_close(out_file);
-    --     wait;
-    -- end process wr_output;
+    procedure leaf_soc_send_program (
+        signal tx : out std_logic;
+        signal rx_data : in std_logic_vector(7 downto 0);
+        constant program : in string
+    );
 
 end package leaf_soc_tb_pkg;
 
 package body leaf_soc_tb_pkg is
 
-    impure function load_mem_data(constant file_path : string) return byte_array is
-        type char_file is file of character;
-        file mem_file : char_file;
+    procedure load_bin_file (
+        constant path : in string;
+        variable data : out byte_array_t;
+        variable size : out natural
+    ) is
+        type bin_file_t is file of character;
+        file bin_file : bin_file_t;
         variable byte : character;
-        variable mem_data : byte_array := (others => (others => '0'));
-        variable addr : natural := 0;
+        variable addr : natural;
     begin
-        file_open(mem_file, file_path, read_mode);
-        while not endfile(mem_file) loop
-            if addr < MEM_SIZE then
-                read(mem_file, byte);
-                mem_data(addr) := std_logic_vector(to_unsigned(character'pos(byte), 8));
-                addr := addr + 1;
+        file_open(bin_file, path, read_mode);
+        addr := 0;
+        while not endfile(bin_file) loop
+            read(bin_file, byte);
+            data(addr) := std_logic_vector(to_unsigned(character'pos(byte), 8));
+            addr := addr + 1;
+        end loop;
+        file_close(bin_file);
+        size := addr;
+    end procedure load_bin_file;
+
+    function calc_crc (
+        data       : std_logic_vector;
+        crc_in     : std_logic_vector;
+        polynomial : std_logic_vector
+    ) return std_logic_vector is
+        variable crc : std_logic_vector(crc_in'range) := crc_in;
+    begin
+        for i in data'high downto data'low loop
+            if crc(crc'high) = '1' then
+                crc := (crc(crc'high - 1 downto 0) & data(i)) xor polynomial;
             else
-                report "load_mem_data: program too large for memory" severity error;
-                exit;
+                crc := (crc(crc'high - 1 downto 0) & data(i));
             end if;
         end loop;
-        file_close(mem_file);
-        return mem_data;
-    end function load_mem_data;
+        return crc;
+    end function calc_crc;
 
-    procedure uart_tx(
-        constant baud : time;
-        constant data : std_logic_vector(7 downto 0);
-        signal tx : out std_logic
+    procedure leaf_soc_send_program (
+        signal tx : out std_logic;
+        signal rx_data : in std_logic_vector(7 downto 0);
+        constant program : in string
     ) is
-    begin
-        tx <= '0';
-        wait for baud;
-        for i in 0 to 7 loop
-            tx <= data(i);
-            wait for baud;
-        end loop;
-        tx <= '1';
-        wait for baud;
-    end procedure uart_tx;
 
-    procedure uart_rx(
-        constant baud : time;
-        signal data : out std_logic_vector(7 downto 0);
-        signal rx : in std_logic
-    ) is
+        constant RAM_JUMP_CMD : std_logic_vector(7 downto 0) := x"4A";
+        constant RAM_LOAD_CMD : std_logic_vector(7 downto 0) := x"4C";
+
+        constant ACK : std_logic_vector(7 downto 0) := x"06";
+        constant NAK : std_logic_vector(7 downto 0) := x"15";
+
+        constant MAX_PROGRAM_SIZE : natural := 64 * 1024;
+
+        variable program_data : byte_array_t(0 to MAX_PROGRAM_SIZE - 1) := (others => x"00");
+        variable program_size : natural := 0;
+
+        constant crc_polynomial : std_logic_vector := x"07";
+
+        variable crc : std_logic_vector(7 downto 0) := (others => '0');
+        variable byte : std_logic_vector(7 downto 0) := (others => '0');
+
     begin
-        wait until rx = '0';
-        wait for baud/2;
-        for i in 0 to 7 loop
-            wait for baud;
-            data(i) <= rx;
+        load_bin_file(program, program_data, program_size);
+
+        uart_transmit(tx, RAM_LOAD_CMD);
+        wait until rx_data = ACK for 20 us;
+
+        for i in 0 to 3 loop
+            byte := std_logic_vector(to_unsigned(program_size / (2**(8*i)), 8));
+            uart_transmit(tx, byte);
+            -- crc := calc_crc(byte, crc, crc_polynomial);
         end loop;
-        wait for baud;
-    end procedure uart_rx;
+        uart_transmit(tx, crc);
+        wait until rx_data = ACK for 20 us;
+
+        crc := (others => '0');
+        for i in 0 to program_size-1 loop
+            uart_transmit(tx, program_data(i));
+            -- crc := calc_crc(byte, crc, crc_polynomial);
+        end loop;
+        uart_transmit(tx, crc);
+        wait until rx_data = ACK for 20 us;
+
+        uart_transmit(tx, RAM_JUMP_CMD);
+        wait until rx_data = ACK for 20 us;
+
+    end procedure leaf_soc_send_program;
 
 end package body leaf_soc_tb_pkg;

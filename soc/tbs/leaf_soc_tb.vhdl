@@ -4,6 +4,7 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 use work.leaf_soc_pkg.all;
 use work.leaf_soc_tb_pkg.all;
+use work.uart_tb_pkg.all;
 
 entity leaf_soc_tb is
     generic (
@@ -28,9 +29,9 @@ architecture tb of leaf_soc_tb is
     signal xip_adr_o : std_logic_vector(23 downto 2);
     signal xip_dat_o : std_logic_vector(31 downto 0);
 
-    signal clk_en : std_logic := '0';
+    signal uart_data : std_logic_vector(7 downto 0);
 
-    signal rx_data : std_logic_vector(7 downto 0);
+    signal clk_en : std_logic := '0';
 
 begin
 
@@ -65,12 +66,13 @@ begin
     );
 
     clk <= not clk after (CLK_PERIOD/2) when clk_en = '1' else '0';
-    
+
     uart_rx_proc: process
+        variable rx_data : std_logic_vector(7 downto 0);
     begin
-        rx_data <= (others => '0');
         rx_loop : loop
-            uart_rx(UART_115200_BAUD_RATE, rx_data, tx);
+            uart_receive(tx, rx_data);
+            uart_data <= rx_data;
         end loop;
     end process uart_rx_proc;
 
@@ -88,18 +90,9 @@ begin
             wait until rising_edge(clk);
         end loop;
 
-        uart_tx(UART_115200_BAUD_RATE, x"4C", rx);
+        leaf_soc_send_program(rx, uart_data, PROGRAM);
 
-        for i in 0 to 5 * 1024 - 1 loop
-            wait until rising_edge(clk);
-        end loop;
-
-        uart_tx(UART_115200_BAUD_RATE, x"4C", rx);
-
-        for i in 0 to 5 * 1024 - 1 loop
-            wait until rising_edge(clk);
-        end loop;
-
+        wait until rising_edge(clk);
         clk_en <= '0';
         wait;
     end process test;
