@@ -45,8 +45,10 @@ read_program_block:
     la s3, 2f
     la s4, 3f
     lw s5, 0x0(s0)
+    add s5, s5, s0
     mv s6, s5
     andi s5, s5, -0x400
+    beq s0, s5, read_program_remainder
 1:
     addi s1, s1, 0x400
     j read_data
