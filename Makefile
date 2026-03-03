@@ -33,8 +33,8 @@ $(WORKDIR) $(WAVESDIR):
 	@$(GHDL) -m $(GHDLFLAGS) $(TOP_TB) | tee $@
 
 ifdef WAVEFORM
-# GHDLXOPTS += --wave=$(WAVESDIR)/$(WAVEFORM)
-GHDLXOPTS += --fst=$(WAVESDIR)/$(WAVEFORM).fst
+GHDLXOPTS += --wave=$(WAVESDIR)/$(WAVEFORM)
+# GHDLXOPTS += --fst=$(WAVESDIR)/$(WAVEFORM).fst
 endif
 .PHONY: simulation clean
 simulation: .make | $(WAVESDIR)
