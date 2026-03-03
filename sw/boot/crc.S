@@ -16,8 +16,9 @@ crc8_update:
     xor  a0, a0, a1       # crc ^= byte
     li   t0, 8            # bit loop counter
 1:
+    andi t1, a0, 0x80
     slli a0, a0, 1        # crc <<= 1
-    bgez a0, 2f           # if previous MSB was 0, skip polynomial
+    beqz t1, 2f           # if previous MSB was 0, skip polynomial
     xori a0, a0, 0x07     # apply polynomial (x^8 + x^2 + x + 1)
 2:
     addi t0, t0, -1
