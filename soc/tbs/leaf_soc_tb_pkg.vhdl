@@ -107,6 +107,7 @@ package body leaf_soc_tb_pkg is
         variable byte : std_logic_vector(7 downto 0) := (others => '0');
 
     begin
+
         load_bin_file(program, program_data, program_size);
 
         uart_transmit(tx, RAM_LOAD_CMD);
@@ -115,16 +116,19 @@ package body leaf_soc_tb_pkg is
         for i in 0 to 3 loop
             byte := std_logic_vector(to_unsigned(program_size / (2**(8*i)), 8));
             uart_transmit(tx, byte);
-            -- crc := calc_crc(byte, crc, crc_polynomial);
+            crc := calc_crc(byte, crc, crc_polynomial);
         end loop;
+        crc := calc_crc(x"00", crc, crc_polynomial);
         uart_transmit(tx, crc);
         wait until rx_data = ACK for 20 us;
 
-        crc := (others => '0');
+        crc := x"00";
         for i in 0 to program_size-1 loop
-            uart_transmit(tx, program_data(i));
-            -- crc := calc_crc(byte, crc, crc_polynomial);
+            byte := program_data(i);
+            uart_transmit(tx, byte);
+            crc := calc_crc(byte, crc, crc_polynomial);
         end loop;
+        crc := calc_crc(x"00", crc, crc_polynomial);
         uart_transmit(tx, crc);
         wait until rx_data = ACK for 20 us;
 
