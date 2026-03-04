@@ -19,16 +19,6 @@ architecture tb of leaf_soc_tb is
     signal rx  : std_logic;
     signal tx  : std_logic;
 
-    signal xip_ack_i : std_logic;
-    signal xip_err_i : std_logic;
-    signal xip_dat_i : std_logic_vector(31 downto 0);
-    signal xip_cyc_o : std_logic;
-    signal xip_stb_o : std_logic;
-    signal xip_we_o  : std_logic;
-    signal xip_sel_o : std_logic_vector(3  downto 0);
-    signal xip_adr_o : std_logic_vector(23 downto 2);
-    signal xip_dat_o : std_logic_vector(31 downto 0);
-
     signal uart_data : std_logic_vector(7 downto 0);
 
     signal clk_en : std_logic := '0';
@@ -36,33 +26,10 @@ architecture tb of leaf_soc_tb is
 begin
 
     uut: leaf_soc port map (
-        clk       => clk,
-        rst       => rst,
-        rx        => rx,
-        tx        => tx,
-        xip_ack_i => xip_ack_i,
-        xip_err_i => xip_err_i,
-        xip_dat_i => xip_dat_i,
-        xip_cyc_o => xip_cyc_o,
-        xip_stb_o => xip_stb_o,
-        xip_we_o  => xip_we_o,
-        xip_sel_o => xip_sel_o,
-        xip_adr_o => xip_adr_o,
-        xip_dat_o => xip_dat_o
-    );
-
-    tb_xip_ctrl: xip_ctrl port map (
-        clk   => clk,
-        rst   => rst,
-        cyc_i => xip_cyc_o,
-        stb_i => xip_stb_o,
-        we_i  => xip_we_o,
-        sel_i => xip_sel_o,
-        adr_i => xip_adr_o,
-        dat_i => xip_dat_o,
-        ack_o => xip_ack_i,
-        err_o => xip_err_i,
-        dat_o => xip_dat_i
+        clk => clk,
+        rst => rst,
+        rx  => rx,
+        tx  => tx
     );
 
     clk <= not clk after (CLK_PERIOD/2) when clk_en = '1' else '0';
