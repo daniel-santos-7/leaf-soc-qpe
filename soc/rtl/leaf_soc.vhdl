@@ -6,18 +6,19 @@
 ----------------------------------------------------------------------
 
 library IEEE;
-library work;
 use IEEE.std_logic_1164.all;
 use work.core_pkg.all;
 use work.leaf_soc_pkg.all;
 use work.uart_pkg.all;
+use work.sig_gen_pkg.all;
 
 entity leaf_soc is
     port (
         clk : in  std_logic;
         rst : in  std_logic;
         rx  : in  std_logic;
-        tx  : out std_logic
+        tx  : out std_logic;
+        sig : out std_logic_vector(OUT_RES_BITS-1 downto 0)
     );
 end entity leaf_soc;
 
@@ -184,6 +185,19 @@ begin
         ack_o => soc_io0_ack,
         dat_o => soc_io0_dat,
         tx    => tx
+    );
+
+    soc_wgen: sig_gen port map (
+        clk_i => soc_syscon_clk,
+        rst_i => soc_syscon_rst,
+        cyc_i => soc_intercon_io1_cyc,
+        stb_i => soc_intercon_io1_stb,
+        we_i  => soc_intercon_io1_we,
+        sel_i => soc_intercon_io1_sel,
+        dat_i => soc_intercon_io1_dat,
+        ack_o => soc_io1_ack,
+        dat_o => soc_io1_dat,
+        sig_o => sig
     );
 
     -- XIP not connected --

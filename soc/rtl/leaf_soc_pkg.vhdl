@@ -1,6 +1,6 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
-library work;
+use work.sig_gen_pkg.all;
 
 package leaf_soc_pkg is
 
@@ -18,6 +18,8 @@ package leaf_soc_pkg is
     constant IO1_ADDR_WIDTH : natural := 4;    -- 16 bytes (4 registers)
     constant XIP_ADDR_WIDTH : natural := 24;   -- 16 MB
     constant RAM_ADDR_WIDTH : natural := 16;   -- 64 KB
+
+    constant OUT_RES_BITS : natural := 12;
 
     component wb_syscon is
         port (
@@ -117,7 +119,8 @@ package leaf_soc_pkg is
             clk : in  std_logic;
             rst : in  std_logic;
             rx  : in  std_logic;
-            tx  : out std_logic
+            tx  : out std_logic;
+            sig : out std_logic_vector(OUT_RES_BITS-1 downto 0)
         );
     end component leaf_soc;
 
