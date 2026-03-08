@@ -1,5 +1,4 @@
 library IEEE;
-library work;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 use work.leaf_soc_pkg.all;
