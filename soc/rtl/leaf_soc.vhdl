@@ -6,7 +6,6 @@
 ----------------------------------------------------------------------
 
 library IEEE;
-library work;
 use IEEE.std_logic_1164.all;
 use work.core_pkg.all;
 use work.leaf_soc_pkg.all;

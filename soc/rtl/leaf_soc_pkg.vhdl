@@ -1,6 +1,5 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
-library work;
 
 package leaf_soc_pkg is
 
