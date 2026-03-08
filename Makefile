@@ -1,6 +1,3 @@
-# leaf project
-
-# VHDL simulator
 GHDL = ghdl
 GHDLFLAGS = --workdir=$(WORKDIR) --ieee=synopsys
 GHDLXOPTS = --ieee-asserts=disable --stop-time=10ms
@@ -23,21 +20,22 @@ TOP_TB = leaf_soc_tb
 PROGRAM  ?= sw/asm/hello-world/hello-world.bin
 WAVEFORM ?= $(shell basename $(PROGRAM) .bin).ghw
 
-$(WORKDIR) $(WAVESDIR):
-	@mkdir $@
-
-.import: $(RTL_SRC) $(TBS_SRC) | $(WORKDIR)
-	@$(GHDL) -i $(GHDLFLAGS) $(RTL_SRC) $(TBS_SRC) | tee $@
-
-.make: .import
-	@$(GHDL) -m $(GHDLFLAGS) $(TOP_TB) | tee $@
-
 ifdef WAVEFORM
 GHDLXOPTS += --wave=$(WAVESDIR)/$(WAVEFORM)
 # GHDLXOPTS += --fst=$(WAVESDIR)/$(WAVEFORM).fst
 endif
-.PHONY: simulation clean
-simulation: .make | $(WAVESDIR)
+
+$(WORKDIR) $(WAVESDIR):
+	@mkdir -p $@
+
+$(WORKDIR)/.import: $(RTL_SRC) $(TBS_SRC) | $(WORKDIR)
+	@$(GHDL) -i $(GHDLFLAGS) $(RTL_SRC) $(TBS_SRC) | tee $@
+
+$(WORKDIR)/.make: $(WORKDIR)/.import
+	@$(GHDL) -m $(GHDLFLAGS) $(TOP_TB) | tee $@
+
+.PHONY: run clean
+run: $(WORKDIR)/.make $(PROGRAM) | $(WAVESDIR)
 	@$(GHDL) -r $(GHDLFLAGS) $(TOP_TB) $(GHDLXOPTS) -gPROGRAM=$(PROGRAM)
 
 clean:

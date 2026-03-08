@@ -1,13 +1,10 @@
 waves
 work
 
-.import
-.make
-
 e~leaf_soc_tb.o
 leaf_soc_tb
 
 sw/**/*.elf
 sw/**/*.bin
-sw/**/*.debug
+sw/**/*.disass
 sw/**/*.vhdl
