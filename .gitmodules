@@ -1,0 +1,3 @@
+[submodule "ips/wgen"]
+	path = ips/wgen
+	url = https://github.com/daniel-santos-7/dds-sig-gen
