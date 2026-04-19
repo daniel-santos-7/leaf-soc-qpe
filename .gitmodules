@@ -3,4 +3,4 @@
 	url = https://github.com/daniel-santos-7/leaf.git
 [submodule "ips/uart"]
 	path = ips/uart
-	url = git@github.com:daniel-santos-7/wb-uart.git
+	url = https://github.com/daniel-santos-7/wb-uart.git
