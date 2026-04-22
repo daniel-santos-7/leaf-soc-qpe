@@ -68,7 +68,7 @@ begin
 
         leaf_soc_send_program(rx, uart_data, PROGRAM);
 
-        wait for 1 ms;
+        wait for 10 ms;
 
         wait until rising_edge(clk);
         clk_en <= '0';
