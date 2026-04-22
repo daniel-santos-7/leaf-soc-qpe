@@ -82,6 +82,16 @@ architecture rtl of leaf_soc is
     signal soc_ram_ack : std_logic;
     signal soc_ram_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
+    signal soc_cop_csr_rdata : std_logic_vector(31 downto 0);
+    signal soc_cop_csr_addr  : std_logic_vector(5 downto 0);
+    signal soc_cop_csr_wdata : std_logic_vector(31 downto 0);
+    signal soc_cop_csr_we    : std_logic;
+
+    signal soc_wgen_inc : std_logic_vector(31 downto 0);
+    signal soc_wgen_pha : std_logic_vector(31 downto 0);
+    signal soc_wgen_amp : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal soc_wgen_we  : std_logic;
+
 begin
 
     soc_syscon: wb_syscon port map (
@@ -102,12 +112,29 @@ begin
         ack_i  => soc_intercon_cpu_ack,
         err_i  => soc_intercon_cpu_err,
         dat_i  => soc_intercon_cpu_dat,
+        cop_csr_rdata_i => soc_cop_csr_rdata,
+        cop_csr_addr_o  => soc_cop_csr_addr,
+        cop_csr_wdata_o => soc_cop_csr_wdata,
+        cop_csr_we_o    => soc_cop_csr_we,
         cyc_o  => soc_cpu_cyc,
         stb_o  => soc_cpu_stb,
         we_o   => soc_cpu_we,
         sel_o  => soc_cpu_sel,
         adr_o  => soc_cpu_adr,
         dat_o  => soc_cpu_dat
+    );
+
+    soc_wgx_csrs: wgx_csrs port map (
+        clk_i   => soc_syscon_clk,
+        rst_i   => soc_syscon_rst,
+        addr_i  => soc_cop_csr_addr,
+        wdata_i => soc_cop_csr_wdata,
+        we_i    => soc_cop_csr_we,
+        rdata_o => soc_cop_csr_rdata,
+        inc_o   => soc_wgen_inc,
+        pha_o   => soc_wgen_pha,
+        amp_o   => soc_wgen_amp,
+        we_o    => soc_wgen_we
     );
 
     soc_intercon: wb_intercon port map (
@@ -190,15 +217,16 @@ begin
     soc_wgen: sig_gen port map (
         clk_i => soc_syscon_clk,
         rst_i => soc_syscon_rst,
-        cyc_i => soc_intercon_io1_cyc,
-        stb_i => soc_intercon_io1_stb,
-        we_i  => soc_intercon_io1_we,
-        sel_i => soc_intercon_io1_sel,
-        dat_i => soc_intercon_io1_dat,
-        ack_o => soc_io1_ack,
-        dat_o => soc_io1_dat,
+        we_i  => soc_wgen_we,
+        inc_i => soc_wgen_inc,
+        pha_i => soc_wgen_pha,
+        amp_i => soc_wgen_amp,
         sig_o => sig
     );
+
+    -- io1 not connected --
+    soc_io1_ack <= '0';
+    soc_io1_dat <= (others => '0');
 
     -- XIP not connected --
     soc_xip_ack <= '0';
