@@ -96,8 +96,32 @@ def load_bin(port, filename, baud=115200):
         return False
 
     print("SUCCESS: Program loaded and started!")
+    print("Reading output...")
+    read_output(ser)
     ser.close()
     return True
+
+
+def read_output(ser, timeout=5):
+    """Read and print output from the program."""
+    start = time.time()
+    buffer = b""
+    
+    while time.time() - start < timeout:
+        if ser.in_waiting:
+            data = ser.read(ser.in_waiting)
+            buffer += data
+            # Try to decode as ASCII
+            try:
+                text = data.decode('ascii')
+                print(text, end='')
+            except:
+                # Print hex for non-ASCII
+                print(f" [raw: {data.hex()}]")
+            start = time.time()  # Reset timeout on activity
+        time.sleep(0.01)
+    
+    return buffer
 
 
 def wait_ack(ser):
