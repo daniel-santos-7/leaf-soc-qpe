@@ -13,20 +13,18 @@ end entity wb_syscon;
 
 architecture rtl of wb_syscon is
     
-    signal dly    : std_logic;
-    signal in_rst : std_logic;
+    signal rst_sync : std_logic_vector(1 downto 0);
 
 begin
     
-    rst_gen: process(clk)
-    begin                                     
+    rst_sync_proc: process(clk)
+    begin
         if rising_edge(clk) then
-            dly    <= (not rst and dly and not in_rst) or (not rst and not dly and in_rst);
-            in_rst <= (not rst and not dly and not in_rst);
+            rst_sync <= rst_sync(0) & not rst;
         end if;
-    end process rst_gen;
+    end process rst_sync_proc;
 
     clk_o <= clk;
-    rst_o <= rst;
+    rst_o <= rst_sync(1);
 
 end architecture rtl;

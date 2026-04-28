@@ -17,8 +17,7 @@ architecture tb of leaf_soc_tb is
     signal rst : std_logic;
     signal rx  : std_logic;
     signal tx  : std_logic;
-
-
+    signal sig : std_logic_vector(OUT_RES_BITS-1 downto 0);
 
     signal uart_data : std_logic_vector(7 downto 0);
 
@@ -30,7 +29,8 @@ begin
         clk => clk,
         rst => rst,
         rx  => rx,
-        tx  => tx
+        tx  => tx,
+        sig => sig
     );
 
     clk <= not clk after (CLK_PERIOD/2) when clk_en = '1' else '0';
@@ -52,14 +52,30 @@ begin
         wait;
     end process uart_rx_proc;
 
+    -- uart_tx_proc: process
+    --     type char_file is file of character;
+    --     file in_file : char_file;
+    --     variable tx_data : std_logic_vector(7 downto 0);
+    --     variable char : character;
+    -- begin
+    --     file_open(in_file, "STD_INPUT", read_mode);
+    --     while not endfile(in_file) loop
+    --         read(in_file, char);
+    --         tx_data := std_logic_vector(to_unsigned(character'pos(char), 8));
+    --         uart_transmit(rx, tx_data);
+    --     end loop;
+    --     file_close(in_file);
+    --     wait;
+    -- end process uart_tx_proc;
+
     test: process
     begin
-        rst  <= '1';
+        rst  <= '0';
         rx   <= '1';
         clk_en <= '1';
         wait until rising_edge(clk);
 
-        rst <= '0';
+        rst <= '1';
         wait until rising_edge(clk);
 
         for i in 0 to 511 loop
@@ -68,7 +84,7 @@ begin
 
         leaf_soc_send_program(rx, uart_data, PROGRAM);
 
-        wait for 1 ms;
+        wait for 10 ms;
 
         wait until rising_edge(clk);
         clk_en <= '0';
