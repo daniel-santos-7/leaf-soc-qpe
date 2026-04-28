@@ -36,6 +36,12 @@ $(WORKDIR)/.import: $(RTL_SRC) $(TBS_SRC) | $(WORKDIR)
 $(WORKDIR)/.make: $(WORKDIR)/.import
 	@$(GHDL) -m $(GHDLFLAGS) $(TOP_TB) | tee $@
 
+rtl.tar.gz: $(CPU_RTL) $(UART_RTL) $(WGEN_RTL) $(SOC_RTL)
+	@mkdir -p /tmp/rtl-archive
+	@cp $(CPU_RTL) $(UART_RTL) $(WGEN_RTL) $(SOC_RTL) /tmp/rtl-archive/
+	@tar -czvf $@ -C /tmp/rtl-archive .
+	@rm -rf /tmp/rtl-archive
+
 .PHONY: run clean
 run: $(WORKDIR)/.make $(PROGRAM) | $(WAVESDIR)
 	@$(GHDL) -r $(GHDLFLAGS) $(TOP_TB) $(GHDLXOPTS) -gPROGRAM=$(PROGRAM)
