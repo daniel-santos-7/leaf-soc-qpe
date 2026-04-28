@@ -17,7 +17,6 @@ architecture tb of leaf_soc_tb is
     signal rst : std_logic;
     signal rx  : std_logic;
     signal tx  : std_logic;
-    signal sig : std_logic_vector(OUT_RES_BITS-1 downto 0);
 
     signal uart_data : std_logic_vector(7 downto 0);
 
@@ -29,8 +28,7 @@ begin
         clk => clk,
         rst => rst,
         rx  => rx,
-        tx  => tx,
-        sig => sig
+        tx  => tx
     );
 
     clk <= not clk after (CLK_PERIOD/2) when clk_en = '1' else '0';
