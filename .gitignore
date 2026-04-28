@@ -7,4 +7,5 @@ leaf_soc_tb
 sw/**/*.elf
 sw/**/*.bin
 sw/**/*.disass
+sw/**/*.debug
 sw/**/*.vhdl
