@@ -92,19 +92,34 @@ package body leaf_soc_tb_pkg is
     begin
 
         load_bin_file(program, program_data, program_size);
+        report "Loaded " & integer'image(program_size) & " bytes from " & program;
 
+        report "Sending RAM_LOAD_CMD (0x4C)...";
         uart_transmit(tx, RAM_LOAD_CMD);
-        wait until rx_data = ACK for 20 us;
+        wait until rx_data = ACK for 100 us;
+        if rx_data = ACK then
+            report "ACK received after RAM_LOAD_CMD at " & time'image(now);
+        else
+            report "ERROR: No ACK after RAM_LOAD_CMD" severity failure;
+        end if;
 
+        report "Sending size: " & integer'image(program_size) & " bytes";
         for i in 0 to 3 loop
             byte := std_logic_vector(to_unsigned(program_size / (2**(8*i)), 8));
             uart_transmit(tx, byte);
             crc := calc_crc(byte, crc, crc_polynomial);
         end loop;
         crc := calc_crc(x"00", crc, crc_polynomial);
+        report "Size CRC: " & integer'image(to_integer(unsigned(crc)));
         uart_transmit(tx, crc);
-        wait until rx_data = ACK for 20 us;
+        wait until rx_data = ACK for 100 us;
+        if rx_data = ACK then
+            report "ACK received after size+CRC at " & time'image(now);
+        else
+            report "ERROR: No ACK after size+CRC" severity failure;
+        end if;
 
+        report "Sending " & integer'image(program_size) & " program bytes...";
         crc := x"00";
         for i in 0 to program_size-1 loop
             byte := program_data(i);
@@ -112,20 +127,40 @@ package body leaf_soc_tb_pkg is
             crc := calc_crc(byte, crc, crc_polynomial);
             if (i + 1) mod 1024 = 0 then
                 crc := calc_crc(x"00", crc, crc_polynomial);
+                report "Progress: " & integer'image(i+1) & "/" & integer'image(program_size) & " bytes, CRC: " & integer'image(to_integer(unsigned(crc)));
                 uart_transmit(tx, crc);
-                wait until rx_data = ACK for 20 us;
+                wait until rx_data = ACK for 100 us;
+                if rx_data = ACK then
+                    report "ACK received after 1024-byte block at " & time'image(now);
+                else
+                    report "ERROR: No ACK after 1024-byte block" severity failure;
+                end if;
                 crc := x"00";
             end if;
         end loop;
 
         if program_size mod 1024 /= 0 then
             crc := calc_crc(x"00", crc, crc_polynomial);
+            report "Final CRC: " & integer'image(to_integer(unsigned(crc)));
             uart_transmit(tx, crc);
-            wait until rx_data = ACK for 20 us;
+            wait until rx_data = ACK for 100 us;
+            if rx_data = ACK then
+                report "ACK received after final CRC at " & time'image(now);
+            else
+                report "ERROR: No ACK after final CRC" severity failure;
+            end if;
         end if;
 
+        report "Sending RAM_JUMP_CMD (0x4A)...";
         uart_transmit(tx, RAM_JUMP_CMD);
-        wait until rx_data = ACK for 20 us;
+        wait until rx_data = ACK for 100 us;
+        if rx_data = ACK then
+            report "ACK received after RAM_JUMP_CMD at " & time'image(now);
+        else
+            report "ERROR: No ACK after RAM_JUMP_CMD" severity failure;
+        end if;
+
+        report "Program loaded and started!";
 
     end procedure leaf_soc_send_program;
 
