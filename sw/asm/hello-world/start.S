@@ -2,20 +2,31 @@
 
 .globl _start
 _start:
-    li a0, 'H'
+    la a0, hello_str
+    call uart_print_str
+inf:
+    wfi
+    j inf
+
+uart_print_str:
+    lbu t0, 0(a0)
+    beqz t0, 1f
+    mv a1, t0
     call uart_write
-    li a0, 'i'
-    call uart_write
-    li a0, '!'
-    call uart_write
-    j _start
+    addi a0, a0, 1
+    j uart_print_str
+1:
+    ret
 
 uart_write:
-    li  t1, UART_BASE_ADDR     # load UART base address
+    li  t1, UART_BASE_ADDR
 1:
-    lbu t0, 0x0(t1)            # read UART status register
-    andi t0, t0, 0x20          # mask TX ready flag (bit 5)
-    beqz t0, 1b                # wait until TX is ready
-    andi a0, a0, 0xFF          # ensure only 8 bits are written
-    sb   a0, 0xC(t1)           # write byte to TX register
-    ret                        # return to caller
+    lbu t0, 0x0(t1)
+    andi t0, t0, 0x20
+    beqz t0, 1b
+    andi a1, a1, 0xFF
+    sb   a1, 0xC(t1)
+    ret
+
+hello_str:
+    .asciz "Hello World!\n"
