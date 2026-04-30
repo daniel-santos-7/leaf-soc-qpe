@@ -58,6 +58,7 @@ read_program_block:
     j read_data
 3:
     bne s0, s5, 1b
+    beq s5, s6, read_command
     j read_program_remainder
 
 read_program_remainder:
