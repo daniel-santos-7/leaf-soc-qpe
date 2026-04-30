@@ -1,16 +1,21 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/times.h>
 
 #undef errno
 extern int errno;
 
-char volatile *iostatus = (char *) 0x0;
-char volatile *iodata = (char *) 0xC;
+#define UART_BASE   0x10000000
+#define UART_STAT   0x00  // Status: bit2=RX ready, bit5=TX ready
+#define UART_DATA   0x0C  // TX/RX data register
+
+static volatile uint8_t *const uart_stat = (volatile uint8_t *)(UART_BASE + UART_STAT);
+static volatile uint8_t *const uart_data = (volatile uint8_t *)(UART_BASE + UART_DATA);
 
 void _exit(int n) {
-  char *halt = (char *) 0x10;
-  *halt = 0x1;
+  for (;;);
 }
 
 int _close(int file) {
@@ -44,7 +49,7 @@ int _isatty(int file) {
 }
 
 int _kill(int pid, int sig) {
-  return EINVAL;
+  errno = EINVAL;
   return -1;
 }
 
@@ -64,26 +69,26 @@ int _open(const char *name, int flags, int mode) {
 int _read(int file, char *ptr, int len) {
   int i;
   for (i = 0; i < len; i++) {
-    while((*iostatus & 0x4) != 0x4);
-    ptr[i] = *iodata;
+    while ((*uart_stat & 0x4) != 0x4);
+    ptr[i] = (char)(*uart_data);
     if (ptr[i] == '\n') return i+1;
   }
 
   return i;
 }
 
-caddr_t _sbrk(int incr) {
+char *_sbrk(int incr) {
   extern char __end;
   static char *heap_end;
   char *prev_heap_end;
- 
+
   if (heap_end == 0) {
     heap_end = &__end;
   }
   prev_heap_end = heap_end;
 
   heap_end += incr;
-  return (caddr_t) prev_heap_end;
+  return prev_heap_end;
 }
 
 int _stat(char *file, struct stat *st) {
@@ -112,8 +117,8 @@ int _write(int file, char *ptr, int len) {
 
   int todo;
   for(todo = 0; todo < len; todo++) {
-    while(((*iostatus) & 0x20) != 0x20);
-    (*iodata) = *ptr++;
+    while ((*uart_stat & 0x20) != 0x20);
+    *uart_data = (uint8_t)*ptr++;
   }
 
   return len;

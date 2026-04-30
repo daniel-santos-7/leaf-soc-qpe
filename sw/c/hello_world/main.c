@@ -1,6 +1,10 @@
 #include <stdio.h>
 
-void main() {
-	printf("Hello World!\nLeaf is working.\n");
-	exit(0);
+int main(void) {
+	const char * volatile fmt = "%s";
+
+	printf(fmt, "Hello World!\nLeaf is working.\n");
+	fflush(stdout);
+
+	for (;;);
 }

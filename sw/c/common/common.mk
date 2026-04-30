@@ -6,9 +6,9 @@ RISCV_OBJCOPY = $(RISCV_PREFIX)-objcopy
 MARCH = rv32i
 MABI  = ilp32
 
-STARTUP  ?= ../../common/crt0.S
-SYSCALLS ?= ../../common/syscalls.c
-LDSCRIPT ?= ../../common/sim.ld
+STARTUP  ?= ../common/crt0.S
+SYSCALLS ?= ../common/syscalls.c
+LDSCRIPT ?= ../common/soc.ld
 APP_EXE  ?= out
 APP_SRC  ?= $(wildcard ./*.c) $(wildcard ./*.cpp) $(wildcard ./*.s) $(wildcard ./*.S) $(STARTUP) $(SYSCALLS)
 
