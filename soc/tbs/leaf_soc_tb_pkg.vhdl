@@ -110,10 +110,19 @@ package body leaf_soc_tb_pkg is
             byte := program_data(i);
             uart_transmit(tx, byte);
             crc := calc_crc(byte, crc, crc_polynomial);
+            if (i + 1) mod 1024 = 0 then
+                crc := calc_crc(x"00", crc, crc_polynomial);
+                uart_transmit(tx, crc);
+                wait until rx_data = ACK for 20 us;
+                crc := x"00";
+            end if;
         end loop;
-        crc := calc_crc(x"00", crc, crc_polynomial);
-        uart_transmit(tx, crc);
-        wait until rx_data = ACK for 20 us;
+
+        if program_size mod 1024 /= 0 then
+            crc := calc_crc(x"00", crc, crc_polynomial);
+            uart_transmit(tx, crc);
+            wait until rx_data = ACK for 20 us;
+        end if;
 
         uart_transmit(tx, RAM_JUMP_CMD);
         wait until rx_data = ACK for 20 us;
