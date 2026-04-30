@@ -82,16 +82,22 @@ def load_bin(port, filename, baud=115200):
     for i, b in enumerate(program_data):
         ser.write(bytes([b]))
         ser.flush()
-        time.sleep(0.0001)
+        time.sleep(0.0002)
         crc = calc_crc([b], crc, CRC_POLYNOMIAL)
         if (i + 1) % 1024 == 0:
-            print(f"  Progress: {i+1}/{program_size} bytes")
+            print(f"  Progress: {i+1}/{program_size} bytes, CRC: {crc:02X}")
+            time.sleep(0.4)
             crc = calc_crc([0x00], crc, CRC_POLYNOMIAL)
+            print(f"  Sending CRC: {crc:02X}")
             ser.write(bytes([crc]))
             ser.flush()
+            time.sleep(0.4)
+            print("  Waiting for ACK...")
             if not wait_ack(ser):
                 print("ERROR: No ACK after 1024-byte block")
                 return False
+            print("  ACK received!")
+            time.sleep(0.2)
             crc = 0x00
         elif (i + 1) == program_size:
             print(f"  Progress: {i+1}/{program_size} bytes")
