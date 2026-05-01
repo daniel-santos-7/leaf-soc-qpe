@@ -57,7 +57,9 @@ read_program_block:
     li s2, 0x0
     j read_data
 3:
+    li s2, 0x0
     bne s0, s5, 1b
+    beq s5, s6, read_command
     j read_program_remainder
 
 read_program_remainder:

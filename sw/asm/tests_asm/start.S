@@ -1,27 +1,35 @@
+.equ UART_BASE_ADDR, 0x10000000
+
 .globl _start
 _start:
-    call uart_read
-    call uart_write
-    li t0, 0x00000010
-    li t1, 0x1
-    sw t1, 0x0(t0)
+.rept 237
+    nop
+.endr
+    la a0, ok_str
+    call uart_print_str
+inf:
+    wfi
+    j inf
 
-uart_read:
-	li t2, 0		 
-	li t3, 0x4		 
+uart_print_str:
+    lbu t0, 0(a0)
+    beqz t0, 1f
+    mv a1, t0
+    call uart_write
+    addi a0, a0, 1
+    j uart_print_str
 1:
-	lbu t2, 0x0(zero)
-	andi t2, t2, 0x4 
-	bne t2, t3, 1b	 
-	lw a0, 0xC(zero) 
-	ret				 
+    ret
 
 uart_write:
-    li t2, 0x0
-    li t3, 0x20
+    li  t1, UART_BASE_ADDR
 1:
-    lbu t2, 0x0(x0)
-    andi t2, t2, 0x20
-    bne t2, t3, 1b
-    sb a0, 0xC(zero)
+    lbu t0, 0x0(t1)
+    andi t0, t0, 0x20
+    beqz t0, 1b
+    andi a1, a1, 0xFF
+    sb   a1, 0xC(t1)
     ret
+
+ok_str:
+    .asciz "OK\n"

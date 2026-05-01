@@ -41,6 +41,9 @@ begin
         variable rx_data : std_logic_vector(7 downto 0);
         variable char : character;
     begin
+        wait until rst = '1';
+        wait until rising_edge(clk);
+        wait until rising_edge(clk);
         file_open(out_file, "STD_OUTPUT", write_mode);
         rx_loop : loop
             uart_receive(tx, rx_data);
@@ -76,6 +79,7 @@ begin
         wait until rising_edge(clk);
 
         rst <= '1';
+        wait until rising_edge(clk);
         wait until rising_edge(clk);
 
         for i in 0 to 511 loop

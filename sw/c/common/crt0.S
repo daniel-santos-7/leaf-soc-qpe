@@ -18,6 +18,13 @@ clear_bss:
 init_stack:
 	la sp, __stack_top
 
+.hidden init_gp
+init_gp:
+	.option push
+	.option norelax
+	la gp, __global_pointer$
+	.option pop
+
 .hidden call_main
 call_main:
 	call main

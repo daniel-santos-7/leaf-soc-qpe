@@ -1,6 +1,5 @@
 #include <stdio.h>
 
-void main() {
+int main(void) {
 	printf("Hello World!\nLeaf is working.\n");
-	exit(0);
 }

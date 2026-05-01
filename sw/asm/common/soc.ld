@@ -3,8 +3,7 @@ ENTRY(_start)
 
 MEMORY
 {
-    IOP (rw)  : ORIGIN = 0x00000000, LENGTH = 0x00000010
-    RAM (rwx) : ORIGIN = 0x00400000, LENGTH = 0x00400000
+    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 0x00010000
 }
 
 SECTIONS
@@ -51,6 +50,8 @@ SECTIONS
 		. = ALIGN(4);
 		__sdata_end = .;
 	} > RAM
+
+	__global_pointer$ = __sdata_begin + 0x800;
 
 	__stack_top = ORIGIN(RAM) + LENGTH(RAM);
 	__end = .;
