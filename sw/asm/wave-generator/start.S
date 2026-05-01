@@ -5,13 +5,9 @@
 .globl _start
 _start:
     li t0, WGEN_INCREMENT
-    csrw WGEN_CSR_INC, t0
-    li t0, 0
-    csrw WGEN_CSR_PHA, t0
-    li t0, 2047
-    csrw WGEN_CSR_AMP, t0
-    li t0, 1
-    csrw WGEN_CSR_CTRL, t0
+    li t1, 0
+    li t2, 2047
+    xwg.setup t0, t1, t2
     li a0, 'O'
     call uart_write
     li a0, 'K'
