@@ -1,71 +1,71 @@
 # :leaves: Leaf
 
-Leaf é um ecossistema SoC (*System-on-Chip*) baseado em um processador RISC-V de 32 bits, projetado para ser compacto, eficiente e ideal para aplicações em sistemas embarcados e IoT (Internet das Coisas).
+Leaf is an SoC (*System-on-Chip*) ecosystem based on a 32-bit RISC-V processor, designed to be compact, efficient, and ideal for applications in embedded systems and IoT (Internet of Things).
 
-## :star: Recursos
+## :star: Features
 
-O núcleo Leaf possui as seguintes características:
+The Leaf core has the following characteristics:
 
-- **ISA RISC-V (RV32I):** Suporte completo à extensão base de inteiros.
-- **Pipeline de 2 estágios:** Otimizado para balanço entre área e frequência (Busca / Execução).
-- **Interface Wishbone B4:** Master interface compatível com o padrão Wishbone para fácil integração de periféricos.
-- **Suporte a CSRs (Machine Mode):** Implementação de registradores de controle e status (`mtvec`, `mepc`, `mcause`, `mstatus`, `mie`, `mip`, `mscratch`, `mtval`) e contadores (`mcycle`, `minstret`, `mtime`).
-- **Tratamento de Interrupções:** Suporte a interrupções externas, de software e de timer.
-- **Coprocessador Interface:** Janela de CSRs customizada (0x7C0-0x7FF) para expansão de hardware.
+- **RISC-V ISA (RV32I):** Full support for the base integer instruction set.
+- **2-Stage Pipeline:** Optimized for a balance between area and frequency (Fetch / Execute).
+- **Wishbone B4 Interface:** Master interface compatible with the Wishbone standard for easy peripheral integration.
+- **CSR Support (Machine Mode):** Implementation of control and status registers (`mtvec`, `mepc`, `mcause`, `mstatus`, `mie`, `mip`, `mscratch`, `mtval`) and counters (`mcycle`, `minstret`, `mtime`).
+- **Interrupt Handling:** Support for external, software, and timer interrupts.
+- **Coprocessor Interface:** Customized CSR window (0x7C0-0x7FF) for hardware expansion.
 
-## :file_folder: Estrutura do Projeto
+## :file_folder: Project Structure
 
-O repositório está organizado da seguinte forma:
+The repository is organized as follows:
 
-Diretório             | Descrição
+Directory             | Description
 --------------------- | ---------------------------------------------------------
-[`ips/cpu/`](ips/cpu/) | Núcleo do processador Leaf (Submódulo)
-[`ips/uart/`](ips/uart/) | Periférico UART com interface Wishbone Slave (Submódulo)
-[`ips/wgen/`](ips/wgen/) | Gerador de sinais senoidais via DDS (Submódulo)
-[`soc/`](soc/)         | RTL e testbenches do SoC completo (FPGA-sintetizável)
-[`sw/`](sw/)           | Programas de teste e bibliotecas (C e Assembly)
+[`ips/cpu/`](ips/cpu/) | Leaf processor core (Submodule)
+[`ips/uart/`](ips/uart/) | UART peripheral with Wishbone Slave interface (Submodule)
+[`ips/wgen/`](ips/wgen/) | DDS-based sine wave generator (Submodule)
+[`soc/`](soc/)         | RTL and testbenches for the full SoC (FPGA-synthesizable)
+[`sw/`](sw/)           | Test programs and libraries (C and Assembly)
 
-## :rocket: Como Começar
+## :rocket: Getting Started
 
-### Pré-requisitos
+### Prerequisites
 
-Para simular e desenvolver para o Leaf, você precisará de:
+To simulate and develop for Leaf, you will need:
 
-- **GHDL:** Simulador VHDL open-source.
-- **Toolchain RISC-V:** `riscv32-unknown-elf-gcc` (configurada para `rv32i`).
-- **GNU Make:** Automação de builds.
-- **GTKWave:** Visualizador de formas de onda (opcional).
+- **GHDL:** Open-source VHDL simulator.
+- **RISC-V Toolchain:** `riscv32-unknown-elf-gcc` (configured for `rv32i`).
+- **GNU Make:** Build automation.
+- **GTKWave:** Waveform viewer (optional).
 
-### Configuração Inicial
+### Initial Setup
 
-Como os IPs são gerenciados via submódulos Git, inicialize-os após clonar o repositório:
+As the IPs are managed via Git submodules, initialize them after cloning the repository:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-### Simulação do SoC
+### SoC Simulation
 
-O projeto inclui um Makefile na raiz para facilitar a simulação do sistema completo.
+The project includes a root Makefile to facilitate full system simulation.
 
-1. **Compilar um programa (exemplo em C):**
+1. **Compile a program (C example):**
    ```bash
    make -C sw/c/hello_world
    ```
 
-2. **Executar a simulação:**
+2. **Run the simulation:**
    ```bash
    make run PROGRAM=sw/c/hello_world/hello_world.bin
    ```
 
-As formas de onda serão geradas no diretório `waves/` e podem ser visualizadas com o GTKWave:
+Waveforms will be generated in the `waves/` directory and can be viewed with GTKWave:
 ```bash
 gtkwave waves/hello_world.ghw
 ```
 
-## :computer: Ambiente de Desenvolvimento
+## :computer: Development Environment
 
-Em sistemas baseados em Linux (Debian/Ubuntu), você pode instalar as ferramentas de simulação com:
+On Linux-based systems (Debian/Ubuntu), you can install the simulation tools with:
 
 ```bash
 sudo apt install ghdl gtkwave make
