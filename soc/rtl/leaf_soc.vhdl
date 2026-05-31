@@ -92,20 +92,23 @@ begin
     soc_cpu: leaf generic map (
         RESET_ADDR => ROM_BASE_ADDR
     ) port map (
-        clk_i  => soc_syscon_clk,
-        rst_i  => soc_syscon_rst,
-        ex_irq => '0',
-        sw_irq => '0',
-        tm_irq => '0',
-        ack_i  => soc_intercon_cpu_ack,
-        err_i  => soc_intercon_cpu_err,
-        dat_i  => soc_intercon_cpu_dat,
-        cyc_o  => soc_cpu_cyc,
-        stb_o  => soc_cpu_stb,
-        we_o   => soc_cpu_we,
-        sel_o  => soc_cpu_sel,
-        adr_o  => soc_cpu_adr,
-        dat_o  => soc_cpu_dat
+        clk_i     => soc_syscon_clk,
+        rst_i     => soc_syscon_rst,
+        ex_irq_i  => '0',
+        sw_irq_i  => '0',
+        tm_irq_i  => '0',
+        ack_i     => soc_intercon_cpu_ack,
+        err_i     => soc_intercon_cpu_err,
+        dat_i     => soc_intercon_cpu_dat,
+        cop_adr_o => open,
+        cop_dat_o => open,
+        cop_we_o  => open,
+        cyc_o     => soc_cpu_cyc,
+        stb_o     => soc_cpu_stb,
+        we_o      => soc_cpu_we,
+        sel_o     => soc_cpu_sel,
+        adr_o     => soc_cpu_adr,
+        dat_o     => soc_cpu_dat
     );
 
     soc_intercon: wb_intercon port map (
