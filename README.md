@@ -1,75 +1,85 @@
-# :leaves: Leaf
+# :leaves: Leaf SoC
 
-Leaf is an SoC (*System-on-Chip*) ecosystem based on a 32-bit RISC-V processor, designed to be compact, efficient, and ideal for applications in embedded systems and IoT (Internet of Things).
+Leaf SoC is a compact and efficient 32-bit *System-on-Chip* based on the RISC-V architecture. It is designed for embedded applications, IoT (Internet of Things), and academic research, providing a balanced platform between resource economy and functional completeness.
 
 ## :star: Features
 
-The Leaf core has the following characteristics:
+- **Leaf Processor:** 32-bit RISC-V core (RV32I) with a 2-stage pipeline.
+- **Wishbone B4 Bus:** Shared-bus interconnection for seamless peripheral integration.
+- **Memory System:** Integrated Boot ROM and 64 KB of internal RAM.
+- **Standard Peripherals:** Includes a robust UART for serial communication.
+- **Expandability:** Ready for XIP (Execute-In-Place) and custom hardware via a dedicated coprocessor interface.
+- **FPGA Friendly:** Synthesizable VHDL design optimized for modern FPGA architectures.
 
-- **RISC-V ISA (RV32I):** Full support for the base integer instruction set.
-- **2-Stage Pipeline:** Optimized for a balance between area and frequency (Fetch / Execute).
-- **Wishbone B4 Interface:** Master interface compatible with the Wishbone standard for easy peripheral integration.
-- **CSR Support (Machine Mode):** Implementation of control and status registers (`mtvec`, `mepc`, `mcause`, `mstatus`, `mie`, `mip`, `mscratch`, `mtval`) and counters (`mcycle`, `minstret`, `mtime`).
-- **Interrupt Handling:** Support for external, software, and timer interrupts.
-- **Coprocessor Interface:** Customized CSR window (0x7C0-0x7FF) for hardware expansion.
+## :gears: Microarchitecture
+
+The SoC architecture is centered around the **Wishbone B4** interconnect, which manages the communication between the Leaf master and several slave peripherals.
+
+### Processor
+The **Leaf** core implements the RV32I base integer instruction set. It features a 2-stage pipeline (Fetch and Execute) and supports Machine-mode CSRs, hardware counters, and interrupts.
+
+### Bus & Interconnect
+A central **Intercon** module performs address decoding and bus steering. It uses the Wishbone B4 protocol, supporting byte-selects (`SEL`) and error reporting (`ERR`).
+
+### Memory Map
+The default address space allocation is defined as follows:
+
+| Peripheral | Base Address | Size | Description |
+|------------|--------------|------|-------------|
+| **ROM**    | `0x00001000` | 512 B | Bootloader / Initialization code |
+| **UART**   | `10000000` | 16 B | Serial communication (IO0) |
+| **IO1**    | `0x10001000` | 16 B | Reserved for secondary IO |
+| **XIP**    | `0x20000000` | 16 MB | External Flash / Execute-In-Place (Optional) |
+| **RAM**    | `0x80000000` | 64 KB | Main System Memory |
+
+### System Controller
+The **Syscon** module handles global clock buffering and synchronized reset generation for the entire SoC.
 
 ## :file_folder: Project Structure
 
-The repository is organized as follows:
+The repository is organized into the following main directories:
 
-Directory             | Description
---------------------- | ---------------------------------------------------------
-[`ips/cpu/`](ips/cpu/) | Leaf processor core (Submodule)
-[`ips/uart/`](ips/uart/) | UART peripheral with Wishbone Slave interface (Submodule)
-[`ips/wgen/`](ips/wgen/) | DDS-based sine wave generator (Submodule)
-[`soc/`](soc/)         | RTL and testbenches for the full SoC (FPGA-synthesizable)
-[`sw/`](sw/)           | Test programs and libraries (C and Assembly)
+- [`ips/`](ips/): Intellectual Property blocks (Git submodules).
+  - [`cpu/`](ips/cpu/): The Leaf RISC-V processor core.
+  - [`uart/`](ips/uart/): UART controller with Wishbone interface.
+  - [`wgen/`](ips/wgen/): DDS-based signal generator.
+- [`soc/`](soc/): SoC-level RTL implementation and top-level testbenches.
+- [`sw/`](sw/): RISC-V software, including bootloaders, libraries, and C/Assembly examples.
+- [`waves/`](waves/): Output directory for simulation waveforms (generated at runtime).
 
-## :rocket: Getting Started
+## :test_tube: Simulation
 
-### Prerequisites
+The SoC can be fully simulated using the provided Makefiles and open-source VHDL tools.
 
-To simulate and develop for Leaf, you will need:
+### Dependencies
+To build and simulate the project, ensure the following tools are installed:
 
-- **GHDL:** Open-source VHDL simulator.
-- **RISC-V Toolchain:** `riscv32-unknown-elf-gcc` (configured for `rv32i`).
-- **GNU Make:** Build automation.
-- **GTKWave:** Waveform viewer (optional).
+- **GHDL:** VHDL simulator for logic verification.
+- **RISC-V Toolchain:** `riscv32-unknown-elf-gcc` (must support `-march=rv32i -mabi=ilp32`).
+- **GNU Make:** Used to orchestrate the build and simulation process.
+- **GTKWave:** (Optional) Recommended for viewing `.ghw` waveform files.
 
-### Initial Setup
+### Running a Simulation
 
-As the IPs are managed via Git submodules, initialize them after cloning the repository:
+1. **Initialize Submodules:**
+   ```bash
+   git submodule update --init --recursive
+   ```
 
-```bash
-git submodule update --init --recursive
-```
-
-### SoC Simulation
-
-The project includes a root Makefile to facilitate full system simulation.
-
-1. **Compile a program (C example):**
+2. **Build the Software:**
    ```bash
    make -C sw/c/hello_world
    ```
 
-2. **Run the simulation:**
+3. **Execute Simulation:**
    ```bash
    make run PROGRAM=sw/c/hello_world/hello_world.bin
    ```
 
-Waveforms will be generated in the `waves/` directory and can be viewed with GTKWave:
-```bash
-gtkwave waves/hello_world.ghw
-```
-
-## :computer: Development Environment
-
-On Linux-based systems (Debian/Ubuntu), you can install the simulation tools with:
-
-```bash
-sudo apt install ghdl gtkwave make
-```
+4. **View Waveforms:**
+   ```bash
+   gtkwave waves/hello_world.ghw
+   ```
 
 ---
 
