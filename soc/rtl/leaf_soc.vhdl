@@ -52,7 +52,6 @@ architecture rtl of leaf_soc is
     signal soc_intercon_xip_we  : std_logic;
     signal soc_intercon_io0_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_io1_sel : std_logic_vector(3 downto 0);
-    signal soc_intercon_rom_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_ram_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_xip_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_io0_adr : std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
@@ -82,7 +81,6 @@ architecture rtl of leaf_soc is
     signal soc_ram_ack : std_logic;
     signal soc_ram_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
-    signal soc_cop_csr_rdata : std_logic_vector(31 downto 0);
     signal soc_cop_csr_addr  : std_logic_vector(5 downto 0);
     signal soc_cop_csr_wdata : std_logic_vector(31 downto 0);
     signal soc_cop_csr_we    : std_logic;
@@ -104,24 +102,23 @@ begin
     soc_cpu: leaf generic map (
         RESET_ADDR => ROM_BASE_ADDR
     ) port map (
-        clk_i  => soc_syscon_clk,
-        rst_i  => soc_syscon_rst,
-        ex_irq => '0',
-        sw_irq => '0',
-        tm_irq => '0',
-        ack_i  => soc_intercon_cpu_ack,
-        err_i  => soc_intercon_cpu_err,
-        dat_i  => soc_intercon_cpu_dat,
-        cop_csr_rdata_i => soc_cop_csr_rdata,
-        cop_csr_addr_o  => soc_cop_csr_addr,
-        cop_csr_wdata_o => soc_cop_csr_wdata,
-        cop_csr_we_o    => soc_cop_csr_we,
-        cyc_o  => soc_cpu_cyc,
-        stb_o  => soc_cpu_stb,
-        we_o   => soc_cpu_we,
-        sel_o  => soc_cpu_sel,
-        adr_o  => soc_cpu_adr,
-        dat_o  => soc_cpu_dat
+        clk_i     => soc_syscon_clk,
+        rst_i     => soc_syscon_rst,
+        ex_irq_i  => '0',
+        sw_irq_i  => '0',
+        tm_irq_i  => '0',
+        ack_i     => soc_intercon_cpu_ack,
+        err_i     => soc_intercon_cpu_err,
+        dat_i     => soc_intercon_cpu_dat,
+        cop_adr_o => soc_cop_csr_addr,
+        cop_dat_o => soc_cop_csr_wdata,
+        cop_we_o  => soc_cop_csr_we,
+        cyc_o     => soc_cpu_cyc,
+        stb_o     => soc_cpu_stb,
+        we_o      => soc_cpu_we,
+        sel_o     => soc_cpu_sel,
+        adr_o     => soc_cpu_adr,
+        dat_o     => soc_cpu_dat
     );
 
     soc_wgx_csrs: wgx_csrs port map (
@@ -130,7 +127,7 @@ begin
         addr_i  => soc_cop_csr_addr,
         wdata_i => soc_cop_csr_wdata,
         we_i    => soc_cop_csr_we,
-        rdata_o => soc_cop_csr_rdata,
+        rdata_o => open,
         inc_o   => soc_wgen_inc,
         pha_o   => soc_wgen_pha,
         amp_o   => soc_wgen_amp,
@@ -173,7 +170,6 @@ begin
         xip_we_o  => soc_intercon_xip_we,
         io0_sel_o => soc_intercon_io0_sel,
         io1_sel_o => soc_intercon_io1_sel,
-        rom_sel_o => soc_intercon_rom_sel,
         ram_sel_o => soc_intercon_ram_sel,
         xip_sel_o => soc_intercon_xip_sel,
         io0_adr_o => soc_intercon_io0_adr,
@@ -193,7 +189,6 @@ begin
         rst_i => soc_syscon_rst,
         cyc_i => soc_intercon_rom_cyc,
         stb_i => soc_intercon_rom_stb,
-        sel_i => soc_intercon_rom_sel,
         adr_i => soc_intercon_rom_adr,
         ack_o => soc_rom_ack,
         dat_o => soc_rom_dat
@@ -234,7 +229,7 @@ begin
     soc_xip_dat <= (others => '0');
 
     -- memory 64 kB --
-    soc_ram: ram generic map (
+    soc_ram: wb_ram generic map (
         BITS  => 16
     ) port map (
         clk_i => soc_syscon_clk,

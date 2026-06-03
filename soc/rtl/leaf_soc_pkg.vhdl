@@ -30,7 +30,7 @@ package leaf_soc_pkg is
         );
     end component wb_syscon;
 
-    component ram is
+    component wb_ram is
         generic (
             BITS : natural := 8
         );
@@ -46,7 +46,7 @@ package leaf_soc_pkg is
             ack_o : out std_logic;
             dat_o : out std_logic_vector(31 downto 0)
         );
-    end component ram;
+    end component wb_ram;
 
     component wb_rom is
         port (
@@ -54,7 +54,6 @@ package leaf_soc_pkg is
             rst_i : in  std_logic;
             cyc_i : in  std_logic;
             stb_i : in  std_logic;
-            sel_i : in  std_logic_vector(3 downto 0);
             adr_i : in  std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
             ack_o : out std_logic;
             dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
@@ -96,7 +95,6 @@ package leaf_soc_pkg is
             io1_we_o  : out  std_logic;
             xip_we_o  : out  std_logic;
             ram_we_o  : out  std_logic;
-            rom_sel_o : out  std_logic_vector(3  downto 0);
             io0_sel_o : out  std_logic_vector(3  downto 0);
             io1_sel_o : out  std_logic_vector(3  downto 0);
             xip_sel_o : out  std_logic_vector(3  downto 0);

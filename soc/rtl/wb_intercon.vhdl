@@ -44,7 +44,6 @@ entity wb_intercon is
         io1_we_o  : out  std_logic;
         xip_we_o  : out  std_logic;
         ram_we_o  : out  std_logic;
-        rom_sel_o : out  std_logic_vector(3  downto 0);
         io0_sel_o : out  std_logic_vector(3  downto 0);
         io1_sel_o : out  std_logic_vector(3  downto 0);
         xip_sel_o : out  std_logic_vector(3  downto 0);
@@ -83,7 +82,7 @@ begin
     sel_err <= not (rom_sel or io0_sel or io1_sel or xip_sel or ram_sel);
 
     cpu_ack_o <= (rom_ack_i and rom_sel) or (io0_ack_i and io0_sel) or (io1_ack_i and io1_sel) or (xip_ack_i and xip_sel) or (ram_ack_i and ram_sel);
-    cpu_err_o <= cpu_cyc_i and cpu_stb_i and sel_err;
+    cpu_err_o <= cpu_cyc_i and cpu_stb_i and (sel_err or (xip_err_i and xip_sel));
 
     rom_cyc_o <= cpu_cyc_i;
     io0_cyc_o <= cpu_cyc_i;
@@ -102,7 +101,6 @@ begin
     xip_we_o <= cpu_we_i;
     ram_we_o <= cpu_we_i;
 
-    rom_sel_o <= cpu_sel_i;
     io0_sel_o <= cpu_sel_i;
     io1_sel_o <= cpu_sel_i;
     xip_sel_o <= cpu_sel_i;
