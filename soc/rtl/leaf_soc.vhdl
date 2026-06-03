@@ -50,7 +50,6 @@ architecture rtl of leaf_soc is
     signal soc_intercon_xip_we  : std_logic;
     signal soc_intercon_io0_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_io1_sel : std_logic_vector(3 downto 0);
-    signal soc_intercon_rom_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_ram_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_xip_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_io0_adr : std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
@@ -147,7 +146,6 @@ begin
         xip_we_o  => soc_intercon_xip_we,
         io0_sel_o => soc_intercon_io0_sel,
         io1_sel_o => soc_intercon_io1_sel,
-        rom_sel_o => soc_intercon_rom_sel,
         ram_sel_o => soc_intercon_ram_sel,
         xip_sel_o => soc_intercon_xip_sel,
         io0_adr_o => soc_intercon_io0_adr,
@@ -167,7 +165,6 @@ begin
         rst_i => soc_syscon_rst,
         cyc_i => soc_intercon_rom_cyc,
         stb_i => soc_intercon_rom_stb,
-        sel_i => soc_intercon_rom_sel,
         adr_i => soc_intercon_rom_adr,
         ack_o => soc_rom_ack,
         dat_o => soc_rom_dat
@@ -194,7 +191,7 @@ begin
     soc_xip_dat <= (others => '0');
 
     -- memory 64 kB --
-    soc_ram: ram generic map (
+    soc_ram: wb_ram generic map (
         BITS  => 16
     ) port map (
         clk_i => soc_syscon_clk,

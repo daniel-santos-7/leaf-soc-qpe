@@ -44,7 +44,6 @@ entity wb_intercon is
         io1_we_o  : out  std_logic;
         xip_we_o  : out  std_logic;
         ram_we_o  : out  std_logic;
-        rom_sel_o : out  std_logic_vector(3  downto 0);
         io0_sel_o : out  std_logic_vector(3  downto 0);
         io1_sel_o : out  std_logic_vector(3  downto 0);
         xip_sel_o : out  std_logic_vector(3  downto 0);
@@ -102,7 +101,6 @@ begin
     xip_we_o <= cpu_we_i;
     ram_we_o <= cpu_we_i;
 
-    rom_sel_o <= cpu_sel_i;
     io0_sel_o <= cpu_sel_i;
     io1_sel_o <= cpu_sel_i;
     xip_sel_o <= cpu_sel_i;

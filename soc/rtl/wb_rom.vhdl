@@ -17,7 +17,6 @@ entity wb_rom is
         rst_i : in  std_logic;
         cyc_i : in  std_logic;
         stb_i : in  std_logic;
-        sel_i : in  std_logic_vector(3 downto 0);
         adr_i : in  std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
         ack_o : out std_logic;
         dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
@@ -54,14 +53,8 @@ begin
     dat_reg_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
-            if rst_i = '1' then
-                dat_reg <= (others => '0');
-            elsif ack_reg = '0' and rom_req = '1' then
-                for i in 0 to 3 loop
-                    if sel_i(i) = '1' then
-                        dat_reg(8*i+7 downto 8*i) <= BOOT_DATA(to_integer(unsigned(adr_i)))(8*i+7 downto 8*i);
-                    end if;
-                end loop;
+            if ack_reg = '0' and rom_req = '1' then
+                dat_reg <= BOOT_DATA(to_integer(unsigned(adr_i)));
             end if;
         end if;
     end process dat_reg_proc;

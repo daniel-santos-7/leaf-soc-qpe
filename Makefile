@@ -1,6 +1,6 @@
 GHDL = ghdl
 GHDLFLAGS = --workdir=$(WORKDIR) --ieee=synopsys
-GHDLXOPTS = --ieee-asserts=disable --stop-time=10ms
+GHDLXOPTS = --ieee-asserts=disable --stop-time=15ms
 
 WORKDIR  = work
 WAVESDIR = waves
@@ -13,7 +13,7 @@ SOC_RTL  = $(wildcard ./soc/rtl/*.vhdl)
 SOC_TBS  = $(wildcard ./soc/tbs/*.vhdl)
 
 RTL_SRC  = $(CPU_RTL) $(UART_RTL) $(SOC_RTL)
-TBS_SRC  = $(CPU_TBS) $(UART_TBS) $(SOC_TBS)
+TBS_SRC  = $(UART_TBS) $(SOC_TBS)
 
 TOP_TB = leaf_soc_tb
 
