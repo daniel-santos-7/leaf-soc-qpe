@@ -81,6 +81,10 @@ To build and simulate the project, ensure the following tools are installed:
    gtkwave waves/hello_world.ghw
    ```
 
+## :balance_scale: License
+
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for the full text.
+
 ---
 
 <p align="center">2026</p>
