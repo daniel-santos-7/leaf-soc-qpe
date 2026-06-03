@@ -27,9 +27,9 @@ architecture rtl of wb_rom is
 
     signal rom_req : std_logic;
 
-	signal ack_reg : std_logic;
+    signal ack_reg : std_logic;
 
-	signal dat_reg : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal dat_reg : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
 begin
 
@@ -38,7 +38,7 @@ begin
     rom_req <= cyc_i and stb_i;
 
     ack_reg_proc: process(clk_i)
-	begin
+    begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 ack_reg <= '0';
@@ -48,7 +48,7 @@ begin
                 ack_reg <= rom_req;
             end if;
         end if;
-	end process ack_reg_proc;
+    end process ack_reg_proc;
 
     dat_reg_proc: process(clk_i)
     begin
