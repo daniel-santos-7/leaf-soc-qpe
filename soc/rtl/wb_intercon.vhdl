@@ -82,7 +82,7 @@ begin
     sel_err <= not (rom_sel or io0_sel or io1_sel or xip_sel or ram_sel);
 
     cpu_ack_o <= (rom_ack_i and rom_sel) or (io0_ack_i and io0_sel) or (io1_ack_i and io1_sel) or (xip_ack_i and xip_sel) or (ram_ack_i and ram_sel);
-    cpu_err_o <= cpu_cyc_i and cpu_stb_i and sel_err;
+    cpu_err_o <= cpu_cyc_i and cpu_stb_i and (sel_err or (xip_err_i and xip_sel));
 
     rom_cyc_o <= cpu_cyc_i;
     io0_cyc_o <= cpu_cyc_i;
