@@ -1,6 +1,6 @@
 GHDL = ghdl
 GHDLFLAGS = --workdir=$(WORKDIR) --ieee=synopsys
-GHDLXOPTS = --ieee-asserts=disable --stop-time=15ms
+GHDLXOPTS = --ieee-asserts=disable
 
 WORKDIR  = work
 WAVESDIR = waves
