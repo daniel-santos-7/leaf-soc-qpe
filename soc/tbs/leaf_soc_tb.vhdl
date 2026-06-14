@@ -75,6 +75,8 @@ begin
         rx   <= '1';
         clk_en <= '1';
         wait until rising_edge(clk);
+        wait until rising_edge(clk);
+        wait until rising_edge(clk);
 
         rst <= '1';
         wait until rising_edge(clk);
