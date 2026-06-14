@@ -665,8 +665,8 @@ uart_send_char(char c)
     // char volatile *out = (char *) 0x00200000;
     // (*out) = c;
     
-    char volatile *flag = (char *) 0x0;
-    char volatile *out = (char *) 0xC;
+    char volatile *flag = (char *) 0x10000000;
+    char volatile *out = (char *) 0x1000000C;
 
     while(((*flag) & 0x20) != 0x20);
     (*out) = c;
