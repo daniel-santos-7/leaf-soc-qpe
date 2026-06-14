@@ -55,7 +55,7 @@ architecture rtl of leaf_soc is
     signal soc_intercon_ram_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_xip_sel : std_logic_vector(3 downto 0);
     signal soc_intercon_io0_adr : std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
-    signal soc_intercon_io1_adr : std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
+    signal soc_intercon_io1_adr : std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
     signal soc_intercon_rom_adr : std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
     signal soc_intercon_ram_adr : std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
     signal soc_intercon_xip_adr : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
