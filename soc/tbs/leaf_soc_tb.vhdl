@@ -7,7 +7,8 @@ use work.uart_tb_pkg.all;
 
 entity leaf_soc_tb is
     generic (
-        PROGRAM : string
+        PROGRAM : string;
+        RUN_CYCLES : natural := 500000
     );
 end entity leaf_soc_tb;
 
@@ -88,9 +89,10 @@ begin
 
         leaf_soc_send_program(rx, uart_data, PROGRAM);
 
-        wait for 10 ms;
+        for i in 0 to RUN_CYCLES-1 loop
+            wait until rising_edge(clk);
+        end loop;
 
-        wait until rising_edge(clk);
         clk_en <= '0';
         wait;
     end process test;

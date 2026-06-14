@@ -20,7 +20,7 @@ run: coremark
 .PHONY: run-quick
 run-quick:
 	@mkdir -p $(LOG_DIR)
-	$(MAKE) -C .. run PROGRAM=$(COREMARK_BIN) --stop-time=1500ms 2>&1 | tee $(LOG_FILE)
+	$(MAKE) -C .. run PROGRAM=$(COREMARK_BIN) GHDLXOPTS="--ieee-asserts=disable --stop-time=1500ms" 2>&1 | tee $(LOG_FILE)
 	@ln -sf $(notdir $(LOG_FILE)) $(LOG_LATEST)
 	@echo "Log saved: $(LOG_FILE) (quick mode)"
 

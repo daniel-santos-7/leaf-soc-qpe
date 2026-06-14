@@ -18,11 +18,12 @@ TBS_SRC  = $(UART_TBS) $(SOC_TBS)
 TOP_TB = leaf_soc_tb
 
 PROGRAM  ?= sw/asm/hello-world/hello-world.bin
+RUN_CYCLES ?= 500000
 WAVEFORM ?= $(shell basename $(PROGRAM) .bin).ghw
 
 ifdef WAVEFORM
-GHDLXOPTS += --wave=$(WAVESDIR)/$(WAVEFORM)
-# GHDLXOPTS += --fst=$(WAVESDIR)/$(WAVEFORM).fst
+override GHDLXOPTS += --wave=$(WAVESDIR)/$(WAVEFORM)
+# override GHDLXOPTS += --fst=$(WAVESDIR)/$(WAVEFORM).fst
 endif
 
 $(WORKDIR) $(WAVESDIR):
@@ -36,7 +37,7 @@ $(WORKDIR)/.make: $(WORKDIR)/.import
 
 .PHONY: run clean
 run: $(WORKDIR)/.make $(PROGRAM) | $(WAVESDIR)
-	@$(GHDL) -r $(GHDLFLAGS) $(TOP_TB) $(GHDLXOPTS) -gPROGRAM=$(PROGRAM)
+	@$(GHDL) -r $(GHDLFLAGS) $(TOP_TB) $(GHDLXOPTS) -gPROGRAM=$(PROGRAM) -gRUN_CYCLES=$(RUN_CYCLES)
 
 clean:
 	@$(GHDL) clean --workdir=$(WORKDIR)
