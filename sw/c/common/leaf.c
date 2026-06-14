@@ -106,24 +106,29 @@ void itoa(int num, char *str)
     int i = 0;
     int is_neg = 0;
     char tmp[20];
+    unsigned unum;
 
     if (num < 0)
     {
         is_neg = 1;
-        num = -num;
+        unum = -(unsigned)num;
+    }
+    else
+    {
+        unum = (unsigned)num;
     }
 
-    if (num == 0)
+    if (unum == 0)
     {
         str[i++] = '0';
         str[i] = '\0';
         return;
     }
 
-    while (num != 0)
+    while (unum != 0)
     {
-        tmp[i++] = (num % 10) + '0';
-        num /= 10;
+        tmp[i++] = (unum % 10) + '0';
+        unum /= 10;
     }
 
     if (is_neg)
