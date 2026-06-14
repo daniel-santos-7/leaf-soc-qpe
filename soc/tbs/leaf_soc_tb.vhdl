@@ -26,7 +26,7 @@ architecture tb of leaf_soc_tb is
 
 begin
 
-    uut: leaf_soc port map (
+    uut: entity work.leaf_soc port map (
         clk => clk,
         rst => rst,
         rx  => rx,
@@ -55,22 +55,6 @@ begin
         file_close(out_file);
         wait;
     end process uart_rx_proc;
-
-    -- uart_tx_proc: process
-    --     type char_file is file of character;
-    --     file in_file : char_file;
-    --     variable tx_data : std_logic_vector(7 downto 0);
-    --     variable char : character;
-    -- begin
-    --     file_open(in_file, "STD_INPUT", read_mode);
-    --     while not endfile(in_file) loop
-    --         read(in_file, char);
-    --         tx_data := std_logic_vector(to_unsigned(character'pos(char), 8));
-    --         uart_transmit(rx, tx_data);
-    --     end loop;
-    --     file_close(in_file);
-    --     wait;
-    -- end process uart_tx_proc;
 
     test: process
     begin

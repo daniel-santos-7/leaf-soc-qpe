@@ -9,3 +9,5 @@ sw/**/*.bin
 sw/**/*.disass
 sw/**/*.debug
 sw/**/*.vhdl
+
+soc/rtl/wgen_cfg.vhdl

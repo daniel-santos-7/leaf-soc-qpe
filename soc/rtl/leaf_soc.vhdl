@@ -1,16 +1,10 @@
-----------------------------------------------------------------------
--- Leaf project
--- developed by: Daniel Santos
--- module: leaf system (SOC)
--- 2026
-----------------------------------------------------------------------
-
 library IEEE;
 use IEEE.std_logic_1164.all;
 use work.leaf_pkg.all;
 use work.leaf_soc_pkg.all;
 use work.uart_pkg.all;
 use work.sig_gen_pkg.all;
+use work.wgen_cfg.all;
 
 entity leaf_soc is
     port (
@@ -123,18 +117,40 @@ begin
         dat_o     => soc_cpu_dat
     );
 
-    soc_wgx_csrs: wgx_csrs port map (
-        clk_i   => soc_syscon_clk,
-        rst_i   => soc_syscon_rst,
-        addr_i  => soc_cop_csr_addr,
-        wdata_i => soc_cop_csr_wdata,
-        we_i    => soc_cop_csr_we,
-        rdata_o => soc_cop_csr_rdata,
-        inc_o   => soc_wgen_inc,
-        pha_o   => soc_wgen_pha,
-        amp_o   => soc_wgen_amp,
-        we_o    => soc_wgen_we
-    );
+    cop_wgx_gen: if WGEN_IF_COP generate
+        soc_wgx_csrs: wgx_csrs port map (
+            clk_i   => soc_syscon_clk,
+            rst_i   => soc_syscon_rst,
+            addr_i  => soc_cop_csr_addr,
+            wdata_i => soc_cop_csr_wdata,
+            we_i    => soc_cop_csr_we,
+            rdata_o => soc_cop_csr_rdata,
+            inc_o   => soc_wgen_inc,
+            pha_o   => soc_wgen_pha,
+            amp_o   => soc_wgen_amp,
+            we_o    => soc_wgen_we
+        );
+    end generate;
+
+    mmio_wgx_gen: if not WGEN_IF_COP generate
+        soc_wb_wgx_csrs: wb_wgx_csrs port map (
+            clk_i   => soc_syscon_clk,
+            rst_i   => soc_syscon_rst,
+            cyc_i   => soc_intercon_io1_cyc,
+            stb_i   => soc_intercon_io1_stb,
+            we_i    => soc_intercon_io1_we,
+            sel_i   => soc_intercon_io1_sel,
+            adr_i   => soc_intercon_io1_adr,
+            dat_i   => soc_intercon_io1_dat,
+            ack_o   => soc_io1_ack,
+            dat_o   => soc_io1_dat,
+            inc_o   => soc_wgen_inc,
+            pha_o   => soc_wgen_pha,
+            amp_o   => soc_wgen_amp,
+            we_o    => soc_wgen_we
+        );
+        soc_cop_csr_rdata <= (others => '0');
+    end generate;
 
     soc_intercon: wb_intercon port map (
         cpu_cyc_i => soc_cpu_cyc,
@@ -211,6 +227,11 @@ begin
         tx    => tx
     );
 
+    cop_io1_gen: if WGEN_IF_COP generate
+        soc_io1_ack <= '0';
+        soc_io1_dat <= (others => '0');
+    end generate;
+
     soc_wgen: sig_gen port map (
         clk_i => soc_syscon_clk,
         rst_i => soc_syscon_rst,
@@ -220,10 +241,6 @@ begin
         amp_i => soc_wgen_amp,
         sig_o => sig
     );
-
-    -- io1 not connected --
-    soc_io1_ack <= '0';
-    soc_io1_dat <= (others => '0');
 
     -- XIP not connected --
     soc_xip_ack <= '0';

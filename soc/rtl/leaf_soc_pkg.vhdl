@@ -137,4 +137,23 @@ package leaf_soc_pkg is
         );
     end component wgx_csrs;
 
+    component wb_wgx_csrs is
+        port (
+            clk_i : in  std_logic;
+            rst_i : in  std_logic;
+            cyc_i : in  std_logic;
+            stb_i : in  std_logic;
+            we_i  : in  std_logic;
+            sel_i : in  std_logic_vector(3 downto 0);
+            adr_i : in  std_logic_vector(3 downto 2);
+            dat_i : in  std_logic_vector(31 downto 0);
+            ack_o : out std_logic;
+            dat_o : out std_logic_vector(31 downto 0);
+            inc_o : out std_logic_vector(31 downto 0);
+            pha_o : out std_logic_vector(31 downto 0);
+            amp_o : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+            we_o  : out std_logic
+        );
+    end component wb_wgx_csrs;
+
 end package leaf_soc_pkg;
