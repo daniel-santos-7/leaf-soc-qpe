@@ -1,15 +1,17 @@
-COREMARK_DIR = coremark
-COREMARK_BIN = sw/$(COREMARK_DIR)/coremark.bin
-LOG_DIR      = logs
-LOG_FILE     = $(LOG_DIR)/coremark-$(shell date +%Y%m%d-%H%M%S).log
-LOG_LATEST   = $(LOG_DIR)/coremark-latest.log
+COREMARK_DIR  = coremark
+COREMARK_BIN  = sw/$(COREMARK_DIR)/coremark.bin
+CORE_DEBUG   ?= 1
+SW_ITERATIONS ?= 1000
+LOG_DIR       = logs
+LOG_FILE      = $(LOG_DIR)/coremark-$(shell date +%Y%m%d-%H%M%S).log
+LOG_LATEST    = $(LOG_DIR)/coremark-latest.log
 
 .PHONY: all coremark run clean
 
 all: coremark run
 
 coremark:
-	$(MAKE) -C $(COREMARK_DIR) CORE_DEBUG=1
+	$(MAKE) -C $(COREMARK_DIR) CORE_DEBUG=$(CORE_DEBUG) SW_ITERATIONS=$(SW_ITERATIONS)
 
 run: coremark
 	@mkdir -p $(LOG_DIR)
@@ -18,9 +20,9 @@ run: coremark
 	@echo "Log saved: $(LOG_FILE)"
 
 .PHONY: run-quick
-run-quick:
+run-quick: coremark
 	@mkdir -p $(LOG_DIR)
-	$(MAKE) -C .. run PROGRAM=$(COREMARK_BIN) GHDLXOPTS="--ieee-asserts=disable --stop-time=1500ms" 2>&1 | tee $(LOG_FILE)
+	$(MAKE) -C .. run PROGRAM=$(COREMARK_BIN) RUN_CYCLES=75000000 2>&1 | tee $(LOG_FILE)
 	@ln -sf $(notdir $(LOG_FILE)) $(LOG_LATEST)
 	@echo "Log saved: $(LOG_FILE) (quick mode)"
 
