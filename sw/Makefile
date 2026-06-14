@@ -6,7 +6,7 @@ LOG_DIR       = logs
 LOG_FILE      = $(LOG_DIR)/coremark-$(shell date +%Y%m%d-%H%M%S).log
 LOG_LATEST    = $(LOG_DIR)/coremark-latest.log
 
-.PHONY: all coremark run clean
+.PHONY: all coremark run run-quick clean upload monitor
 
 all: coremark run
 
@@ -29,3 +29,15 @@ run-quick: coremark
 clean:
 	$(MAKE) -C $(COREMARK_DIR) clean
 	rm -rf $(LOG_DIR)
+
+BIN    ?= ./c/hello_world/hello_world.bin
+PORT   ?= /dev/ttyUSB0
+BAUD   ?= 115200
+
+.PHONY: upload
+upload: $(BIN)
+	python3 utils/load_bin.py $(PORT) $(BIN) $(BAUD)
+
+.PHONY: monitor
+monitor:
+	python3 -m serial.tools.miniterm $(PORT) $(BAUD) --eol LF
