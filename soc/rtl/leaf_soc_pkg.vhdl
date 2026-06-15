@@ -122,6 +122,29 @@ package leaf_soc_pkg is
         );
     end component leaf_soc;
 
+    component leaf_wgx is
+        generic (
+            RESET_ADDR : std_logic_vector(31 downto 0) := (others => '0')
+        );
+        port (
+            clk_i     : in  std_logic;
+            rst_i     : in  std_logic;
+            ex_irq_i  : in  std_logic;
+            sw_irq_i  : in  std_logic;
+            tm_irq_i  : in  std_logic;
+            ack_i     : in  std_logic;
+            err_i     : in  std_logic;
+            dat_i     : in  std_logic_vector(31 downto 0);
+            cyc_o     : out std_logic;
+            stb_o     : out std_logic;
+            we_o      : out std_logic;
+            sel_o     : out std_logic_vector(3  downto 0);
+            adr_o     : out std_logic_vector(31 downto 0);
+            dat_o     : out std_logic_vector(31 downto 0);
+            sig_o     : out std_logic_vector(OUT_RES_BITS-1 downto 0)
+        );
+    end component leaf_wgx;
+
     component wgx_csrs is
         port (
             clk_i   : in  std_logic;
