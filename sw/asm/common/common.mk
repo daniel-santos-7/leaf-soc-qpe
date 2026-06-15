@@ -6,11 +6,9 @@ RISCV_OBJCOPY = $(RISCV_PREFIX)-objcopy
 MARCH = rv32i
 MABI  = ilp32
 
-STARTUP  ?= ../common/crt0.S
-SYSCALLS ?= ../common/syscalls.c
 LDSCRIPT ?= ../common/soc.ld
 APP_EXE  ?= out
-APP_SRC  ?= $(wildcard ./*.c) $(wildcard ./*.cpp) $(wildcard ./*.s) $(wildcard ./*.S) $(STARTUP) $(SYSCALLS)
+APP_SRC  ?= $(wildcard ./*.s) $(wildcard ./*.S)
 
 RISCV_GCC_OPTS ?= -nostartfiles -T $(LDSCRIPT) -march=$(MARCH) -mabi=$(MABI) -Os -w -fdata-sections -ffunction-sections -mno-fdiv -Wl,--gc-sections -lm -lc -lgcc -lc
 
