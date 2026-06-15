@@ -7,7 +7,7 @@ MARCH = rv32i
 MABI  = ilp32
 
 APP_EXE  = boot
-APP_SRC  = start.S uart.S crc.S
+APP_SRC  = start.S crc.S ../common/uart.S
 
 RISCV_GCC_OPTS = -nostartfiles -nostdlib -Ttext 0x00001000 -march=$(MARCH) -mabi=$(MABI) -O0
 
