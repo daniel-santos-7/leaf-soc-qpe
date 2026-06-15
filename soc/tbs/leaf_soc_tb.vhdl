@@ -18,7 +18,9 @@ architecture tb of leaf_soc_tb is
     signal rst : std_logic;
     signal rx  : std_logic;
     signal tx  : std_logic;
-    signal sig : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal sig_i  : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal sig_q  : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal active : std_logic;
 
     signal uart_data : std_logic_vector(7 downto 0);
 
@@ -27,11 +29,13 @@ architecture tb of leaf_soc_tb is
 begin
 
     uut: entity work.leaf_soc port map (
-        clk => clk,
-        rst => rst,
-        rx  => rx,
-        tx  => tx,
-        sig => sig
+        clk    => clk,
+        rst    => rst,
+        rx     => rx,
+        tx     => tx,
+        sig_i  => sig_i,
+        sig_q  => sig_q,
+        active => active
     );
 
     clk <= not clk after (CLK_PERIOD/2) when clk_en = '1' else '0';

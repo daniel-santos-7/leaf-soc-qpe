@@ -118,7 +118,7 @@ package leaf_soc_pkg is
             rst : in  std_logic;
             rx  : in  std_logic;
             tx  : out std_logic;
-            sig : out std_logic_vector(OUT_RES_BITS-1 downto 0)
+            sig_i : out std_logic_vector(OUT_RES_BITS-1 downto 0)
         );
     end component leaf_soc;
 
@@ -141,7 +141,9 @@ package leaf_soc_pkg is
             sel_o     : out std_logic_vector(3  downto 0);
             adr_o     : out std_logic_vector(31 downto 0);
             dat_o     : out std_logic_vector(31 downto 0);
-            sig_o     : out std_logic_vector(OUT_RES_BITS-1 downto 0)
+            sig_o     : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+            sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+            active_o  : out std_logic
         );
     end component leaf_wgx;
 

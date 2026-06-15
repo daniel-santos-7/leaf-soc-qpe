@@ -12,7 +12,9 @@ entity leaf_soc is
         rst : in  std_logic;
         rx  : in  std_logic;
         tx  : out std_logic;
-        sig : out std_logic_vector(OUT_RES_BITS-1 downto 0)
+        sig_i  : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+        sig_q  : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+        active : out std_logic
     );
 end entity leaf_soc;
 
@@ -104,7 +106,9 @@ begin
             sel_o    => soc_cpu_sel,
             adr_o    => soc_cpu_adr,
             dat_o    => soc_cpu_dat,
-            sig_o    => sig
+            sig_o    => sig_i,
+            sig_q_o  => sig_q,
+            active_o => active
         );
 
         soc_io1_ack <= '0';
@@ -148,9 +152,9 @@ begin
             dat_i    => soc_intercon_io1_dat,
             ack_o    => soc_io1_ack,
             dat_o    => soc_io1_dat,
-            sig_i_o  => sig,
-            sig_q_o  => open,
-            active_o => open
+            sig_i_o  => sig_i,
+            sig_q_o  => sig_q,
+            active_o => active
         );
     end generate;
 

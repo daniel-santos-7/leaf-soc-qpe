@@ -23,7 +23,9 @@ entity leaf_wgx is
         sel_o     : out std_logic_vector(3         downto 0);
         adr_o     : out std_logic_vector(XLEN-1 downto 0);
         dat_o     : out std_logic_vector(XLEN-1 downto 0);
-        sig_o     : out std_logic_vector(OUT_RES_BITS-1 downto 0)
+        sig_o     : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+        sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+        active_o  : out std_logic
     );
 end entity leaf_wgx;
 
@@ -88,7 +90,7 @@ begin
         ready_i => wgen_ready
     );
 
-    u_wgen: sig_gen port map (
+        u_wgen: sig_gen port map (
         clk_i   => clk_i,
         rst_i   => rst_i,
         ftw_i   => wgen_ftw,
@@ -100,8 +102,8 @@ begin
         delay_i => wgen_delay,
         ready_o => wgen_ready,
         sig_i_o => wgen_sig_i,
-        sig_q_o => open,
-        active_o => wgen_active
+        sig_q_o => sig_q_o,
+        active_o => active_o
     );
 
     sig_o <= wgen_sig_i;
