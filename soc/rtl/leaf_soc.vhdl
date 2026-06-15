@@ -77,11 +77,6 @@ architecture rtl of leaf_soc is
 
     signal soc_cop_csr_rdata : std_logic_vector(31 downto 0);
 
-    signal soc_wgen_inc : std_logic_vector(31 downto 0);
-    signal soc_wgen_pha : std_logic_vector(31 downto 0);
-    signal soc_wgen_amp : std_logic_vector(OUT_RES_BITS-1 downto 0);
-    signal soc_wgen_we  : std_logic;
-
 begin
 
     soc_syscon: wb_syscon port map (
@@ -142,31 +137,20 @@ begin
 
         soc_cop_csr_rdata <= (others => '0');
 
-        soc_wb_wgx_csrs: wb_wgx_csrs port map (
-            clk_i   => soc_syscon_clk,
-            rst_i   => soc_syscon_rst,
-            cyc_i   => soc_intercon_io1_cyc,
-            stb_i   => soc_intercon_io1_stb,
-            we_i    => soc_intercon_io1_we,
-            sel_i   => soc_intercon_io1_sel,
-            adr_i   => soc_intercon_io1_adr,
-            dat_i   => soc_intercon_io1_dat,
-            ack_o   => soc_io1_ack,
-            dat_o   => soc_io1_dat,
-            inc_o   => soc_wgen_inc,
-            pha_o   => soc_wgen_pha,
-            amp_o   => soc_wgen_amp,
-            we_o    => soc_wgen_we
-        );
-
-        soc_wgen: sig_gen port map (
-            clk_i => soc_syscon_clk,
-            rst_i => soc_syscon_rst,
-            we_i  => soc_wgen_we,
-            inc_i => soc_wgen_inc,
-            pha_i => soc_wgen_pha,
-            amp_i => soc_wgen_amp,
-            sig_o => sig
+        soc_wb_sig_gen: wb_sig_gen port map (
+            rst_i    => soc_syscon_rst,
+            clk_i    => soc_syscon_clk,
+            adr_i    => soc_intercon_io1_adr,
+            cyc_i    => soc_intercon_io1_cyc,
+            stb_i    => soc_intercon_io1_stb,
+            we_i     => soc_intercon_io1_we,
+            sel_i    => soc_intercon_io1_sel,
+            dat_i    => soc_intercon_io1_dat,
+            ack_o    => soc_io1_ack,
+            dat_o    => soc_io1_dat,
+            sig_i_o  => sig,
+            sig_q_o  => open,
+            active_o => open
         );
     end generate;
 

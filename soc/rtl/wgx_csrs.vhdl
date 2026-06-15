@@ -1,7 +1,6 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
-use work.sig_gen_pkg.all;
-use work.sine_lut_pkg.OUT_RES_BITS;
+use IEEE.numeric_std.all;
 
 entity wgx_csrs is
     port (
@@ -11,24 +10,34 @@ entity wgx_csrs is
         wdata_i : in  std_logic_vector(31 downto 0);
         we_i    : in  std_logic;
         rdata_o : out std_logic_vector(31 downto 0);
-        inc_o   : out std_logic_vector(31 downto 0);
-        pha_o   : out std_logic_vector(31 downto 0);
-        amp_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
-        we_o    : out std_logic
+        ftw_o   : out std_logic_vector(31 downto 0);
+        pow_o   : out std_logic_vector(31 downto 0);
+        amp_o   : out std_logic_vector(15 downto 0);
+        env_o   : out std_logic_vector(31 downto 0);
+        drag_o  : out std_logic_vector(15 downto 0);
+        valid_o : out std_logic;
+        delay_o : out std_logic_vector(23 downto 0);
+        ready_i : in  std_logic
     );
 end entity wgx_csrs;
 
 architecture rtl of wgx_csrs is
 
-    constant ADDR_INC  : std_logic_vector(5 downto 0) := "000000";
-    constant ADDR_PHA  : std_logic_vector(5 downto 0) := "000001";
-    constant ADDR_AMP  : std_logic_vector(5 downto 0) := "000010";
-    constant ADDR_CTRL : std_logic_vector(5 downto 0) := "000011";
+    constant ADDR_FTW   : std_logic_vector(5 downto 0) := "000000";
+    constant ADDR_POW   : std_logic_vector(5 downto 0) := "000001";
+    constant ADDR_AMP   : std_logic_vector(5 downto 0) := "000010";
+    constant ADDR_ENV   : std_logic_vector(5 downto 0) := "000011";
+    constant ADDR_DRAG  : std_logic_vector(5 downto 0) := "000100";
+    constant ADDR_DELAY : std_logic_vector(5 downto 0) := "000101";
+    constant ADDR_TRIG  : std_logic_vector(5 downto 0) := "000110";
 
-    signal inc_reg  : std_logic_vector(31 downto 0);
-    signal pha_reg  : std_logic_vector(31 downto 0);
-    signal amp_reg  : std_logic_vector(OUT_RES_BITS-1 downto 0);
-    signal ctrl_reg : std_logic;
+    signal ftw_reg  : std_logic_vector(31 downto 0);
+    signal pow_reg  : std_logic_vector(31 downto 0);
+    signal amp_reg  : std_logic_vector(15 downto 0);
+    signal env_reg  : std_logic_vector(31 downto 0);
+    signal drag_reg : std_logic_vector(15 downto 0);
+    signal delay_reg : std_logic_vector(23 downto 0);
+    signal valid_reg : std_logic;
 
 begin
 
@@ -36,48 +45,57 @@ begin
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                inc_reg  <= (others => '0');
-                pha_reg  <= (others => '0');
-                amp_reg  <= (others => '0');
-                ctrl_reg <= '0';
+                ftw_reg   <= (others => '0');
+                pow_reg   <= (others => '0');
+                amp_reg   <= (others => '0');
+                env_reg   <= (others => '0');
+                drag_reg  <= (others => '0');
+                delay_reg <= (others => '0');
+                valid_reg <= '0';
             else
+                if valid_reg = '1' and ready_i = '1' then
+                    valid_reg <= '0';
+                end if;
                 if we_i = '1' then
                     case addr_i is
-                        when ADDR_INC =>
-                            inc_reg <= wdata_i;
-                        when ADDR_PHA =>
-                            pha_reg <= wdata_i;
+                        when ADDR_FTW =>
+                            ftw_reg <= wdata_i;
+                        when ADDR_POW =>
+                            pow_reg <= wdata_i;
                         when ADDR_AMP =>
-                            amp_reg <= wdata_i(OUT_RES_BITS-1 downto 0);
-                        when ADDR_CTRL =>
-                            ctrl_reg <= wdata_i(0);
+                            amp_reg <= wdata_i(15 downto 0);
+                        when ADDR_ENV =>
+                            env_reg <= wdata_i;
+                        when ADDR_DRAG =>
+                            drag_reg <= wdata_i(15 downto 0);
+                        when ADDR_DELAY =>
+                            delay_reg <= wdata_i(23 downto 0);
+                        when ADDR_TRIG =>
+                            valid_reg <= '1';
                         when others =>
                             null;
                     end case;
-                else
-                    ctrl_reg <= '0';
                 end if;
             end if;
         end if;
     end process;
 
-    process(addr_i, inc_reg, pha_reg, amp_reg) is
-    begin
-        case addr_i is
-            when ADDR_INC =>
-                rdata_o <= inc_reg;
-            when ADDR_PHA =>
-                rdata_o <= pha_reg;
-            when ADDR_AMP =>
-                rdata_o <= (31 downto OUT_RES_BITS => '0') & amp_reg;
-            when others =>
-                rdata_o <= (others => '0');
-        end case;
-    end process;
+    with addr_i select rdata_o <=
+        ftw_reg                         when ADDR_FTW,
+        pow_reg                         when ADDR_POW,
+        x"0000" & amp_reg               when ADDR_AMP,
+        env_reg                         when ADDR_ENV,
+        x"0000" & drag_reg              when ADDR_DRAG,
+        x"00" & delay_reg               when ADDR_DELAY,
+        x"000000" & "0000000" & ready_i & valid_reg when ADDR_TRIG,
+        (others => '0')                 when others;
 
-    inc_o <= inc_reg;
-    pha_o <= pha_reg;
-    amp_o <= amp_reg;
-    we_o  <= ctrl_reg;
+    ftw_o   <= ftw_reg;
+    pow_o   <= pow_reg;
+    amp_o   <= amp_reg;
+    env_o   <= env_reg;
+    drag_o  <= drag_reg;
+    valid_o <= valid_reg;
+    delay_o <= delay_reg;
 
 end architecture rtl;

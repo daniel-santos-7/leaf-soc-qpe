@@ -15,7 +15,7 @@ package leaf_soc_pkg is
 
     constant ROM_ADDR_WIDTH : natural := 9;    -- 512 bytes
     constant IO0_ADDR_WIDTH : natural := 4;    -- 16 bytes (4 registers)
-    constant IO1_ADDR_WIDTH : natural := 4;    -- 16 bytes (4 registers)
+    constant IO1_ADDR_WIDTH : natural := 5;    -- 32 bytes (8 registers)
     constant XIP_ADDR_WIDTH : natural := 24;   -- 16 MB
     constant RAM_ADDR_WIDTH : natural := 16;   -- 64 KB
 
@@ -153,30 +153,15 @@ package leaf_soc_pkg is
             wdata_i : in  std_logic_vector(31 downto 0);
             we_i    : in  std_logic;
             rdata_o : out std_logic_vector(31 downto 0);
-            inc_o   : out std_logic_vector(31 downto 0);
-            pha_o   : out std_logic_vector(31 downto 0);
-            amp_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
-            we_o    : out std_logic
+            ftw_o   : out std_logic_vector(31 downto 0);
+            pow_o   : out std_logic_vector(31 downto 0);
+            amp_o   : out std_logic_vector(15 downto 0);
+            env_o   : out std_logic_vector(31 downto 0);
+            drag_o  : out std_logic_vector(15 downto 0);
+            valid_o : out std_logic;
+            delay_o : out std_logic_vector(23 downto 0);
+            ready_i : in  std_logic
         );
     end component wgx_csrs;
-
-    component wb_wgx_csrs is
-        port (
-            clk_i : in  std_logic;
-            rst_i : in  std_logic;
-            cyc_i : in  std_logic;
-            stb_i : in  std_logic;
-            we_i  : in  std_logic;
-            sel_i : in  std_logic_vector(3 downto 0);
-            adr_i : in  std_logic_vector(3 downto 2);
-            dat_i : in  std_logic_vector(31 downto 0);
-            ack_o : out std_logic;
-            dat_o : out std_logic_vector(31 downto 0);
-            inc_o : out std_logic_vector(31 downto 0);
-            pha_o : out std_logic_vector(31 downto 0);
-            amp_o : out std_logic_vector(OUT_RES_BITS-1 downto 0);
-            we_o  : out std_logic
-        );
-    end component wb_wgx_csrs;
 
 end package leaf_soc_pkg;

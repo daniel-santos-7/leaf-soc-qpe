@@ -34,10 +34,17 @@ architecture rtl of leaf_wgx is
     signal csr_wdata : std_logic_vector(XLEN-1 downto 0);
     signal csr_we    : std_logic;
 
-    signal wgen_inc  : std_logic_vector(31 downto 0);
-    signal wgen_pha  : std_logic_vector(31 downto 0);
-    signal wgen_amp  : std_logic_vector(OUT_RES_BITS-1 downto 0);
-    signal wgen_we   : std_logic;
+    signal wgen_ftw   : std_logic_vector(31 downto 0);
+    signal wgen_pow   : std_logic_vector(31 downto 0);
+    signal wgen_amp   : std_logic_vector(15 downto 0);
+    signal wgen_env   : std_logic_vector(31 downto 0);
+    signal wgen_drag  : std_logic_vector(15 downto 0);
+    signal wgen_valid : std_logic;
+    signal wgen_delay : std_logic_vector(23 downto 0);
+    signal wgen_ready : std_logic;
+
+    signal wgen_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal wgen_active : std_logic;
 
 begin
 
@@ -71,20 +78,32 @@ begin
         wdata_i => csr_wdata,
         we_i    => csr_we,
         rdata_o => csr_rdata,
-        inc_o   => wgen_inc,
-        pha_o   => wgen_pha,
+        ftw_o   => wgen_ftw,
+        pow_o   => wgen_pow,
         amp_o   => wgen_amp,
-        we_o    => wgen_we
+        env_o   => wgen_env,
+        drag_o  => wgen_drag,
+        valid_o => wgen_valid,
+        delay_o => wgen_delay,
+        ready_i => wgen_ready
     );
 
     u_wgen: sig_gen port map (
-        clk_i => clk_i,
-        rst_i => rst_i,
-        we_i  => wgen_we,
-        inc_i => wgen_inc,
-        pha_i => wgen_pha,
-        amp_i => wgen_amp,
-        sig_o => sig_o
+        clk_i   => clk_i,
+        rst_i   => rst_i,
+        ftw_i   => wgen_ftw,
+        pow_i   => wgen_pow,
+        amp_i   => wgen_amp,
+        env_i   => wgen_env,
+        drag_i  => wgen_drag,
+        valid_i => wgen_valid,
+        delay_i => wgen_delay,
+        ready_o => wgen_ready,
+        sig_i_o => wgen_sig_i,
+        sig_q_o => open,
+        active_o => wgen_active
     );
+
+    sig_o <= wgen_sig_i;
 
 end architecture rtl;
