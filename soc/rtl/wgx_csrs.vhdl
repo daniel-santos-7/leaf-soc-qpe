@@ -87,7 +87,7 @@ begin
         env_reg                         when ADDR_ENV,
         x"0000" & drag_reg              when ADDR_DRAG,
         x"00" & delay_reg               when ADDR_DELAY,
-        x"000000" & "0000000" & ready_i & valid_reg when ADDR_TRIG,
+        x"000000" & "000000" & ready_i & valid_reg when ADDR_TRIG,
         (others => '0')                 when others;
 
     ftw_o   <= ftw_reg;
