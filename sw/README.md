@@ -7,7 +7,7 @@ Este diretório apresenta recursos para programação do processador Leaf e algu
 Diretório   					| Descrição
 ------------------------------- | -------------------------------
 [array_sort](/sw/array_sort/)  	| Algoritmo básico para ordenar um vetor
-[boot](/sw/boot/)        		| Simples bootloader
+[boot](/sw/asm/boot/)        	| Simples bootloader
 [coremak](/sw/coremark/)     	| Benchmark coremark
 [data_io](/sw/data_io/)   		| Teste de entrada e saída de dados
 [factorial](/sw/factorial)   	| Algoritmo para o cálculo de 10!
@@ -127,7 +127,7 @@ make leaf_sim PROGRAM=sw/my_software/my_software.bin
 
 Se um dispositivo FPGA estiver disponível, pode-se realizar a sintese lógica do simples [SoC](/soc/) disponível neste repositório. 
 
-Esse sistema inclui, além do processador Leaf, uma memória de leitura e escrita (64kB), uma interface serial (UART) e uma memória de somente leitura que armazena um pequeno firmware. Esse firmware se trata de um simples [bootloader](/sw/boot/), o qual permite a programação do dispositivo por meio do módulo UART.
+Esse sistema inclui, além do processador Leaf, uma memória de leitura e escrita (64kB), uma interface serial (UART) e uma memória de somente leitura que armazena um pequeno firmware. Esse firmware se trata de um simples [bootloader](/sw/asm/boot/), o qual permite a programação do dispositivo por meio do módulo UART.
 
 Os procedimentos para desenvolver um programa que será executado em hardware, são idênticos aos já apresentados. Todavia, durante a compilação, o script [soc.ld](/sw/common/soc.ld) deve ser especificado, isso possibilita que o compilador conheça o limite de memória disponível (apenas 64kB).
 
