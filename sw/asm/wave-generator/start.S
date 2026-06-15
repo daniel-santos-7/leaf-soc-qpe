@@ -1,6 +1,6 @@
 .equ UART_BASE_ADDR, 0x10000000
 .equ WGEN_INCREMENT, 0x051EB852
-.include "xwgen.S"
+.include "../common/xwgen.S"
 
 .globl _start
 _start:
