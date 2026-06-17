@@ -22,7 +22,7 @@ TOP_TB = leaf_soc_tb
 PROGRAM  ?= sw/asm/hello-world/hello-world.bin
 RUN_CYCLES ?= 500000
 WGEN_IF  ?= COP
-WAVEFORM ?= $(shell basename $(PROGRAM) .bin).ghw
+WAVEFORM ?= $(shell basename $(PROGRAM) .bin).fst
 
 # Generated config package
 WGEN_CFG = soc/rtl/wgen_cfg.vhdl
@@ -34,7 +34,7 @@ WGEN_CFG_BOOL := true
 endif
 
 ifdef WAVEFORM
-override GHDLXOPTS += --wave=$(WAVESDIR)/$(WAVEFORM)
+override GHDLXOPTS += --fst=$(WAVESDIR)/$(WAVEFORM)
 endif
 
 $(WORKDIR) $(WAVESDIR):
