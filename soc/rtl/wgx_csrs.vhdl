@@ -1,6 +1,7 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
+use work.sig_gen_pkg.all;
 
 entity wgx_csrs is
     port (
@@ -31,15 +32,65 @@ architecture rtl of wgx_csrs is
     constant ADDR_DELAY : std_logic_vector(5 downto 0) := "000101";
     constant ADDR_TRIG  : std_logic_vector(5 downto 0) := "000110";
 
-    signal ftw_reg  : std_logic_vector(31 downto 0);
-    signal pow_reg  : std_logic_vector(31 downto 0);
-    signal amp_reg  : std_logic_vector(15 downto 0);
-    signal env_reg  : std_logic_vector(31 downto 0);
-    signal drag_reg : std_logic_vector(15 downto 0);
-    signal delay_reg : std_logic_vector(23 downto 0);
-    signal valid_reg : std_logic;
+    constant ADDR_SEQ_LEN    : std_logic_vector(5 downto 0) := "000111";
+    constant ADDR_SEQ_PTR    : std_logic_vector(5 downto 0) := "001000";
+    constant ADDR_SEQ_DATA   : std_logic_vector(5 downto 0) := "001001";
+    constant ADDR_SEQ_CTRL   : std_logic_vector(5 downto 0) := "001010";
+    constant ADDR_SEQ_REPEAT : std_logic_vector(5 downto 0) := "001011";
+
+    signal ftw_reg    : std_logic_vector(31 downto 0);
+    signal pow_reg    : std_logic_vector(31 downto 0);
+    signal amp_reg    : std_logic_vector(15 downto 0);
+    signal env_reg    : std_logic_vector(31 downto 0);
+    signal drag_reg   : std_logic_vector(15 downto 0);
+    signal delay_reg  : std_logic_vector(23 downto 0);
+    signal valid_reg  : std_logic;
+
+    signal seq_cpu_addr : std_logic_vector(2 downto 0);
+    signal seq_cpu_we   : std_logic;
+    signal seq_cpu_rdata : std_logic_vector(31 downto 0);
+    signal seq_ftw      : std_logic_vector(31 downto 0);
+    signal seq_pow      : std_logic_vector(31 downto 0);
+    signal seq_amp      : std_logic_vector(15 downto 0);
+    signal seq_env      : std_logic_vector(31 downto 0);
+    signal seq_drag     : std_logic_vector(15 downto 0);
+    signal seq_delay    : std_logic_vector(23 downto 0);
+    signal seq_valid    : std_logic;
+    signal seq_busy     : std_logic;
 
 begin
+
+    -- Sequencer address decode
+    seq_cpu_addr <=
+        "000" when addr_i = ADDR_SEQ_LEN    else
+        "001" when addr_i = ADDR_SEQ_PTR    else
+        "010" when addr_i = ADDR_SEQ_DATA   else
+        "011" when addr_i = ADDR_SEQ_CTRL   else
+        "100" when addr_i = ADDR_SEQ_REPEAT else
+        "000";
+
+    seq_cpu_we <= we_i when
+        (addr_i = ADDR_SEQ_LEN or addr_i = ADDR_SEQ_PTR or
+         addr_i = ADDR_SEQ_DATA or addr_i = ADDR_SEQ_CTRL or
+         addr_i = ADDR_SEQ_REPEAT) else '0';
+
+    u_seq: seq_ctrl port map (
+        clk_i       => clk_i,
+        rst_i       => rst_i,
+        cpu_addr_i  => seq_cpu_addr,
+        cpu_wdata_i => wdata_i,
+        cpu_we_i    => seq_cpu_we,
+        cpu_rdata_o => seq_cpu_rdata,
+        ftw_o       => seq_ftw,
+        pow_o       => seq_pow,
+        amp_o       => seq_amp,
+        env_o       => seq_env,
+        drag_o      => seq_drag,
+        delay_o     => seq_delay,
+        valid_o     => seq_valid,
+        ready_i     => ready_i,
+        busy_o      => seq_busy
+    );
 
     process(clk_i) is
     begin
@@ -88,14 +139,19 @@ begin
         x"0000" & drag_reg              when ADDR_DRAG,
         x"00" & delay_reg               when ADDR_DELAY,
         x"000000" & "000000" & ready_i & valid_reg when ADDR_TRIG,
+        seq_cpu_rdata                   when ADDR_SEQ_LEN,
+        seq_cpu_rdata                   when ADDR_SEQ_PTR,
+        seq_cpu_rdata                   when ADDR_SEQ_DATA,
+        seq_cpu_rdata                   when ADDR_SEQ_CTRL,
+        seq_cpu_rdata                   when ADDR_SEQ_REPEAT,
         (others => '0')                 when others;
 
-    ftw_o   <= ftw_reg;
-    pow_o   <= pow_reg;
-    amp_o   <= amp_reg;
-    env_o   <= env_reg;
-    drag_o  <= drag_reg;
-    valid_o <= valid_reg;
-    delay_o <= delay_reg;
+    ftw_o   <= ftw_reg   when seq_busy = '0' else seq_ftw;
+    pow_o   <= pow_reg   when seq_busy = '0' else seq_pow;
+    amp_o   <= amp_reg   when seq_busy = '0' else seq_amp;
+    env_o   <= env_reg   when seq_busy = '0' else seq_env;
+    drag_o  <= drag_reg  when seq_busy = '0' else seq_drag;
+    delay_o <= delay_reg when seq_busy = '0' else seq_delay;
+    valid_o <= (valid_reg and not seq_busy) or seq_valid;
 
 end architecture rtl;
