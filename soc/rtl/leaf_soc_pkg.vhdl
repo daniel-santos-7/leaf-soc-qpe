@@ -162,7 +162,8 @@ package leaf_soc_pkg is
             drag_o  : out std_logic_vector(15 downto 0);
             valid_o : out std_logic;
             delay_o : out std_logic_vector(23 downto 0);
-            ready_i : in  std_logic
+            ready_i : in  std_logic;
+            irq_o   : out std_logic
         );
     end component wgx_csrs;
 

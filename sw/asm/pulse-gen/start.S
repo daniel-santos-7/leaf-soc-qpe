@@ -28,6 +28,13 @@
 _start:
     li sp, RAM_TOP
 
+    # IRQ setup
+    la   t0, irq_handler
+    csrw mtvec, t0
+    li   t0, 0x800
+    csrw mie, t0
+    csrsi mstatus, 8
+
     li s0, FTW_PI
     li s1, 0
     li s2, AMP_PI
@@ -147,7 +154,7 @@ cmd_status:
 
     la a0, ready_lbl
     call uart_print_str
-    csrr t0, WGEN_CSR_TRIG
+    csrr t0, WGEN_CSR_STAT
     andi t0, t0, 2
     mv a0, t0
     call uart_print_dec
@@ -171,18 +178,10 @@ fire_pulse:
     xwg.drag  s4
     xwg.delay s5
     xwg.trigger
-    call wait_ready
+    wfi
+    csrwi WGEN_CSR_SEQ_CTRL, 0
     la a0, ok_str
     call uart_print_str
-    ret
-
-// --------------------------------------------------
-// wait_ready: poll CSR until ready=1 (bit 1)
-// --------------------------------------------------
-wait_ready:
-    csrr t0, WGEN_CSR_TRIG
-    andi t0, t0, 2
-    beqz t0, wait_ready
     ret
 
 // --------------------------------------------------
@@ -339,6 +338,12 @@ __divmod:
     addi t3, t3, -1
     bnez t3, 1b
     ret
+
+// --------------------------------------------------
+// irq_handler: sequencer IRQ (just mret, IRQ cleared by caller)
+// --------------------------------------------------
+irq_handler:
+    mret
 
 // --------------------------------------------------
 // parse_dec: read decimal number from UART

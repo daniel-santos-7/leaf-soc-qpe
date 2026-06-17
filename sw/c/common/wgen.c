@@ -130,32 +130,33 @@ uint32_t wgen_read_delay(void)
 #endif
 }
 
-uint32_t wgen_read_trig(void)
+static uint32_t wgen_read_status(void)
 {
 #ifdef WGEN_IF_MMIO
-    return wgen_read(WGEN_OFF_TRIG);
+    return wgen_read(WGEN_OFF_STAT);
 #else
-    return csr_read(WGEN_CSR_TRIG);
+    return csr_read(WGEN_CSR_STAT);
 #endif
 }
 
 void wgen_trigger(void)
 {
 #ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_TRIG, 1);
+    wgen_write(WGEN_OFF_STAT, 1);
 #else
-    csr_write(WGEN_CSR_TRIG, 1);
+    wgen_seq_set_len(1);
+    wgen_seq_start();
 #endif
 }
 
 int wgen_is_ready(void)
 {
-    return (wgen_read_trig() & WGEN_TRIG_READY) != 0;
+    return (wgen_read_status() & WGEN_STAT_READY) != 0;
 }
 
 int wgen_is_valid(void)
 {
-    return (wgen_read_trig() & WGEN_TRIG_VALID) != 0;
+    return (wgen_read_status() & WGEN_STAT_VALID) != 0;
 }
 
 void wgen_wait_ready(void)

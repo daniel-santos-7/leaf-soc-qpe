@@ -1,10 +1,5 @@
-// pulse-seq: Autonomous microwave pulse sequence generator
-// Clock: 50 MHz (20 ns/cycle)
-// Repeats: π-pulse → π/2-pulse → Readout pulse → ...
-// UART TX-only: no blocking on RX (safe for simulation)
-
+// pulse-seq: three-pulse sequence (π, π/2, readout), one shot
 .equ UART_BASE_ADDR, 0x10000000
-
 .equ RAM_TOP,        0x80010000
 
 // π-pulse: FTW=5 MHz, AMP=2047, ENV=200 cyc (4 µs), DRAG=0.2
@@ -13,11 +8,11 @@
 .equ ENV_PI,         0x0147AE14
 .equ DRAG_PI,        0x00001999
 
-// π/2-pulse: AMP=1024 (half), ENV=100 cyc (2 µs)
+// π/2-pulse: AMP=1024, ENV=100 cyc (2 µs)
 .equ AMP_PI2,        0x00000400
 .equ ENV_PI2,        0x028F5C29
 
-// Readout pulse: FTW=10 MHz, AMP=3072, ENV=500 cyc (10 µs)
+// Readout: FTW=10 MHz, AMP=3072, ENV=500 cyc (10 µs)
 .equ FTW_READOUT,    0x33333333
 .equ AMP_READOUT,    0x00000C00
 .equ ENV_READOUT,    0x0083126F
@@ -29,8 +24,16 @@
 
 _start:
     li sp, RAM_TOP
-    la a0, banner_str
-    call uart_print_str
+
+    // IRQ setup
+    la   t0, irq_handler
+    csrw mtvec, t0
+    li   t0, 0x800
+    csrw mie, t0
+    csrsi mstatus, 8
+
+#    la a0, banner_str
+#    call uart_print_str
 
     li s0, FTW_PI
     li s1, DRAG_PI
@@ -42,51 +45,32 @@ _start:
     li s7, AMP_READOUT
     li s8, ENV_READOUT
 
-loop:
-    // π-pulse
-    xwg.ftw s0
-    xwg.pow x0
-    xwg.amp s2
-    xwg.env s3
-    xwg.drag s1
-    xwg.delay x0
-    xwg.trigger
-    call wait_ready
-#    la a0, dot_str
+    xwg.seq_entry 0, s0, x0, s2, s3, s1, x0
+    xwg.seq_entry 1, s0, x0, s4, s5, s1, x0
+    xwg.seq_entry 2, s6, x0, s7, s8, x0, x0
+
+    // Fire once
+    xwg.seq_len 3
+    xwg.seq_repeat 1
+    xwg.seq_start
+    wfi
+    csrwi WGEN_CSR_SEQ_CTRL, 0
+
+#    la a0, done_str
 #    call uart_print_str
 
-    // π/2-pulse
-    xwg.ftw s0
-    xwg.pow x0
-    xwg.amp s4
-    xwg.env s5
-    xwg.drag s1
-    xwg.delay x0
-    xwg.trigger
-    call wait_ready
-#    la a0, dot_str
-#    call uart_print_str
+    // Halt
+1:  j 1b
 
-    // Readout pulse
-    xwg.ftw s6
-    xwg.pow x0
-    xwg.amp s7
-    xwg.env s8
-    xwg.drag x0
-    xwg.delay x0
-    xwg.trigger
-    call wait_ready
-#    la a0, dot_str
-#    call uart_print_str
+// --------------------------------------------------
+// irq_handler: sequencer IRQ (just mret, IRQ cleared by caller)
+// --------------------------------------------------
+irq_handler:
+    mret
 
-    j loop
-
-wait_ready:
-    csrr t0, WGEN_CSR_TRIG
-    andi t0, t0, 2
-    beqz t0, wait_ready
-    ret
-
+// --------------------------------------------------
+// uart_write: write a0 to UART TX (poll TX ready)
+// --------------------------------------------------
 uart_write:
     li  t1, UART_BASE_ADDR
 1:
@@ -97,6 +81,9 @@ uart_write:
     sb   a0, 0xC(t1)
     ret
 
+// --------------------------------------------------
+// uart_print_str: print null-terminated string at a0
+// --------------------------------------------------
 uart_print_str:
     addi sp, sp, -4
     sw   ra, 0(sp)
@@ -118,6 +105,6 @@ uart_print_str:
     ret
 
 banner_str:
-    .asciz "pulse-seq\n"
-dot_str:
-    .asciz "."
+    .asciz "pulse-seq: π + π/2 + readout\n"
+done_str:
+    .asciz "done\n"

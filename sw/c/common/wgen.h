@@ -9,7 +9,7 @@
 #define WGEN_CSR_ENV   0x7C3
 #define WGEN_CSR_DRAG  0x7C4
 #define WGEN_CSR_DELAY 0x7C5
-#define WGEN_CSR_TRIG  0x7C6
+#define WGEN_CSR_STAT  0x7C6
 
 #define WGEN_BASE      0x10001000
 #define WGEN_OFF_FTW   0x00
@@ -18,7 +18,7 @@
 #define WGEN_OFF_ENV   0x0C
 #define WGEN_OFF_DRAG  0x10
 #define WGEN_OFF_DELAY 0x14
-#define WGEN_OFF_TRIG  0x18
+#define WGEN_OFF_STAT  0x18
 
 #define WGEN_CSR_SEQ_LEN    0x7C7
 #define WGEN_CSR_SEQ_PTR    0x7C8
@@ -32,8 +32,8 @@
 #define WGEN_OFF_SEQ_CTRL    0x28
 #define WGEN_OFF_SEQ_REPEAT  0x2C
 
-#define WGEN_TRIG_VALID (1u << 0)
-#define WGEN_TRIG_READY (1u << 1)
+#define WGEN_STAT_VALID (1u << 0)
+#define WGEN_STAT_READY (1u << 1)
 
 #define WGEN_SEQ_BUSY   (1u << 0)
 #define WGEN_SEQ_DONE   (1u << 1)
@@ -60,8 +60,6 @@ uint16_t wgen_read_amp(void);
 uint32_t wgen_read_env(void);
 uint16_t wgen_read_drag(void);
 uint32_t wgen_read_delay(void);
-uint32_t wgen_read_trig(void);
-
 void wgen_trigger(void);
 int  wgen_is_ready(void);
 int  wgen_is_valid(void);
