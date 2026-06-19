@@ -45,21 +45,20 @@ architecture rtl of leaf_wgx is
     signal wgen_delay : std_logic_vector(23 downto 0);
     signal wgen_ready : std_logic;
 
-    signal cpu_ex_irq : std_logic;
-    signal wgen_irq   : std_logic;
     signal wgen_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal wgen_active : std_logic;
 
-begin
+    signal wgen_start     : std_logic;
+    signal wgen_pend : std_logic_vector(3 downto 0);
 
-    cpu_ex_irq <= ex_irq_i or wgen_irq;
+begin
 
     u_cpu: leaf generic map (
         RESET_ADDR => RESET_ADDR
     ) port map (
         clk_i     => clk_i,
         rst_i     => rst_i,
-        ex_irq_i  => cpu_ex_irq,
+        ex_irq_i  => ex_irq_i,
         sw_irq_i  => sw_irq_i,
         tm_irq_i  => tm_irq_i,
         ack_i     => ack_i,
@@ -77,7 +76,7 @@ begin
         dat_o     => dat_o
     );
 
-    u_csrs: wgx_csrs port map (
+    u_csrs: entity work.wgx_csrs port map (
         clk_i   => clk_i,
         rst_i   => rst_i,
         addr_i  => csr_addr,
@@ -90,27 +89,31 @@ begin
         env_o   => wgen_env,
         drag_o  => wgen_drag,
         valid_o => wgen_valid,
-        delay_o => wgen_delay,
-        ready_i => wgen_ready,
-        irq_o   => wgen_irq
+        start_o => wgen_start,
+        delay_o      => wgen_delay,
+        ready_i      => wgen_ready,
+        pend_i => wgen_pend
     );
 
-        u_wgen: sig_gen port map (
-        clk_i   => clk_i,
-        rst_i   => rst_i,
-        ftw_i   => wgen_ftw,
-        pow_i   => wgen_pow,
-        amp_i   => wgen_amp,
-        env_i   => wgen_env,
-        drag_i  => wgen_drag,
-        valid_i => wgen_valid,
-        delay_i => wgen_delay,
-        ready_o => wgen_ready,
+    u_wgen: entity work.sig_gen port map (
+        clk_i        => clk_i,
+        rst_i        => rst_i,
+        start_i      => wgen_start,
+        ftw_i        => wgen_ftw,
+        pow_i        => wgen_pow,
+        amp_i        => wgen_amp,
+        env_i        => wgen_env,
+        drag_i       => wgen_drag,
+        valid_i      => wgen_valid,
+        delay_i      => wgen_delay,
+        ready_o      => wgen_ready,
+        pend_o => wgen_pend,
         sig_i_o => wgen_sig_i,
         sig_q_o => sig_q_o,
-        active_o => active_o
+        active_o => wgen_active
     );
 
     sig_o <= wgen_sig_i;
+    active_o <= wgen_active;
 
 end architecture rtl;

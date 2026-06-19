@@ -1,18 +1,18 @@
-// pulse-seq: three-pulse sequence (π, π/2, readout), one shot
+# pulse-seq: three-pulse sequence (pi, pi/2, readout), one shot
 .equ UART_BASE_ADDR, 0x10000000
 .equ RAM_TOP,        0x80010000
 
-// π-pulse: FTW=5 MHz, AMP=2047, ENV=200 cyc (4 µs), DRAG=0.2
+# pi-pulse: FTW=5 MHz, AMP=2047, ENV=200 cyc (4 us), DRAG=0.2
 .equ FTW_PI,         0x1999999A
 .equ AMP_PI,         0x000007FF
 .equ ENV_PI,         0x0147AE14
 .equ DRAG_PI,        0x00001999
 
-// π/2-pulse: AMP=1024, ENV=100 cyc (2 µs)
+# pi/2-pulse: AMP=1024, ENV=100 cyc (2 us)
 .equ AMP_PI2,        0x00000400
 .equ ENV_PI2,        0x028F5C29
 
-// Readout: FTW=10 MHz, AMP=3072, ENV=500 cyc (10 µs)
+# Readout: FTW=10 MHz, AMP=3072, ENV=500 cyc (10 us)
 .equ FTW_READOUT,    0x33333333
 .equ AMP_READOUT,    0x00000C00
 .equ ENV_READOUT,    0x0083126F
@@ -25,16 +25,6 @@
 _start:
     li sp, RAM_TOP
 
-    // IRQ setup
-    la   t0, irq_handler
-    csrw mtvec, t0
-    li   t0, 0x800
-    csrw mie, t0
-    csrsi mstatus, 8
-
-#    la a0, banner_str
-#    call uart_print_str
-
     li s0, FTW_PI
     li s1, DRAG_PI
     li s2, AMP_PI
@@ -45,66 +35,29 @@ _start:
     li s7, AMP_READOUT
     li s8, ENV_READOUT
 
-    xwg.seq_entry 0, s0, x0, s2, s3, s1, x0
-    xwg.seq_entry 1, s0, x0, s4, s5, s1, x0
-    xwg.seq_entry 2, s6, x0, s7, s8, x0, x0
+    # Entry 0: pi-pulse
+    xwg.ftw      s0
+    xwg.pow      x0
+    xwg.amp_drag s2, s1
+    xwg.env      s3
+    xwg.delay    x0
+    xwg.push
 
-    // Fire once
-    xwg.seq_len 3
-    xwg.seq_repeat 1
-    xwg.seq_start
-    wfi
-    csrwi WGEN_CSR_SEQ_CTRL, 0
+    # Entry 1: pi/2-pulse
+    xwg.ftw      s0
+    xwg.amp_drag s4, s1
+    xwg.env      s5
+    xwg.push
 
-#    la a0, done_str
-#    call uart_print_str
+    # Entry 2: readout
+    xwg.ftw      s6
+    xwg.amp_drag s7, x0
+    xwg.env      s8
+    xwg.push_start
 
-    // Halt
-1:  j 1b
-
-// --------------------------------------------------
-// irq_handler: sequencer IRQ (just mret, IRQ cleared by caller)
-// --------------------------------------------------
-irq_handler:
-    mret
-
-// --------------------------------------------------
-// uart_write: write a0 to UART TX (poll TX ready)
-// --------------------------------------------------
-uart_write:
-    li  t1, UART_BASE_ADDR
-1:
-    lbu t0, 0x0(t1)
-    andi t0, t0, 0x20
+1:  xwg.trig t0
+    andi t0, t0, 2
     beqz t0, 1b
-    andi a0, a0, 0xFF
-    sb   a0, 0xC(t1)
-    ret
 
-// --------------------------------------------------
-// uart_print_str: print null-terminated string at a0
-// --------------------------------------------------
-uart_print_str:
-    addi sp, sp, -4
-    sw   ra, 0(sp)
-    mv   t2, a0
-1:
-    lbu  t0, 0(t2)
-    beqz t0, 2f
-    mv   a0, t0
-    addi sp, sp, -4
-    sw   t2, 0(sp)
-    call uart_write
-    lw   t2, 0(sp)
-    addi sp, sp, 4
-    addi t2, t2, 1
-    j    1b
-2:
-    lw   ra, 0(sp)
-    addi sp, sp, 4
-    ret
-
-banner_str:
-    .asciz "pulse-seq: π + π/2 + readout\n"
-done_str:
-    .asciz "done\n"
+    # Halt
+2:  j 2b

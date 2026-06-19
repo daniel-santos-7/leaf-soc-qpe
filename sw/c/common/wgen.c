@@ -43,9 +43,10 @@ void wgen_write_pow(uint32_t val)
 void wgen_write_amp(uint16_t val)
 {
 #ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_AMP, val);
+    *(volatile uint16_t *)((uintptr_t)wgen + WGEN_OFF_AMP) = val;
 #else
-    csr_write(WGEN_CSR_AMP, val);
+    uint32_t tmp = csr_read(WGEN_CSR_AMP) & 0xFFFF0000;
+    csr_write(WGEN_CSR_AMP, tmp | val);
 #endif
 }
 
@@ -61,9 +62,10 @@ void wgen_write_env(uint32_t val)
 void wgen_write_drag(uint16_t val)
 {
 #ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_DRAG, val);
+    *(volatile uint16_t *)((uintptr_t)wgen + WGEN_OFF_AMP + 2) = val;
 #else
-    csr_write(WGEN_CSR_DRAG, val);
+    uint32_t tmp = csr_read(WGEN_CSR_AMP) & 0x0000FFFF;
+    csr_write(WGEN_CSR_AMP, tmp | ((uint32_t)val << 16));
 #endif
 }
 
@@ -115,9 +117,9 @@ uint32_t wgen_read_env(void)
 uint16_t wgen_read_drag(void)
 {
 #ifdef WGEN_IF_MMIO
-    return (uint16_t)wgen_read(WGEN_OFF_DRAG);
+    return (uint16_t)(wgen_read(WGEN_OFF_AMP) >> 16);
 #else
-    return (uint16_t)csr_read(WGEN_CSR_DRAG);
+    return (uint16_t)(csr_read(WGEN_CSR_AMP) >> 16);
 #endif
 }
 
@@ -133,30 +135,29 @@ uint32_t wgen_read_delay(void)
 static uint32_t wgen_read_status(void)
 {
 #ifdef WGEN_IF_MMIO
-    return wgen_read(WGEN_OFF_STAT);
+    return wgen_read(WGEN_OFF_TRIG);
 #else
-    return csr_read(WGEN_CSR_STAT);
+    return csr_read(WGEN_CSR_TRIG);
 #endif
 }
 
 void wgen_trigger(void)
 {
 #ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_STAT, 1);
+    wgen_write(WGEN_OFF_TRIG, 1);
 #else
-    wgen_seq_set_len(1);
-    wgen_seq_start();
+    csr_write(WGEN_CSR_TRIG, 1);
 #endif
 }
 
 int wgen_is_ready(void)
 {
-    return (wgen_read_status() & WGEN_STAT_READY) != 0;
+    return (wgen_read_status() & (1u << 1)) != 0;
 }
 
 int wgen_is_valid(void)
 {
-    return (wgen_read_status() & WGEN_STAT_VALID) != 0;
+    return (wgen_read_status() & (1u << 0)) != 0;
 }
 
 void wgen_wait_ready(void)
@@ -180,92 +181,4 @@ void wgen_pulse(const wgen_pulse_t *p)
     wgen_trigger();
 }
 
-// Sequencer
 
-void wgen_seq_set_len(unsigned len)
-{
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_SEQ_LEN, (uint32_t)len);
-#else
-    csr_write(WGEN_CSR_SEQ_LEN, (uint32_t)len);
-#endif
-}
-
-void wgen_seq_set_ptr(unsigned ptr)
-{
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_SEQ_PTR, (uint32_t)ptr);
-#else
-    csr_write(WGEN_CSR_SEQ_PTR, (uint32_t)ptr);
-#endif
-}
-
-void wgen_seq_write_data(uint32_t val)
-{
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_SEQ_DATA, val);
-#else
-    csr_write(WGEN_CSR_SEQ_DATA, val);
-#endif
-}
-
-void wgen_seq_add_entry(unsigned i, const wgen_pulse_t *p)
-{
-    wgen_seq_set_ptr(i);
-    wgen_seq_write_data(p->ftw);
-    wgen_seq_write_data(p->pow);
-    wgen_seq_write_data(p->amp);
-    wgen_seq_write_data(p->env);
-    wgen_seq_write_data(p->drag);
-    wgen_seq_write_data(p->delay);
-}
-
-void wgen_seq_start(void)
-{
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_SEQ_CTRL, 1);
-#else
-    csr_write(WGEN_CSR_SEQ_CTRL, 1);
-#endif
-}
-
-int wgen_seq_is_busy(void)
-{
-    uint32_t s;
-#ifdef WGEN_IF_MMIO
-    s = wgen_read(WGEN_OFF_SEQ_CTRL);
-#else
-    s = csr_read(WGEN_CSR_SEQ_CTRL);
-#endif
-    return (s & WGEN_SEQ_BUSY) != 0;
-}
-
-int wgen_seq_is_done(void)
-{
-    uint32_t s;
-#ifdef WGEN_IF_MMIO
-    s = wgen_read(WGEN_OFF_SEQ_CTRL);
-#else
-    s = csr_read(WGEN_CSR_SEQ_CTRL);
-#endif
-    return (s & WGEN_SEQ_DONE) != 0;
-}
-
-void wgen_seq_wait_done(void)
-{
-    while (wgen_seq_is_busy());
-}
-
-void wgen_seq_run(unsigned len, unsigned repeat,
-                  const wgen_pulse_t entries[])
-{
-    wgen_seq_set_len(len);
-    for (unsigned i = 0; i < len; i++)
-        wgen_seq_add_entry(i, &entries[i]);
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_SEQ_REPEAT, (uint32_t)repeat);
-#else
-    csr_write(WGEN_CSR_SEQ_REPEAT, (uint32_t)repeat);
-#endif
-    wgen_seq_start();
-}

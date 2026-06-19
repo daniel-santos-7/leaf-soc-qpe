@@ -1,21 +1,21 @@
-// pulse-gen: Microwave pulse generator for superconducting qubit control
-// Clock: 50 MHz (20 ns/cycle)
-// Interface: COP CSR (xwg macros)
+# pulse-gen: Microwave pulse generator for superconducting qubit control
+# Clock: 50 MHz (20 ns/cycle)
+# Interface: COP CSR (xwg macros)
 
 .equ UART_BASE_ADDR, 0x10000000
 .equ RAM_TOP,        0x80010000
 
-// π-pulse (4 µs): FTW=5 MHz, AMP=2047, ENV=200 cyc, DRAG=0.2
+# pi-pulse (4 us): FTW=5 MHz, AMP=2047, ENV=200 cyc, DRAG=0.2
 .equ FTW_PI,         0x1999999A
 .equ AMP_PI,         0x000007FF
 .equ ENV_PI,         0x0147AE14
 .equ DRAG_PI,        0x00001999
 
-// π/2-pulse (2 µs): same FTW, half AMP, ENV=100 cyc, DRAG=0.2
+# pi/2-pulse (2 us): same FTW, half AMP, ENV=100 cyc, DRAG=0.2
 .equ AMP_PI2,        0x00000400
 .equ ENV_PI2,        0x028F5C29
 
-// Readout pulse (10 µs): FTW=10 MHz, AMP=3072, ENV=500 cyc, DRAG=0
+# Readout pulse (10 us): FTW=10 MHz, AMP=3072, ENV=500 cyc, DRAG=0
 .equ FTW_READOUT,    0x33333333
 .equ AMP_READOUT,    0x00000C00
 .equ ENV_READOUT,    0x0083126F
@@ -28,13 +28,6 @@
 _start:
     li sp, RAM_TOP
 
-    # IRQ setup
-    la   t0, irq_handler
-    csrw mtvec, t0
-    li   t0, 0x800
-    csrw mie, t0
-    csrsi mstatus, 8
-
     li s0, FTW_PI
     li s1, 0
     li s2, AMP_PI
@@ -45,7 +38,7 @@ _start:
     la a0, banner_str
     call uart_print_str
 
-    // Auto-fire π-pulse on startup for simulation/hardware test
+    # Auto-fire pi-pulse on startup for simulation/hardware test
     la a0, fire_str
     call uart_print_str
     call fire_pulse
@@ -154,8 +147,9 @@ cmd_status:
 
     la a0, ready_lbl
     call uart_print_str
-    csrr t0, WGEN_CSR_STAT
-    andi t0, t0, 2
+    xwg.trig t0
+    srli t0, t0, 1
+    andi t0, t0, 1
     mv a0, t0
     call uart_print_dec
     la a0, nl
@@ -171,15 +165,15 @@ cmd_help:
 // fire_pulse
 // --------------------------------------------------
 fire_pulse:
-    xwg.ftw   s0
-    xwg.pow   s1
-    xwg.amp   s2
-    xwg.env   s3
-    xwg.drag  s4
-    xwg.delay s5
-    xwg.trigger
-    wfi
-    csrwi WGEN_CSR_SEQ_CTRL, 0
+    xwg.ftw      s0
+    xwg.pow      s1
+    xwg.amp_drag s2, s4
+    xwg.env      s3
+    xwg.delay    s5
+    xwg.push_start
+1:  xwg.trig t0
+    andi t0, t0, 2
+    beqz t0, 1b
     la a0, ok_str
     call uart_print_str
     ret
@@ -339,16 +333,10 @@ __divmod:
     bnez t3, 1b
     ret
 
-// --------------------------------------------------
-// irq_handler: sequencer IRQ (just mret, IRQ cleared by caller)
-// --------------------------------------------------
-irq_handler:
-    mret
-
-// --------------------------------------------------
-// parse_dec: read decimal number from UART
-// Returns: a0 = value
-// --------------------------------------------------
+# --------------------------------------------------
+# parse_dec: read decimal number from UART
+# Returns: a0 = value
+# --------------------------------------------------
 parse_dec:
     li t0, 0
 1:
@@ -378,9 +366,9 @@ parse_dec:
     mv a0, t1
     ret
 
-// --------------------------------------------------
-// Strings
-// --------------------------------------------------
+# --------------------------------------------------
+# Strings
+# --------------------------------------------------
 banner_str:
     .asciz "\npulse-gen: Microwave pulse generator\n"
 fire_str:
