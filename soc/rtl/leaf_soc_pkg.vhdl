@@ -110,12 +110,39 @@ package leaf_soc_pkg is
     end component wb_intercon;
 
     component leaf_soc is
+        
         port (
-            clk : in  std_logic;
-            rst : in  std_logic;
-            rx  : in  std_logic;
-            tx  : out std_logic
+            clk      : in  std_logic;
+            rst      : in  std_logic;
+            rx       : in  std_logic;
+            tx       : out std_logic;
+            spi_clk  : out std_logic;
+            spi_mosi : out std_logic;
+            spi_miso : in  std_logic;
+            spi_cs_n : out std_logic
         );
     end component leaf_soc;
+
+    component wb_xip_ctrl is
+        port (
+            clk_i     : in  std_logic;
+            rst_i     : in  std_logic;
+            cyc_i     : in  std_logic;
+            stb_i     : in  std_logic;
+            we_i      : in  std_logic;
+            sel_i     : in  std_logic_vector(3  downto 0);
+            adr_i     : in  std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+            dat_i     : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            ack_o     : out std_logic;
+            err_o     : out std_logic;
+            dat_o     : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            spi_clk   : out std_logic;
+            spi_mosi  : out std_logic;
+            spi_miso  : in  std_logic;
+            spi_cs_n  : out std_logic
+        );
+    end component wb_xip_ctrl;
+
+
 
 end package leaf_soc_pkg;

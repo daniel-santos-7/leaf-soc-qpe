@@ -13,10 +13,14 @@ use work.uart_pkg.all;
 
 entity leaf_soc is
     port (
-        clk : in  std_logic;
-        rst : in  std_logic;
-        rx  : in  std_logic;
-        tx  : out std_logic
+        clk     : in  std_logic;
+        rst     : in  std_logic;
+        rx      : in  std_logic;
+        tx      : out std_logic;
+        spi_clk  : out std_logic;
+        spi_mosi : out std_logic;
+        spi_miso : in  std_logic;
+        spi_cs_n : out std_logic
     );
 end entity leaf_soc;
 
@@ -185,10 +189,24 @@ begin
         tx    => tx
     );
 
-    -- XIP not connected --
-    soc_xip_ack <= '0';
-    soc_xip_err <= '1';
-    soc_xip_dat <= (others => '0');
+    -- XIP controller
+    soc_xip: wb_xip_ctrl port map (
+        clk_i     => soc_syscon_clk,
+        rst_i     => soc_syscon_rst,
+        cyc_i     => soc_intercon_xip_cyc,
+        stb_i     => soc_intercon_xip_stb,
+        we_i      => soc_intercon_xip_we,
+        sel_i     => soc_intercon_xip_sel,
+        adr_i     => soc_intercon_xip_adr,
+        dat_i     => soc_intercon_xip_dat,
+        ack_o     => soc_xip_ack,
+        err_o     => soc_xip_err,
+        dat_o     => soc_xip_dat,
+        spi_clk   => spi_clk,
+        spi_mosi  => spi_mosi,
+        spi_miso  => spi_miso,
+        spi_cs_n  => spi_cs_n
+    );
 
     -- memory 64 kB --
     soc_ram: wb_ram generic map (
