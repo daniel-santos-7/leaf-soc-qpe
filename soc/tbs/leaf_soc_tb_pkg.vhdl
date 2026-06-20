@@ -5,12 +5,23 @@ use work.uart_tb_pkg.all;
 
 package leaf_soc_tb_pkg is
 
+    constant PROGRAM_FILE : string := "work/program.bin";
+
     type byte_array_t is array (natural range <>) of std_logic_vector(7 downto 0);
 
     procedure load_bin_file (
         constant path : in string;
         variable data : out byte_array_t;
         variable size : out natural
+    );
+
+    procedure init_mem (
+        constant file_name : in string;
+        constant mem_size  : in natural;
+        variable lane0 : inout byte_array_t;
+        variable lane1 : inout byte_array_t;
+        variable lane2 : inout byte_array_t;
+        variable lane3 : inout byte_array_t
     );
 
     function calc_crc (
@@ -28,6 +39,8 @@ package leaf_soc_tb_pkg is
 end package leaf_soc_tb_pkg;
 
 package body leaf_soc_tb_pkg is
+
+    use std.textio.all;
 
     procedure load_bin_file (
         constant path : in string;
@@ -49,6 +62,41 @@ package body leaf_soc_tb_pkg is
         file_close(bin_file);
         size := addr;
     end procedure load_bin_file;
+
+    procedure init_mem (
+        constant file_name : in string;
+        constant mem_size  : in natural;
+        variable lane0 : inout byte_array_t;
+        variable lane1 : inout byte_array_t;
+        variable lane2 : inout byte_array_t;
+        variable lane3 : inout byte_array_t
+    ) is
+        type char_file is file of character;
+        file bin_file : char_file;
+        variable byte : character;
+        variable addr : natural;
+        variable status : file_open_status;
+    begin
+        if file_name /= "" then
+            file_open(status, bin_file, file_name, read_mode);
+            if status = open_ok then
+                addr := 0;
+                while not endfile(bin_file) and addr < mem_size loop
+                    read(bin_file, byte);
+                    case addr mod 4 is
+                        when 0 => lane0(addr / 4) := std_logic_vector(to_unsigned(character'pos(byte), 8));
+                        when 1 => lane1(addr / 4) := std_logic_vector(to_unsigned(character'pos(byte), 8));
+                        when 2 => lane2(addr / 4) := std_logic_vector(to_unsigned(character'pos(byte), 8));
+                        when 3 => lane3(addr / 4) := std_logic_vector(to_unsigned(character'pos(byte), 8));
+                        when others => null;
+                    end case;
+                    addr := addr + 1;
+                end loop;
+                file_close(bin_file);
+                report "init_mem: loaded " & integer'image(addr) & " bytes from " & file_name;
+            end if;
+        end if;
+    end procedure init_mem;
 
     function calc_crc (
         data       : std_logic_vector;

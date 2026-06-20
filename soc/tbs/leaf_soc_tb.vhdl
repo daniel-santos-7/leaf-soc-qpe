@@ -8,6 +8,7 @@ use work.uart_tb_pkg.all;
 entity leaf_soc_tb is
     generic (
         PROGRAM : string;
+        SKIP_UART_LOAD : boolean := false;
         RUN_CYCLES : natural := 500000
     );
 end entity leaf_soc_tb;
@@ -24,19 +25,40 @@ architecture tb of leaf_soc_tb is
 
     signal uart_data : std_logic_vector(7 downto 0);
 
+    signal spi_clk : std_logic;
+    signal spi_mosi : std_logic;
+    signal spi_miso : std_logic;
+    signal spi_cs_n : std_logic;
+
     signal clk_en : std_logic := '0';
 
 begin
 
     uut: entity work.leaf_soc port map (
-        clk    => clk,
-        rst    => rst,
-        rx     => rx,
-        tx     => tx,
-        sig_i  => sig_i,
-        sig_q  => sig_q,
-        active => active
+        clk      => clk,
+        rst      => rst,
+        rx       => rx,
+        tx       => tx,
+        sig_i    => sig_i,
+        sig_q    => sig_q,
+        active   => active,
+        spi_clk  => spi_clk,
+        spi_mosi => spi_mosi,
+        spi_miso => spi_miso,
+        spi_cs_n => spi_cs_n
     );
+
+    u_spi_flash: entity work.spi_flash_model
+        generic map (
+            INIT_FILE => PROGRAM
+        )
+        port map (
+            clk_i    => clk,
+            spi_clk  => spi_clk,
+            spi_mosi => spi_mosi,
+            spi_miso => spi_miso,
+            spi_cs_n => spi_cs_n
+        );
 
     clk <= not clk after (CLK_PERIOD/2) when clk_en = '1' else '0';
 
@@ -77,7 +99,18 @@ begin
             wait until rising_edge(clk);
         end loop;
 
-        leaf_soc_send_program(rx, uart_data, PROGRAM);
+        if SKIP_UART_LOAD then
+            report "RAM preloaded, sending RAM_JUMP_CMD...";
+            uart_transmit(rx, x"4A");
+            wait until uart_data = x"06" for 100 us;
+            if uart_data = x"06" then
+                report "ACK received after RAM_JUMP_CMD, program started!";
+            else
+                report "ERROR: No ACK after RAM_JUMP_CMD" severity failure;
+            end if;
+        else
+            leaf_soc_send_program(rx, uart_data, PROGRAM);
+        end if;
 
         for i in 0 to RUN_CYCLES-1 loop
             wait until rising_edge(clk);
