@@ -34,7 +34,7 @@ architecture tb of leaf_soc_tb is
 
 begin
 
-    uut: entity work.leaf_soc port map (
+    uut: leaf_soc port map (
         clk      => clk,
         rst      => rst,
         rx       => rx,
