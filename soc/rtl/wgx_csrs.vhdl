@@ -17,7 +17,6 @@ entity wgx_csrs is
         env_o   : out std_logic_vector(31 downto 0);
         delay_o : out std_logic_vector(23 downto 0);
         valid_o : out std_logic;
-        start_o : out std_logic;
         ready_i : in  std_logic
     );
 end entity wgx_csrs;
@@ -57,7 +56,6 @@ architecture rtl of wgx_csrs is
 
     -- Registered outs from the sequencer
     signal valid_reg : std_logic := '0';
-    signal start_reg : std_logic := '0';
     signal ftw_reg   : std_logic_vector(31 downto 0) := (others => '0');
     signal pow_reg   : std_logic_vector(31 downto 0) := (others => '0');
     signal amp_reg   : std_logic_vector(15 downto 0) := (others => '0');
@@ -152,13 +150,11 @@ begin
                 seq_cnt      <= (others => '0');
                 seq_count    <= (others => '0');
                 valid_reg    <= '0';
-                start_reg    <= '0';
                 active       <= '0';
             else
                 case seq_state is
                     when IDLE =>
                         valid_reg <= '0';
-                        start_reg <= '0';
                         active    <= '0';
                         if ctrl_start_reg = '1' then
                             seq_cnt   <= (others => '0');
@@ -168,15 +164,13 @@ begin
 
                     when LAUNCH =>
                         valid_reg <= '1';
-                        start_reg <= '1';
                         active    <= '1';
                         seq_state <= WAIT_READY;
 
                     when WAIT_READY =>
-                        valid_reg <= '0';
-                        start_reg <= '0';
                         if ready_i = '1' then
                             if seq_cnt + 1 >= seq_count then
+                                valid_reg <= '0';
                                 seq_state <= IDLE;
                             else
                                 seq_cnt   <= seq_cnt + 1;
@@ -208,6 +202,5 @@ begin
     env_o   <= env_reg;
     delay_o <= delay_reg;
     valid_o <= valid_reg;
-    start_o <= start_reg;
 
 end architecture rtl;

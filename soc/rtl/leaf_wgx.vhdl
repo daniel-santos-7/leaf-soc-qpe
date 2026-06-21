@@ -48,8 +48,6 @@ architecture rtl of leaf_wgx is
     signal wgen_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal wgen_active : std_logic;
 
-    signal wgen_start     : std_logic;
-
 begin
 
     u_cpu: leaf generic map (
@@ -88,15 +86,13 @@ begin
         env_o   => wgen_env,
         drag_o  => wgen_drag,
         valid_o => wgen_valid,
-        start_o => wgen_start,
-        delay_o      => wgen_delay,
-        ready_i      => wgen_ready
+        delay_o => wgen_delay,
+        ready_i => wgen_ready
     );
 
     u_wgen: entity work.sig_gen port map (
         clk_i        => clk_i,
         rst_i        => rst_i,
-        start_i      => wgen_start,
         ftw_i        => wgen_ftw,
         pow_i        => wgen_pow,
         amp_i        => wgen_amp,
