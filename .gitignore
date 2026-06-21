@@ -2,7 +2,9 @@ waves
 work
 
 e~leaf_soc_tb.o
+e~leaf_soc_tb_sim.o
 leaf_soc_tb
+leaf_soc_tb_sim
 
 sw/**/*.elf
 sw/**/*.bin
