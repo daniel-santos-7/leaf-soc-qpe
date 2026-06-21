@@ -38,20 +38,24 @@ _start:
     # Entry 0: pi-pulse
     xwg.ftw      s0
     xwg.pow      x0
-    xwg.amp_drag s2, s1
+    slli t0, s1, 16
+    or   t0, t0, s2
+    xwg.amp_drag t0
     xwg.env      s3
     xwg.delay    x0
     xwg.push
 
     # Entry 1: pi/2-pulse
     xwg.ftw      s0
-    xwg.amp_drag s4, s1
+    slli t0, s1, 16
+    or   t0, t0, s4
+    xwg.amp_drag t0
     xwg.env      s5
     xwg.push
 
     # Entry 2: readout
     xwg.ftw      s6
-    xwg.amp_drag s7, x0
+    xwg.amp_drag s7       # DRAG=0, combined=AMP
     xwg.env      s8
     xwg.push_start
 

@@ -167,7 +167,9 @@ cmd_help:
 fire_pulse:
     xwg.ftw      s0
     xwg.pow      s1
-    xwg.amp_drag s2, s4
+    slli t0, s4, 16
+    or   t0, t0, s2
+    xwg.amp_drag t0
     xwg.env      s3
     xwg.delay    s5
     xwg.push_start

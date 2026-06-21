@@ -15,36 +15,13 @@
     csrw WGEN_CSR_POW, \reg
 .endm
 
-# AMP: combined {drag[15:0], amp[15:0]}
-.macro xwg.amp reg
-    csrr t0, WGEN_CSR_AMP
-    li   t1, 0xFFFF0000
-    and  t0, t0, t1
-    or   t0, t0, \reg
-    csrw WGEN_CSR_AMP, t0
-.endm
-
 .macro xwg.env reg
     csrw WGEN_CSR_ENV, \reg
 .endm
 
-# DRAG: combined into AMP upper half (read-modify-write)
-.macro xwg.drag reg
-    csrr t0, WGEN_CSR_AMP
-    li   t1, 0xFFFF
-    and  t0, t0, t1
-    slli t1, \reg, 16
-    or   t0, t0, t1
-    csrw WGEN_CSR_AMP, t0
-.endm
-
-# Write amp and drag atomically
-.macro xwg.amp_drag amp_reg, drag_reg
-    slli t0, \drag_reg, 16
-    li   t1, 0xFFFF
-    and  t1, \amp_reg, t1
-    or   t0, t0, t1
-    csrw WGEN_CSR_AMP, t0
+# AMP: combined {drag[15:0], amp[15:0]} — caller packs the value
+.macro xwg.amp_drag reg
+    csrw WGEN_CSR_AMP, \reg
 .endm
 
 .macro xwg.delay reg
