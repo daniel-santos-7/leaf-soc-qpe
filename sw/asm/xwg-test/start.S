@@ -8,35 +8,32 @@
 _start:
     li sp, RAM_TOP
 
-    # Entry 1
+    # Bank 0: π-pulse
     li s0, 0x00002D79   # FTW (1MHz)
-    li s1, 0x00000000   # POW
-    li s3, 0x000007FF   # AMP (DRAG=0)
-    li s4, 0x01000000   # ENV
-    li s5, 0x00000000   # DELAY
-    
-    xwg.ftw      s0
-    xwg.pow      s1
-    xwg.amp_drag s3
-    xwg.env      s4
-    xwg.delay    s5
-    xwg.push
+    xwg.ftw 0, s0
+    li s0, 0x00000000   # POW
+    xwg.pow 0, s0
+    li s0, 0x000007FF   # AMP = {DRAG=0, AMP=0x7FF}
+    xwg.amp 0, s0
+    li s0, 0x01000000   # ENV
+    xwg.env 0, s0
+    li s0, 0x00000000   # DEL
+    xwg.delay 0, s0
 
-    # Entry 2
-    li s0, 0x00002D79   # FTW (1MHz)
-    li s1, 0x80000000   
-    li s3, 0x000007FF   # AMP (DRAG=0)
-    li s4, 0x02000000
-    li s5, 0x0000000A
-    
-    xwg.ftw      s0
-    xwg.pow      s1
-    xwg.amp_drag s3
-    xwg.env      s4
-    xwg.delay    s5
-    xwg.push
+    # Bank 1: π/2-pulse
+    li s0, 0x00002D79   # FTW
+    xwg.ftw 1, s0
+    li s0, 0x80000000   # POW
+    xwg.pow 1, s0
+    li s0, 0x000003FF   # AMP = {DRAG=0, AMP=0x3FF}
+    xwg.amp 1, s0
+    li s0, 0x02000000   # ENV
+    xwg.env 1, s0
+    li s0, 0x0000000A   # DEL
+    xwg.delay 1, s0
 
-    xwg.start
+    # Play both banks
+    xwg.start 2
 
 1:  wfi
     j 1b

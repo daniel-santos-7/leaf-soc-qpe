@@ -1,48 +1,41 @@
-# WGEN CSRs (COP register map, matches sig_gen_csrs)
-.equ WGEN_CSR_FTW,   0x7C0
-.equ WGEN_CSR_POW,   0x7C1
-.equ WGEN_CSR_AMP,   0x7C2
-.equ WGEN_CSR_ENV,   0x7C3
-.equ WGEN_CSR_DELAY, 0x7C4
-.equ WGEN_CSR_TRIG,  0x7C5
-.equ WGEN_CSR_CTRL,  0x7C6
+# WGEN CSR bank layout
+# Each bank = 5 consecutive addrs (FTW, POW, AMP, ENV, DEL)
+# Banks 0-11 at base 0x00..0x3B (CSR addrs 0x7C0..0x7FB)
+# CTRL at addr 0x3F (CSR addr 0x7FF)
 
-.macro xwg.ftw reg
-    csrw WGEN_CSR_FTW, \reg
+.equ WG_BANK_BASE,   0x7C0
+.equ WG_BANK_STRIDE, 5
+
+.equ WG_FTW, 0
+.equ WG_POW, 1
+.equ WG_AMP, 2
+.equ WG_ENV, 3
+.equ WG_DEL, 4
+
+.equ WG_CSR_CTRL, 0x7FF
+
+.macro xwg.ftw bank, reg
+    csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_FTW), \reg
 .endm
 
-.macro xwg.pow reg
-    csrw WGEN_CSR_POW, \reg
+.macro xwg.pow bank, reg
+    csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_POW), \reg
 .endm
 
-.macro xwg.env reg
-    csrw WGEN_CSR_ENV, \reg
+# AMP = {drag[15:0], amp[15:0]}
+.macro xwg.amp bank, reg
+    csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_AMP), \reg
 .endm
 
-# AMP: combined {drag[15:0], amp[15:0]} — caller packs the value
-.macro xwg.amp_drag reg
-    csrw WGEN_CSR_AMP, \reg
+.macro xwg.env bank, reg
+    csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_ENV), \reg
 .endm
 
-.macro xwg.delay reg
-    csrw WGEN_CSR_DELAY, \reg
+.macro xwg.delay bank, reg
+    csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_DEL), \reg
 .endm
 
-# TRIG: write bit 0 = valid (push), read: bit 1 = ready, bit 0 = valid
-.macro xwg.push
-    csrwi WGEN_CSR_TRIG, 1
-.endm
-
-.macro xwg.trig rd
-    csrr \rd, WGEN_CSR_TRIG
-.endm
-
-# CTRL: write bit 0 = start
-.macro xwg.start
-    csrwi WGEN_CSR_CTRL, 1
-.endm
-
-.macro xwg.push_start
-    csrwi WGEN_CSR_TRIG, 1
-    csrwi WGEN_CSR_CTRL, 1
+.macro xwg.start count
+    li t0, ((\count & 0xF) << 4) | 1
+    csrw WG_CSR_CTRL, t0
 .endm

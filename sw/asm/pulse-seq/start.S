@@ -35,33 +35,30 @@ _start:
     li s7, AMP_READOUT
     li s8, ENV_READOUT
 
-    # Entry 0: pi-pulse
-    xwg.ftw      s0
-    xwg.pow      x0
+    # Bank 0: pi-pulse
+    xwg.ftw   0, s0
+    xwg.pow   0, x0
     slli t0, s1, 16
     or   t0, t0, s2
-    xwg.amp_drag t0
-    xwg.env      s3
-    xwg.delay    x0
-    xwg.push
+    xwg.amp   0, t0
+    xwg.env   0, s3
+    xwg.delay 0, x0
 
-    # Entry 1: pi/2-pulse
-    xwg.ftw      s0
+    # Bank 1: pi/2-pulse
+    xwg.ftw   1, s0
     slli t0, s1, 16
     or   t0, t0, s4
-    xwg.amp_drag t0
-    xwg.env      s5
-    xwg.push
+    xwg.amp   1, t0
+    xwg.env   1, s5
+    xwg.delay 1, x0
 
-    # Entry 2: readout
-    xwg.ftw      s6
-    xwg.amp_drag s7       # DRAG=0, combined=AMP
-    xwg.env      s8
-    xwg.push_start
+    # Bank 2: readout
+    xwg.ftw   2, s6
+    xwg.amp   2, s7       # DRAG=0, combined=AMP
+    xwg.env   2, s8
+    xwg.delay 2, x0
 
-1:  xwg.trig t0
-    andi t0, t0, 2
-    beqz t0, 1b
+    xwg.start 3
 
     # Halt
 2:  j 2b

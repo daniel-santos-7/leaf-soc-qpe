@@ -145,10 +145,9 @@ cmd_status:
     mv a0, s5
     call uart_print_dec
 
-    la a0, ready_lbl
+    la a0, active_lbl
     call uart_print_str
-    xwg.trig t0
-    srli t0, t0, 1
+    csrr t0, WG_CSR_CTRL
     andi t0, t0, 1
     mv a0, t0
     call uart_print_dec
@@ -165,17 +164,17 @@ cmd_help:
 // fire_pulse
 // --------------------------------------------------
 fire_pulse:
-    xwg.ftw      s0
-    xwg.pow      s1
-    slli t0, s4, 16
-    or   t0, t0, s2
-    xwg.amp_drag t0
-    xwg.env      s3
-    xwg.delay    s5
-    xwg.push_start
-1:  xwg.trig t0
-    andi t0, t0, 2
-    beqz t0, 1b
+    slli t0, s4, 16       # DRAG << 16
+    or   t0, t0, s2       # | AMP
+    xwg.ftw   0, s0
+    xwg.pow   0, s1
+    xwg.amp   0, t0
+    xwg.env   0, s3
+    xwg.delay 0, s5
+    xwg.start 1
+1:  csrr t0, WG_CSR_CTRL
+    andi t0, t0, 1
+    bnez t0, 1b
     la a0, ok_str
     call uart_print_str
     ret
@@ -395,7 +394,7 @@ drag_lbl:
     .asciz " DRAG="
 delay_lbl:
     .asciz " DELAY="
-ready_lbl:
-    .asciz " READY="
+active_lbl:
+    .asciz " ACTIVE="
 help_str:
     .asciz "1  Pi-pulse (4us)\n2  Pi/2-pulse (2us)\n3  Readout pulse (10us)\nt  Trigger with current params\nb  Burst (read N, fire N pulses)\ns  Show status\nh  Help\n"
