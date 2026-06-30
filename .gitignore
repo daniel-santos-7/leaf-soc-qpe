@@ -9,3 +9,6 @@ sw/**/*.bin
 sw/**/*.disass
 sw/**/*.debug
 sw/**/*.vhdl
+
+leaf_soc_tb_sim
+e~leaf_soc_tb_sim.o
