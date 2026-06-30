@@ -63,7 +63,7 @@ package leaf_soc_pkg is
             cpu_stb_i : in   std_logic;
             cpu_we_i  : in   std_logic;
             cpu_sel_i : in   std_logic_vector(3  downto 0);
-            cpu_adr_i : in   std_logic_vector(SOC_ADDR_WIDTH-1 downto 0);
+            cpu_adr_i : in   std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
             cpu_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             rom_ack_i : in   std_logic;
             io0_ack_i : in   std_logic;
