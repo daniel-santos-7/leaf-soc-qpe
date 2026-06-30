@@ -1,6 +1,6 @@
 [submodule "ips/cpu"]
 	path = ips/cpu
-	url = https://github.com/daniel-santos-7/leaf.git
+	url = git@github.com:daniel-santos-7/leaf.git
 [submodule "ips/uart"]
 	path = ips/uart
-	url = https://github.com/daniel-santos-7/wb-uart.git
+	url = git@github.com:daniel-santos-7/wb-uart.git
