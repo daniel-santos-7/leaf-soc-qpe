@@ -31,7 +31,7 @@ architecture rtl of leaf_soc is
     signal soc_cpu_stb : std_logic;
     signal soc_cpu_we  : std_logic;
     signal soc_cpu_sel : std_logic_vector(3  downto 0);
-    signal soc_cpu_adr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_cpu_adr : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
     signal soc_cpu_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_intercon_cpu_ack : std_logic;
