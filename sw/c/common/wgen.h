@@ -50,4 +50,26 @@ void wgen_wait_ready(void);
 void wgen_configure(const wgen_pulse_t *p);
 void wgen_pulse(const wgen_pulse_t *p);
 
+// Bank-aware functions (WGEN sequencer has 12 banks, 0..11)
+void wgen_bank_write_ftw(int bank, uint32_t val);
+void wgen_bank_write_pow(int bank, uint32_t val);
+void wgen_bank_write_amp(int bank, uint16_t val);
+void wgen_bank_write_drag(int bank, uint16_t val);
+void wgen_bank_write_env(int bank, uint32_t val);
+void wgen_bank_write_delay(int bank, uint32_t val);
+
+uint32_t wgen_bank_read_ftw(int bank);
+uint32_t wgen_bank_read_pow(int bank);
+uint16_t wgen_bank_read_amp(int bank);
+uint16_t wgen_bank_read_drag(int bank);
+uint32_t wgen_bank_read_env(int bank);
+uint32_t wgen_bank_read_delay(int bank);
+
+void wgen_bank_configure(int bank, const wgen_pulse_t *p);
+
+// Sequencer control
+void wgen_seq_run(int count);
+int  wgen_seq_is_active(void);
+void wgen_seq_wait_done(void);
+
 #endif
