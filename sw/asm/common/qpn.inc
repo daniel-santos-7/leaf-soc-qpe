@@ -14,28 +14,48 @@
 
 .equ WG_CSR_CTRL, 0x7FF
 
-.macro xwg.ftw bank, reg
+.macro qpn.ftw bank, reg
     csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_FTW), \reg
 .endm
 
-.macro xwg.pow bank, reg
+.macro qpn.pow bank, reg
     csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_POW), \reg
 .endm
 
 # AMP = {drag[15:0], amp[15:0]}
-.macro xwg.amp bank, reg
+.macro qpn.amp bank, reg
     csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_AMP), \reg
 .endm
 
-.macro xwg.env bank, reg
+.macro qpn.env bank, reg
     csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_ENV), \reg
 .endm
 
-.macro xwg.delay bank, reg
+.macro qpn.delay bank, reg
     csrw WG_BANK_BASE + (\bank * WG_BANK_STRIDE + WG_DEL), \reg
 .endm
 
-.macro xwg.start count
+.macro qpn.start count
     li t0, ((\count & 0xF) << 4) | 1
     csrw WG_CSR_CTRL, t0
+.endm
+
+# Bank-0 convenience aliases (single-pulse mode)
+.macro qp.ftw reg
+    qpn.ftw 0, \reg
+.endm
+.macro qp.pow reg
+    qpn.pow 0, \reg
+.endm
+.macro qp.amp reg
+    qpn.amp 0, \reg
+.endm
+.macro qp.env reg
+    qpn.env 0, \reg
+.endm
+.macro qp.delay reg
+    qpn.delay 0, \reg
+.endm
+.macro qp.start
+    qpn.start 1
 .endm

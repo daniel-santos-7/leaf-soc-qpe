@@ -17,7 +17,7 @@
 .equ AMP_READOUT,    0x00000C00
 .equ ENV_READOUT,    0x0083126F
 
-.include "../common/xwg.inc"
+.include "../common/qpn.inc"
 
 .section .text
 .globl _start
@@ -36,29 +36,29 @@ _start:
     li s8, ENV_READOUT
 
     # Bank 0: pi-pulse
-    xwg.ftw   0, s0
-    xwg.pow   0, x0
+    qpn.ftw   0, s0
+    qpn.pow   0, x0
     slli t0, s1, 16
     or   t0, t0, s2
-    xwg.amp   0, t0
-    xwg.env   0, s3
-    xwg.delay 0, x0
+    qpn.amp   0, t0
+    qpn.env   0, s3
+    qpn.delay 0, x0
 
     # Bank 1: pi/2-pulse
-    xwg.ftw   1, s0
+    qpn.ftw   1, s0
     slli t0, s1, 16
     or   t0, t0, s4
-    xwg.amp   1, t0
-    xwg.env   1, s5
-    xwg.delay 1, x0
+    qpn.amp   1, t0
+    qpn.env   1, s5
+    qpn.delay 1, x0
 
     # Bank 2: readout
-    xwg.ftw   2, s6
-    xwg.amp   2, s7       # DRAG=0, combined=AMP
-    xwg.env   2, s8
-    xwg.delay 2, x0
+    qpn.ftw   2, s6
+    qpn.amp   2, s7       # DRAG=0, combined=AMP
+    qpn.env   2, s8
+    qpn.delay 2, x0
 
-    xwg.start 3
+    qpn.start 3
 
     # Halt
 2:  j 2b

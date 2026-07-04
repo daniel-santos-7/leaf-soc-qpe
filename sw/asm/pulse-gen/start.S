@@ -20,7 +20,7 @@
 .equ AMP_READOUT,    0x00000C00
 .equ ENV_READOUT,    0x0083126F
 
-.include "../common/xwg.inc"
+.include "../common/qpn.inc"
 
 .section .text
 .globl _start
@@ -166,12 +166,12 @@ cmd_help:
 fire_pulse:
     slli t0, s4, 16       # DRAG << 16
     or   t0, t0, s2       # | AMP
-    xwg.ftw   0, s0
-    xwg.pow   0, s1
-    xwg.amp   0, t0
-    xwg.env   0, s3
-    xwg.delay 0, s5
-    xwg.start 1
+    qpn.ftw   0, s0
+    qpn.pow   0, s1
+    qpn.amp   0, t0
+    qpn.env   0, s3
+    qpn.delay 0, s5
+    qpn.start 1
 1:  csrr t0, WG_CSR_CTRL
     andi t0, t0, 1
     bnez t0, 1b

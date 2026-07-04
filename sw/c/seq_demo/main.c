@@ -34,8 +34,11 @@ int main(void)
 
     uart_puts("seq_demo\n");
 
+    for (int i = 0; i < 3; i++)
+        wgen_bank_configure(i, &seq[i]);
+
     for (;;) {
-        wgen_seq_run(3, 1, seq);
+        wgen_seq_run(3);
         wgen_seq_wait_done();
         uart_puts(".");
     }
