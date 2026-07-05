@@ -142,7 +142,7 @@ begin
             data_ack_i   => soc_cpu_data_ack,
             data_err_i   => soc_cpu_data_err,
             data_stall_i => soc_cpu_data_stall,
-            sig_o    => sig_i,
+            sig_i_o  => sig_i,
             sig_q_o  => sig_q,
             active_o => active
         );

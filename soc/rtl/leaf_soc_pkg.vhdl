@@ -159,7 +159,7 @@ package leaf_soc_pkg is
             data_err_i   : in  std_logic;
             data_stall_i : in  std_logic;
 
-            sig_o     : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+            sig_i_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             active_o  : out std_logic
         );
