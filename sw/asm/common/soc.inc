@@ -7,7 +7,7 @@
 
 // Memory sizes
 .equ ROM_SIZE,      0x200
-.equ RAM_SIZE,      0x10000      // 64 KB
+.equ RAM_SIZE,      0x8000       // 32 KB
 .equ XIP_SIZE,      0x1000000    // 16 MB
 
 // UART register offsets

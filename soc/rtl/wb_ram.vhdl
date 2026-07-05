@@ -11,7 +11,7 @@ use IEEE.numeric_std.all;
 
 entity wb_ram is
     generic (
-        BITS : natural := 16
+        BITS : natural := 15
     );
     port (
         clk_i : in  std_logic;
