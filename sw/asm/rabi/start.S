@@ -20,10 +20,10 @@ _start:
     li   s1, FTW_PI
     li   s2, ENV_PI
     li   s3, DRAG_PI
-    slli s3, s3, 16
 
     qp.ftw  s1
     qp.pow  x0
+    qp.drag s3
     qp.env  s2
     qp.delay x0
 
@@ -34,11 +34,10 @@ repeat_loop:
     li   a0, 0
 
 pulse_loop:
-    or   t0, s3, a0
-    qp.amp  t0
-    qp.start
+    qp.amp  a0
+    qp.trigger
 
-1:  csrr t0, WG_CSR_CTRL
+1:  csrr t0, WG_TRIG
     andi t0, t0, 1
     bnez t0, 1b
 
