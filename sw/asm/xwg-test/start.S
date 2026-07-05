@@ -8,32 +8,39 @@
 _start:
     li sp, RAM_TOP
 
-    # Bank 0: π-pulse
+    # π-pulse
     li s0, 0x00002D79   # FTW (1MHz)
-    qpn.ftw 0, s0
+    qp.ftw  s0
     li s0, 0x00000000   # POW
-    qpn.pow 0, s0
-    li s0, 0x000007FF   # AMP = {DRAG=0, AMP=0x7FF}
-    qpn.amp 0, s0
+    qp.pow  s0
+    li s0, 0x000007FF   # AMP
+    qp.amp  s0
+    qp.drag x0
     li s0, 0x01000000   # ENV
-    qpn.env 0, s0
-    li s0, 0x00000000   # DEL
-    qpn.delay 0, s0
+    qp.env  s0
+    li s0, 0x00000000   # DELAY
+    qp.delay s0
+    qp.trigger
+1:  csrr t0, WG_TRIG
+    andi t0, t0, 1
+    bnez t0, 1b
 
-    # Bank 1: π/2-pulse
+    # π/2-pulse
     li s0, 0x00002D79   # FTW
-    qpn.ftw 1, s0
+    qp.ftw  s0
     li s0, 0x80000000   # POW
-    qpn.pow 1, s0
-    li s0, 0x000003FF   # AMP = {DRAG=0, AMP=0x3FF}
-    qpn.amp 1, s0
+    qp.pow  s0
+    li s0, 0x000003FF   # AMP
+    qp.amp  s0
+    qp.drag x0
     li s0, 0x02000000   # ENV
-    qpn.env 1, s0
-    li s0, 0x0000000A   # DEL
-    qpn.delay 1, s0
+    qp.env  s0
+    li s0, 0x0000000A   # DELAY
+    qp.delay s0
+    qp.trigger
+2:  csrr t0, WG_TRIG
+    andi t0, t0, 1
+    bnez t0, 2b
 
-    # Play both banks
-    qpn.start 2
-
-1:  wfi
-    j 1b
+3:  wfi
+    j 3b

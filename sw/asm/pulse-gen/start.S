@@ -147,7 +147,7 @@ cmd_status:
 
     la a0, active_lbl
     call uart_print_str
-    csrr t0, WG_CSR_CTRL
+    csrr t0, WG_TRIG
     andi t0, t0, 1
     mv a0, t0
     call uart_print_dec
@@ -164,15 +164,14 @@ cmd_help:
 // fire_pulse
 // --------------------------------------------------
 fire_pulse:
-    slli t0, s4, 16       # DRAG << 16
-    or   t0, t0, s2       # | AMP
-    qpn.ftw   0, s0
-    qpn.pow   0, s1
-    qpn.amp   0, t0
-    qpn.env   0, s3
-    qpn.delay 0, s5
-    qpn.start 1
-1:  csrr t0, WG_CSR_CTRL
+    qp.ftw   s0
+    qp.pow   s1
+    qp.amp   s2
+    qp.drag  s4
+    qp.env   s3
+    qp.delay s5
+    qp.trigger
+1:  csrr t0, WG_TRIG
     andi t0, t0, 1
     bnez t0, 1b
     la a0, ok_str

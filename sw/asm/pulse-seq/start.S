@@ -25,40 +25,21 @@
 _start:
     li sp, RAM_TOP
 
-    li s0, FTW_PI
-    li s1, DRAG_PI
-    li s2, AMP_PI
-    li s3, ENV_PI
-    li s4, AMP_PI2
-    li s5, ENV_PI2
-    li s6, FTW_READOUT
-    li s7, AMP_READOUT
-    li s8, ENV_READOUT
+    li s0, 0x0000000F
+    li s1, 0x000000FF
+    li s2, 0x00000FFF
+    li s3, 0x0000FFFF
+    li s4, 0x000FFFFF
+    li s5, 0x00FFFFFF
 
-    # Bank 0: pi-pulse
-    qpn.ftw   0, s0
-    qpn.pow   0, x0
-    slli t0, s1, 16
-    or   t0, t0, s2
-    qpn.amp   0, t0
-    qpn.env   0, s3
-    qpn.delay 0, x0
-
-    # Bank 1: pi/2-pulse
-    qpn.ftw   1, s0
-    slli t0, s1, 16
-    or   t0, t0, s4
-    qpn.amp   1, t0
-    qpn.env   1, s5
-    qpn.delay 1, x0
-
-    # Bank 2: readout
-    qpn.ftw   2, s6
-    qpn.amp   2, s7       # DRAG=0, combined=AMP
-    qpn.env   2, s8
-    qpn.delay 2, x0
-
-    qpn.start 3
+    # Fire pi-pulse
+    qp.ftw   s0
+    qp.pow   s1
+    qp.amp   s2
+    qp.drag  s3
+    qp.env   s4
+    qp.delay s5
+    qp.trigger
 
     # Halt
-2:  j 2b
+1:  j 1b
