@@ -29,12 +29,36 @@ architecture rtl of leaf_soc is
     signal soc_syscon_clk : std_logic;
     signal soc_syscon_rst : std_logic;
 
-    signal soc_cpu_cyc : std_logic;
-    signal soc_cpu_stb : std_logic;
-    signal soc_cpu_we  : std_logic;
-    signal soc_cpu_sel : std_logic_vector(3  downto 0);
-    signal soc_cpu_adr : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
-    signal soc_cpu_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    -- CPU instruction channel
+    signal soc_cpu_inst_cyc : std_logic;
+    signal soc_cpu_inst_stb : std_logic;
+    signal soc_cpu_inst_adr : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+    signal soc_cpu_inst_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_cpu_inst_ack : std_logic;
+    signal soc_cpu_inst_err : std_logic;
+
+    -- CPU data channel
+    signal soc_cpu_data_cyc : std_logic;
+    signal soc_cpu_data_stb : std_logic;
+    signal soc_cpu_data_we  : std_logic;
+    signal soc_cpu_data_sel : std_logic_vector(3 downto 0);
+    signal soc_cpu_data_adr : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+    signal soc_cpu_data_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_cpu_data_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_cpu_data_ack : std_logic;
+    signal soc_cpu_data_err : std_logic;
+
+    -- Stall signals (backpressure: cyc without ack)
+    signal soc_cpu_inst_stall : std_logic;
+    signal soc_cpu_data_stall : std_logic;
+
+    -- Arbitrated Wishbone bus (arbiter to interconnect)
+    signal soc_arb_cyc : std_logic;
+    signal soc_arb_stb : std_logic;
+    signal soc_arb_we  : std_logic;
+    signal soc_arb_sel : std_logic_vector(3 downto 0);
+    signal soc_arb_adr : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+    signal soc_arb_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_intercon_cpu_ack : std_logic;
     signal soc_intercon_cpu_err : std_logic;
@@ -95,32 +119,77 @@ begin
     soc_cpu: leaf generic map (
         RESET_ADDR => ROM_BASE_ADDR
     ) port map (
-        clk_i     => soc_syscon_clk,
-        rst_i     => soc_syscon_rst,
-        ex_irq_i  => '0',
-        sw_irq_i  => '0',
-        tm_irq_i  => '0',
-        ack_i     => soc_intercon_cpu_ack,
-        err_i     => soc_intercon_cpu_err,
-        dat_i     => soc_intercon_cpu_dat,
-        cop_adr_o => open,
-        cop_dat_o => open,
-        cop_we_o  => open,
-        cyc_o     => soc_cpu_cyc,
-        stb_o     => soc_cpu_stb,
-        we_o      => soc_cpu_we,
-        sel_o     => soc_cpu_sel,
-        adr_o     => soc_cpu_adr,
-        dat_o     => soc_cpu_dat
+        clk_i        => soc_syscon_clk,
+        rst_i        => soc_syscon_rst,
+        ex_irq_i     => '0',
+        sw_irq_i     => '0',
+        tm_irq_i     => '0',
+        cop_dat_i    => (others => '0'),
+        cop_adr_o    => open,
+        cop_dat_o    => open,
+        cop_we_o     => open,
+        -- Instruction Wishbone master
+        inst_cyc_o   => soc_cpu_inst_cyc,
+        inst_stb_o   => soc_cpu_inst_stb,
+        inst_adr_o   => soc_cpu_inst_adr,
+        inst_dat_i   => soc_cpu_inst_dat,
+        inst_ack_i   => soc_cpu_inst_ack,
+        inst_err_i   => soc_cpu_inst_err,
+        inst_stall_i => soc_cpu_inst_stall,
+        -- Data Wishbone master
+        data_cyc_o   => soc_cpu_data_cyc,
+        data_stb_o   => soc_cpu_data_stb,
+        data_we_o    => soc_cpu_data_we,
+        data_sel_o   => soc_cpu_data_sel,
+        data_adr_o   => soc_cpu_data_adr,
+        data_dat_o   => soc_cpu_data_dat,
+        data_dat_i   => soc_cpu_data_dat_rd,
+        data_ack_i   => soc_cpu_data_ack,
+        data_err_i   => soc_cpu_data_err,
+        data_stall_i => soc_cpu_data_stall
+    );
+
+    -- Stall when channel is requesting but not yet acknowledged
+    soc_cpu_inst_stall <= soc_cpu_inst_cyc and not soc_cpu_inst_ack;
+    soc_cpu_data_stall <= soc_cpu_data_cyc and not soc_cpu_data_ack;
+
+    -- Wishbone arbiter: merges instruction and data masters
+    soc_arb: wb_arbiter port map (
+        clk_i      => soc_syscon_clk,
+        rst_i      => soc_syscon_rst,
+        inst_cyc_i => soc_cpu_inst_cyc,
+        inst_stb_i => soc_cpu_inst_stb,
+        inst_adr_i => soc_cpu_inst_adr,
+        inst_ack_o => soc_cpu_inst_ack,
+        inst_err_o => soc_cpu_inst_err,
+        data_cyc_i => soc_cpu_data_cyc,
+        data_stb_i => soc_cpu_data_stb,
+        data_adr_i => soc_cpu_data_adr,
+        data_sel_i => soc_cpu_data_sel,
+        data_we_i  => soc_cpu_data_we,
+        data_dat_i => soc_cpu_data_dat,
+        data_ack_o => soc_cpu_data_ack,
+        data_err_o => soc_cpu_data_err,
+        cyc_o      => soc_arb_cyc,
+        stb_o      => soc_arb_stb,
+        adr_o      => soc_arb_adr,
+        sel_o      => soc_arb_sel,
+        we_o       => soc_arb_we,
+        dat_o      => soc_arb_dat,
+        ack_i      => soc_intercon_cpu_ack,
+        err_i      => soc_intercon_cpu_err,
+        dat_i      => soc_intercon_cpu_dat,
+        inst_dat_o => soc_cpu_inst_dat,
+        data_dat_o => soc_cpu_data_dat_rd
     );
 
     soc_intercon: wb_intercon port map (
-        cpu_cyc_i => soc_cpu_cyc,
-        cpu_stb_i => soc_cpu_stb,
-        cpu_we_i  => soc_cpu_we,
-        cpu_sel_i => soc_cpu_sel,
-        cpu_adr_i => soc_cpu_adr,
-        cpu_dat_i => soc_cpu_dat,
+        cpu_cyc_i => soc_arb_cyc,
+        cpu_stb_i => soc_arb_stb,
+        cpu_we_i  => soc_arb_we,
+        cpu_sel_i => soc_arb_sel,
+        cpu_adr_i => soc_arb_adr,
+        cpu_dat_i => soc_arb_dat,
         io0_ack_i => soc_io0_ack,
         io1_ack_i => soc_io1_ack,
         rom_ack_i => soc_rom_ack,
