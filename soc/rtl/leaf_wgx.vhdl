@@ -14,15 +14,26 @@ entity leaf_wgx is
         ex_irq_i  : in  std_logic;
         sw_irq_i  : in  std_logic;
         tm_irq_i  : in  std_logic;
-        ack_i     : in  std_logic;
-        err_i     : in  std_logic;
-        dat_i     : in  std_logic_vector(XLEN-1 downto 0);
-        cyc_o     : out std_logic;
-        stb_o     : out std_logic;
-        we_o      : out std_logic;
-        sel_o     : out std_logic_vector(3         downto 0);
-        adr_o     : out std_logic_vector(XLEN-1 downto 2);
-        dat_o     : out std_logic_vector(XLEN-1 downto 0);
+
+        inst_cyc_o   : out std_logic;
+        inst_stb_o   : out std_logic;
+        inst_adr_o   : out std_logic_vector(XLEN-1 downto 2);
+        inst_dat_i   : in  std_logic_vector(XLEN-1 downto 0);
+        inst_ack_i   : in  std_logic;
+        inst_err_i   : in  std_logic;
+        inst_stall_i : in  std_logic;
+
+        data_cyc_o   : out std_logic;
+        data_stb_o   : out std_logic;
+        data_we_o    : out std_logic;
+        data_sel_o   : out std_logic_vector(3         downto 0);
+        data_adr_o   : out std_logic_vector(XLEN-1 downto 2);
+        data_dat_o   : out std_logic_vector(XLEN-1 downto 0);
+        data_dat_i   : in  std_logic_vector(XLEN-1 downto 0);
+        data_ack_i   : in  std_logic;
+        data_err_i   : in  std_logic;
+        data_stall_i : in  std_logic;
+
         sig_o     : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         active_o  : out std_logic
@@ -58,19 +69,27 @@ begin
         ex_irq_i  => ex_irq_i,
         sw_irq_i  => sw_irq_i,
         tm_irq_i  => tm_irq_i,
-        ack_i     => ack_i,
-        err_i     => err_i,
-        dat_i     => dat_i,
         cop_dat_i => csr_rdata,
         cop_adr_o => csr_addr,
         cop_dat_o => csr_wdata,
         cop_we_o  => csr_we,
-        cyc_o     => cyc_o,
-        stb_o     => stb_o,
-        we_o      => we_o,
-        sel_o     => sel_o,
-        adr_o     => adr_o,
-        dat_o     => dat_o
+        inst_cyc_o   => inst_cyc_o,
+        inst_stb_o   => inst_stb_o,
+        inst_adr_o   => inst_adr_o,
+        inst_dat_i   => inst_dat_i,
+        inst_ack_i   => inst_ack_i,
+        inst_err_i   => inst_err_i,
+        inst_stall_i => inst_stall_i,
+        data_cyc_o   => data_cyc_o,
+        data_stb_o   => data_stb_o,
+        data_we_o    => data_we_o,
+        data_sel_o   => data_sel_o,
+        data_adr_o   => data_adr_o,
+        data_dat_o   => data_dat_o,
+        data_dat_i   => data_dat_i,
+        data_ack_i   => data_ack_i,
+        data_err_i   => data_err_i,
+        data_stall_i => data_stall_i
     );
 
     u_csrs: entity work.wgx_csrs port map (
@@ -101,9 +120,9 @@ begin
         valid_i      => wgen_valid,
         delay_i      => wgen_delay,
         ready_o      => wgen_ready,
-        sig_i_o => wgen_sig_i,
-        sig_q_o => sig_q_o,
-        active_o => wgen_active
+        sig_i_o      => wgen_sig_i,
+        sig_q_o      => sig_q_o,
+        active_o     => wgen_active
     );
 
     sig_o <= wgen_sig_i;
