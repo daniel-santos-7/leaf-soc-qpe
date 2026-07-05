@@ -5,7 +5,7 @@ use work.leaf_soc_tb_pkg.all;
 
 entity wb_ram_sim is
     generic (
-        BITS : natural := 16
+        BITS : natural := 15
     );
     port (
         clk_i : in  std_logic;

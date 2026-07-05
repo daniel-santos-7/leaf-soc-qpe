@@ -277,9 +277,9 @@ begin
         spi_cs_n  => spi_cs_n
     );
 
-    -- memory 64 kB --
+    -- memory 32 kB --
     soc_ram: wb_ram generic map (
-        BITS  => 16
+        BITS  => RAM_ADDR_WIDTH
     ) port map (
         clk_i => soc_syscon_clk,
         rst_i => soc_syscon_rst,
