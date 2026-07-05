@@ -139,15 +139,26 @@ package leaf_soc_pkg is
             ex_irq_i  : in  std_logic;
             sw_irq_i  : in  std_logic;
             tm_irq_i  : in  std_logic;
-            ack_i     : in  std_logic;
-            err_i     : in  std_logic;
-            dat_i     : in  std_logic_vector(31 downto 0);
-            cyc_o     : out std_logic;
-            stb_o     : out std_logic;
-            we_o      : out std_logic;
-            sel_o     : out std_logic_vector(3  downto 0);
-            adr_o     : out std_logic_vector(31 downto 2);
-            dat_o     : out std_logic_vector(31 downto 0);
+
+            inst_cyc_o   : out std_logic;
+            inst_stb_o   : out std_logic;
+            inst_adr_o   : out std_logic_vector(31 downto 2);
+            inst_dat_i   : in  std_logic_vector(31 downto 0);
+            inst_ack_i   : in  std_logic;
+            inst_err_i   : in  std_logic;
+            inst_stall_i : in  std_logic;
+
+            data_cyc_o   : out std_logic;
+            data_stb_o   : out std_logic;
+            data_we_o    : out std_logic;
+            data_sel_o   : out std_logic_vector(3  downto 0);
+            data_adr_o   : out std_logic_vector(31 downto 2);
+            data_dat_o   : out std_logic_vector(31 downto 0);
+            data_dat_i   : in  std_logic_vector(31 downto 0);
+            data_ack_i   : in  std_logic;
+            data_err_i   : in  std_logic;
+            data_stall_i : in  std_logic;
+
             sig_o     : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             active_o  : out std_logic
