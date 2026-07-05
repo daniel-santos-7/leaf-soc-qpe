@@ -6,19 +6,21 @@
 #define WGEN_CSR_FTW   0x7C0
 #define WGEN_CSR_POW   0x7C1
 #define WGEN_CSR_AMP   0x7C2
-#define WGEN_CSR_ENV   0x7C3
-#define WGEN_CSR_DELAY 0x7C4
-#define WGEN_CSR_TRIG  0x7C5
-#define WGEN_CSR_CTRL  0x7C6
+#define WGEN_CSR_DRAG  0x7C3
+#define WGEN_CSR_ENV   0x7C4
+#define WGEN_CSR_DELAY 0x7C5
+#define WGEN_CSR_TRIG  0x7C6
+#define WGEN_CSR_CTRL  0x7C7
 
 #define WGEN_BASE      0x10001000
 #define WGEN_OFF_FTW   0x00
 #define WGEN_OFF_POW   0x04
 #define WGEN_OFF_AMP   0x08
-#define WGEN_OFF_ENV   0x0C
-#define WGEN_OFF_DELAY 0x10
-#define WGEN_OFF_TRIG  0x14
-#define WGEN_OFF_CTRL  0x18
+#define WGEN_OFF_DRAG  0x0C
+#define WGEN_OFF_ENV   0x10
+#define WGEN_OFF_DELAY 0x14
+#define WGEN_OFF_TRIG  0x18
+#define WGEN_OFF_CTRL  0x1C
 
 typedef struct {
     uint32_t ftw;

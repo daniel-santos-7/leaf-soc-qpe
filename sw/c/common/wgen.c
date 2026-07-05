@@ -45,8 +45,16 @@ void wgen_write_amp(uint16_t val)
 #ifdef WGEN_IF_MMIO
     *(volatile uint16_t *)((uintptr_t)wgen + WGEN_OFF_AMP) = val;
 #else
-    uint32_t tmp = csr_read(WGEN_CSR_AMP) & 0xFFFF0000;
-    csr_write(WGEN_CSR_AMP, tmp | val);
+    csr_write(WGEN_CSR_AMP, val);
+#endif
+}
+
+void wgen_write_drag(uint16_t val)
+{
+#ifdef WGEN_IF_MMIO
+    *(volatile uint16_t *)((uintptr_t)wgen + WGEN_OFF_DRAG) = val;
+#else
+    csr_write(WGEN_CSR_DRAG, val);
 #endif
 }
 
@@ -56,16 +64,6 @@ void wgen_write_env(uint32_t val)
     wgen_write(WGEN_OFF_ENV, val);
 #else
     csr_write(WGEN_CSR_ENV, val);
-#endif
-}
-
-void wgen_write_drag(uint16_t val)
-{
-#ifdef WGEN_IF_MMIO
-    *(volatile uint16_t *)((uintptr_t)wgen + WGEN_OFF_AMP + 2) = val;
-#else
-    uint32_t tmp = csr_read(WGEN_CSR_AMP) & 0x0000FFFF;
-    csr_write(WGEN_CSR_AMP, tmp | ((uint32_t)val << 16));
 #endif
 }
 
@@ -117,9 +115,9 @@ uint32_t wgen_read_env(void)
 uint16_t wgen_read_drag(void)
 {
 #ifdef WGEN_IF_MMIO
-    return (uint16_t)(wgen_read(WGEN_OFF_AMP) >> 16);
+    return (uint16_t)wgen_read(WGEN_OFF_DRAG);
 #else
-    return (uint16_t)(csr_read(WGEN_CSR_AMP) >> 16);
+    return (uint16_t)csr_read(WGEN_CSR_DRAG);
 #endif
 }
 
