@@ -6,7 +6,7 @@ Leaf SoC is a compact and efficient 32-bit *System-on-Chip* based on the RISC-V 
 
 - **Leaf Processor:** 32-bit RISC-V core (RV32I) with a 2-stage pipeline.
 - **Wishbone B4 Bus:** Shared-bus interconnection for seamless peripheral integration.
-- **Memory System:** Integrated Boot ROM and 64 KB of internal RAM.
+- **Memory System:** Integrated Boot ROM and 32 KB of internal RAM.
 - **Standard Peripherals:** Includes a robust UART for serial communication.
 - **Expandability:** Ready for XIP (Execute-In-Place) and custom hardware via a dedicated coprocessor interface.
 - **FPGA Friendly:** Synthesizable VHDL design optimized for modern FPGA architectures.
@@ -30,7 +30,7 @@ The default address space allocation is defined as follows:
 | **UART**   | `10000000` | 16 B | Serial communication (IO0) |
 | **IO1**    | `0x10001000` | 16 B | Reserved for secondary IO |
 | **XIP**    | `0x20000000` | 16 MB | External Flash / Execute-In-Place (Optional) |
-| **RAM**    | `0x80000000` | 64 KB | Main System Memory |
+| **RAM**    | `0x80000000` | 32 KB | Main System Memory |
 
 ### System Controller
 The **Syscon** module handles global clock buffering and synchronized reset generation for the entire SoC.

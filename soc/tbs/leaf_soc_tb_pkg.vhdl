@@ -127,7 +127,7 @@ package body leaf_soc_tb_pkg is
         constant ACK : std_logic_vector(7 downto 0) := x"06";
         constant NAK : std_logic_vector(7 downto 0) := x"15";
 
-        constant MAX_PROGRAM_SIZE : natural := 64 * 1024;
+        constant MAX_PROGRAM_SIZE : natural := 32 * 1024;
 
         variable program_data : byte_array_t(0 to MAX_PROGRAM_SIZE - 1) := (others => x"00");
         variable program_size : natural := 0;

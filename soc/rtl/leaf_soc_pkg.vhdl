@@ -17,7 +17,7 @@ package leaf_soc_pkg is
     constant IO0_ADDR_WIDTH : natural := 4;    -- 16 bytes (4 registers)
     constant IO1_ADDR_WIDTH : natural := 5;    -- 32 bytes (8 registers)
     constant XIP_ADDR_WIDTH : natural := 24;   -- 16 MB
-    constant RAM_ADDR_WIDTH : natural := 16;   -- 64 KB
+    constant RAM_ADDR_WIDTH : natural := 15;   -- 32 KB
 
     constant OUT_RES_BITS : natural := 12;
 
@@ -32,7 +32,7 @@ package leaf_soc_pkg is
 
     component wb_ram is
         generic (
-            BITS : natural := 8
+            BITS : natural := 15
         );
         port (
             clk_i : in  std_logic;
