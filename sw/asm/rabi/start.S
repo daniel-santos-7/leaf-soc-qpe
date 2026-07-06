@@ -9,7 +9,7 @@
 .equ AMP_MAX,  4095
 .equ REPEAT,   3
 
-.include "../common/qpn.inc"
+.include "../common/qp.inc"
 
 .section .text
 .globl _start
