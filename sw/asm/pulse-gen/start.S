@@ -20,7 +20,7 @@
 .equ AMP_READOUT,    0x00000C00
 .equ ENV_READOUT,    0x0083126F
 
-.include "../common/qpn.inc"
+.include "../common/qp.inc"
 
 .section .text
 .globl _start

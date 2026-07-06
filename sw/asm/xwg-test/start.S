@@ -1,6 +1,6 @@
 .equ RAM_TOP, 0x80010000
 
-.include "../common/qpn.inc"
+.include "../common/qp.inc"
 
 .section .text
 .globl _start

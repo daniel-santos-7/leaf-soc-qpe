@@ -36,6 +36,5 @@
 .endm
 
 .macro qp.trigger
-    li t0, 1
-    csrw WG_TRIG, t0
+    csrwi WG_TRIG, 1
 .endm
