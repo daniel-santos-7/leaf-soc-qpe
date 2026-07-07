@@ -39,8 +39,6 @@ architecture rtl of wgx_csrs is
     signal delay_reg : std_logic_vector(23 downto 0) := (others => '0');
     signal valid_reg : std_logic := '0';
 
-    signal rdata_reg : std_logic_vector(31 downto 0) := (others => '0');
-
 begin
 
     write_proc : process(clk_i)
@@ -66,7 +64,10 @@ begin
                         when REG_DRAG  => drag_reg  <= wdata_i(15 downto 0);
                         when REG_ENV   => env_reg   <= wdata_i;
                         when REG_DELAY => delay_reg <= wdata_i(23 downto 0);
-                        when REG_TRIG  => valid_reg <= wdata_i(0);
+                        when REG_TRIG  =>
+                            if wdata_i(0) = '1' then
+                                valid_reg <= '1';
+                            end if;
                         when others    => null;
                     end case;
                 end if;
@@ -74,27 +75,20 @@ begin
         end if;
     end process write_proc;
 
-    read_proc : process(clk_i)
+    read_comb : process(addr_i, ftw_reg, pow_reg, amp_reg, drag_reg, env_reg,
+                        delay_reg, valid_reg, ready_i)
     begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                rdata_reg <= (others => '0');
-            else
-                case addr_i is
-                    when REG_FTW   => rdata_reg <= ftw_reg;
-                    when REG_POW   => rdata_reg <= pow_reg;
-                    when REG_AMP   => rdata_reg <= x"0000" & amp_reg;
-                    when REG_DRAG  => rdata_reg <= x"0000" & drag_reg;
-                    when REG_ENV   => rdata_reg <= env_reg;
-                    when REG_DELAY => rdata_reg <= x"00" & delay_reg;
-                    when REG_TRIG  => rdata_reg <= (0 => valid_reg, 1 => ready_i, others => '0');
-                    when others    => rdata_reg <= (others => '0');
-                end case;
-            end if;
-        end if;
-    end process read_proc;
-
-    rdata_o <= rdata_reg;
+        case addr_i is
+            when REG_FTW   => rdata_o <= ftw_reg;
+            when REG_POW   => rdata_o <= pow_reg;
+            when REG_AMP   => rdata_o <= x"0000" & amp_reg;
+            when REG_DRAG  => rdata_o <= x"0000" & drag_reg;
+            when REG_ENV   => rdata_o <= env_reg;
+            when REG_DELAY => rdata_o <= x"00" & delay_reg;
+            when REG_TRIG  => rdata_o <= (0 => valid_reg, 1 => ready_i, others => '0');
+            when others    => rdata_o <= (others => '0');
+        end case;
+    end process read_comb;
     ftw_o   <= ftw_reg;
     pow_o   <= pow_reg;
     amp_o   <= amp_reg;
