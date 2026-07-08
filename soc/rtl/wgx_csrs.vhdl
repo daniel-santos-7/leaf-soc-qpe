@@ -37,7 +37,8 @@ architecture rtl of wgx_csrs is
     signal drag_reg  : std_logic_vector(15 downto 0) := (others => '0');
     signal env_reg   : std_logic_vector(31 downto 0) := (others => '0');
     signal delay_reg : std_logic_vector(23 downto 0) := (others => '0');
-    signal valid_reg : std_logic := '0';
+    signal valid_reg  : std_logic := '0';
+    signal valid_int  : std_logic;
 
 begin
 
@@ -65,7 +66,12 @@ begin
                         when REG_ENV   => env_reg   <= wdata_i;
                         when REG_DELAY => delay_reg <= wdata_i(23 downto 0);
                         when REG_TRIG  =>
-                            if wdata_i(0) = '1' then
+                            -- If ready_i='1' the sig_gen is idle, and valid_int
+                            -- (combinatorial) delivers a single-cycle pulse via
+                            -- valid_o directly; no need to store it.
+                            -- If ready_i='0' the sig_gen is busy, so valid_reg
+                            -- holds the request until ready_i goes high.
+                            if wdata_i(0) = '1' and ready_i = '0' then
                                 valid_reg <= '1';
                             end if;
                         when others    => null;
@@ -76,7 +82,7 @@ begin
     end process write_proc;
 
     read_comb : process(addr_i, ftw_reg, pow_reg, amp_reg, drag_reg, env_reg,
-                        delay_reg, valid_reg, ready_i)
+                        delay_reg, ready_i, valid_int)
     begin
         case addr_i is
             when REG_FTW   => rdata_o <= ftw_reg;
@@ -85,7 +91,7 @@ begin
             when REG_DRAG  => rdata_o <= x"0000" & drag_reg;
             when REG_ENV   => rdata_o <= env_reg;
             when REG_DELAY => rdata_o <= x"00" & delay_reg;
-            when REG_TRIG  => rdata_o <= (0 => valid_reg, 1 => ready_i, others => '0');
+            when REG_TRIG  => rdata_o <= (1 => ready_i and not valid_int, others => '0');
             when others    => rdata_o <= (others => '0');
         end case;
     end process read_comb;
@@ -95,6 +101,12 @@ begin
     drag_o  <= drag_reg;
     env_o   <= env_reg;
     delay_o <= delay_reg;
-    valid_o <= valid_reg;
+    -- Combinatorial: pulses high on a trigger write (consumed same-cycle by
+    -- sig_gen when ready_i='1'), or reflects the latched valid_reg when busy.
+    -- Not registered: the combinatorial path is intentional to allow a
+    -- single-cycle handshake without requiring the CPU to poll for idle.
+    valid_int <= '1' when ((we_i = '1' and addr_i = REG_TRIG and wdata_i(0) = '1')
+                           or valid_reg = '1') else '0';
+    valid_o <= valid_int;
 
 end architecture rtl;
