@@ -1,10 +1,10 @@
 # rabi: Amplitude sweep, bank 0 loop, no UART
 
-.equ RAM_TOP,  0x80010000
+.equ RAM_TOP,  0x80008000
 
 .equ FTW_PI,   0x1999999A
 .equ ENV_PI,   0x0147AE14
-.equ DRAG_PI,  0x00001999
+.equ DRAG_PI,  0x00000000
 .equ AMP_STEP, 41
 .equ AMP_MAX,  4095
 .equ REPEAT,   3
@@ -35,16 +35,14 @@ repeat_loop:
 
 pulse_loop:
     qp.amp  a0
+    qp.wait
     qp.trigger
-
-1:  csrr t0, WG_TRIG
-    andi t0, t0, 1
-    bnez t0, 1b
 
     addi a0, a0, AMP_STEP
     li   t0, AMP_MAX
     ble  a0, t0, pulse_loop
 
+    li   a0, 0
     addi s4, s4, -1
     j    repeat_loop
 

@@ -38,3 +38,9 @@
 .macro qp.trigger
     csrwi WG_TRIG, 1
 .endm
+
+.macro qp.wait
+1:  csrr t0, WG_TRIG
+    andi t0, t0, 2
+    beqz t0, 1b
+.endm

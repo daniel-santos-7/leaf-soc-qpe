@@ -1,4 +1,4 @@
-.equ RAM_TOP, 0x80010000
+.equ RAM_TOP, 0x80008000
 
 .include "../common/qp.inc"
 
@@ -8,24 +8,23 @@
 _start:
     li sp, RAM_TOP
 
-    # Single pulse exercising all registers
-    li s0, 0x1999999A   # FTW = 5 MHz
+    # Load all register values first
+    li s0, 0x1999999A   # FTW = 10 MHz
+    li s1, 0x40000000   # POW = quarter-cycle phase
+    li s2, 0x000007FF   # AMP = 2047
+    li s3, 0x00001999   # DRAG = 0.2
+    li s4, 0x0147AE14   # ENV = 200 cyc (4 us)
+    li s5, 0x0000000A   # DELAY = 10 cycles
+    
+    # Write all WGEN registers
     qp.ftw  s0
-    li s0, 0x40000000   # POW = quarter-cycle phase
-    qp.pow  s0
-    li s0, 0x000007FF   # AMP = 2047
-    qp.amp  s0
-    li s0, 0x00001999   # DRAG = 0.2
-    qp.drag s0
-    li s0, 0x0147AE14   # ENV = 200 cyc (4 us)
-    qp.env  s0
-    li s0, 0x0000000A   # DELAY = 10 cycles
-    qp.delay s0
+    qp.pow  s1
+    qp.amp  s2
+    qp.drag s3
+    qp.env  s4
+    qp.delay s5
     qp.trigger
-
-1:  csrr t0, WG_TRIG
-    andi t0, t0, 1
-    bnez t0, 1b
+    qp.wait
 
 2:  wfi
     j 2b
