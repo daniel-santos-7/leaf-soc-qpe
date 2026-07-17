@@ -19,7 +19,7 @@ TOP_UNIT = leaf_soc_tb_sim
 
 PROGRAM       ?= sw/asm/hello-world/hello-world.bin
 RAM_INIT_FILE = $(PROGRAM)
-RUN_CYCLES    ?= 500000
+RUN_CYCLES    ?= 200000
 
 PROGRAM_NAME ?= $(shell basename $(PROGRAM) .bin)
 GHW_WAVEFORM ?= $(PROGRAM_NAME).ghw
