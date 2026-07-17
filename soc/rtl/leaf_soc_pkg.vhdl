@@ -27,23 +27,28 @@ package leaf_soc_pkg is
         );
     end component wb_syscon;
 
-    component wb_ram is
+    component wb_ram_dp is
         generic (
             BITS : natural := 15
         );
         port (
-            clk_i : in  std_logic;
-            rst_i : in  std_logic;
-            dat_i : in  std_logic_vector(31 downto 0);
-            cyc_i : in  std_logic;
-            stb_i : in  std_logic;
-            we_i  : in  std_logic;
-            sel_i : in  std_logic_vector(3  downto 0);
-            adr_i : in  std_logic_vector(BITS-3 downto 0);
-            ack_o : out std_logic;
-            dat_o : out std_logic_vector(31 downto 0)
+            clk_i   : in  std_logic;
+            rst_i   : in  std_logic;
+            dat_i   : in  std_logic_vector(31 downto 0);
+            cyc_i   : in  std_logic;
+            stb_i   : in  std_logic;
+            we_i    : in  std_logic;
+            sel_i   : in  std_logic_vector(3 downto 0);
+            adr_i   : in  std_logic_vector(BITS-3 downto 0);
+            ack_o   : out std_logic;
+            dat_o   : out std_logic_vector(31 downto 0);
+            cyc_b_i : in  std_logic;
+            stb_b_i : in  std_logic;
+            adr_b_i : in  std_logic_vector(BITS-3 downto 0);
+            ack_b_o : out std_logic;
+            dat_b_o : out std_logic_vector(31 downto 0)
         );
-    end component wb_ram;
+    end component wb_ram_dp;
 
     component wb_rom is
         port (
@@ -142,7 +147,5 @@ package leaf_soc_pkg is
             spi_cs_n  : out std_logic
         );
     end component wb_xip_ctrl;
-
-
 
 end package leaf_soc_pkg;
