@@ -1,6 +1,7 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
+use STD.textio.all;
 use work.leaf_soc_pkg.all;
 use work.leaf_soc_tb_pkg.all;
 use work.uart_tb_pkg.all;
@@ -9,7 +10,8 @@ entity leaf_soc_tb is
     generic (
         PROGRAM : string;
         SKIP_UART_LOAD : boolean := false;
-        RUN_CYCLES : natural := 500000
+        RUN_CYCLES : natural := 500000;
+        SAMPLES_FILE : string := ""
     );
 end entity leaf_soc_tb;
 
@@ -81,6 +83,35 @@ begin
         file_close(out_file);
         wait;
     end process uart_rx_proc;
+
+    -- Logs every sig_i/sig_q sample while active='1' to a CSV file for
+    -- offline plotting, covering the whole run (all pulses), not just one.
+    samples_proc: process
+        file f : text;
+        variable l : line;
+        variable cycle : natural := 0;
+    begin
+        if SAMPLES_FILE'length > 0 then
+            file_open(f, SAMPLES_FILE, write_mode);
+            write(l, string'("cycle,sig_i,sig_q"));
+            writeline(f, l);
+            loop
+                wait until rising_edge(clk) or clk_en = '0';
+                exit when clk_en = '0';
+                if active = '1' then
+                    write(l, cycle);
+                    write(l, string'(","));
+                    write(l, to_integer(signed(sig_i)));
+                    write(l, string'(","));
+                    write(l, to_integer(signed(sig_q)));
+                    writeline(f, l);
+                end if;
+                cycle := cycle + 1;
+            end loop;
+            file_close(f);
+        end if;
+        wait;
+    end process samples_proc;
 
     test: process
     begin
