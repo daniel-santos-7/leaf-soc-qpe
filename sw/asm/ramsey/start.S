@@ -10,8 +10,8 @@
 .equ AMP_HALF,  2048
 .equ DELAY_START, 0
 .equ DELAY_STEP,  0x00000800
-.equ DELAY_END,   0x00004000
-.equ REPEAT,      2
+.equ DELAY_END,   0x00002800
+.equ REPEAT,      1
 
 .include "../common/qp.inc"
 
