@@ -145,12 +145,13 @@ begin
         data_stall_i => soc_cpu_data_stall
     );
 
-    -- Stall when channel is requesting but not yet acknowledged
-    soc_cpu_inst_stall <= soc_cpu_inst_cyc and not soc_cpu_inst_ack;
-    soc_cpu_data_stall <= soc_cpu_data_cyc and not soc_cpu_data_ack;
+    soc_cpu_inst_stall <= '0';
+    soc_cpu_data_stall <= '0';
 
-    -- Instruction channel interconnect: ROM, XIP, RAM arbiter port A
+    -- Instruction channel interconnect: ROM, XIP, wb_ram_dp port B
     intercon_inst: wb_intercon port map (
+        clk_i     => soc_syscon_clk,
+        rst_i     => soc_syscon_rst,
         cpu_cyc_i => soc_cpu_inst_cyc,
         cpu_stb_i => soc_cpu_inst_stb,
         cpu_we_i  => '0',
@@ -200,8 +201,10 @@ begin
         ram_dat_o => open
     );
 
-    -- Data channel interconnect: UART, IO1, RAM arbiter port B
+    -- Data channel interconnect: UART, IO1, wb_ram_dp port A
     intercon_data: wb_intercon port map (
+        clk_i     => soc_syscon_clk,
+        rst_i     => soc_syscon_rst,
         cpu_cyc_i => soc_cpu_data_cyc,
         cpu_stb_i => soc_cpu_data_stb,
         cpu_we_i  => soc_cpu_data_we,

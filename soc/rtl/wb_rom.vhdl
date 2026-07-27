@@ -42,8 +42,6 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 ack_reg <= '0';
-            elsif ack_reg = '1' then
-                ack_reg <= '0';
             else
                 ack_reg <= rom_req;
             end if;
@@ -53,9 +51,7 @@ begin
     dat_reg_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
-            if ack_reg = '0' and rom_req = '1' then
-                dat_reg <= BOOT_DATA(to_integer(unsigned(adr_i)));
-            end if;
+            dat_reg <= BOOT_DATA(to_integer(unsigned(adr_i)));
         end if;
     end process dat_reg_proc;
 
