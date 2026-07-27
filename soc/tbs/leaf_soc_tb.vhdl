@@ -3,7 +3,7 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 use work.leaf_soc_pkg.all;
 use work.leaf_soc_tb_pkg.all;
-use work.uart_tb_pkg.all;
+use work.uart_tb_pkg.uart_transmit, work.uart_tb_pkg.uart_receive;
 
 entity leaf_soc_tb is
     generic (
@@ -28,6 +28,8 @@ architecture tb of leaf_soc_tb is
     signal spi_cs_n : std_logic;
 
     signal clk_en : std_logic := '0';
+
+    constant CLK_PERIOD : time := 10 ns;
 
 begin
 

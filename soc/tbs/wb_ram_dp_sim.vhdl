@@ -102,8 +102,6 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 ack_reg <= '0';
-            elsif ack_reg = '1' then
-                ack_reg <= '0';
             else
                 ack_reg <= ram_req;
             end if;
@@ -114,8 +112,6 @@ begin
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                ack_reg_b <= '0';
-            elsif ack_reg_b = '1' then
                 ack_reg_b <= '0';
             else
                 ack_reg_b <= ram_req_b;

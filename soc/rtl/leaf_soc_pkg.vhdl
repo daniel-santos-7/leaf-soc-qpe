@@ -64,6 +64,8 @@ package leaf_soc_pkg is
 
     component wb_intercon is
         port (
+            clk_i     : in  std_logic;
+            rst_i     : in  std_logic;
             cpu_cyc_i : in   std_logic;
             cpu_stb_i : in   std_logic;
             cpu_we_i  : in   std_logic;
