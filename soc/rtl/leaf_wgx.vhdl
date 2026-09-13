@@ -59,6 +59,13 @@ architecture rtl of leaf_wgx is
     signal wgen_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal wgen_active : std_logic;
 
+    -- Register-file write snoop bus: broadcasts the CPU's own GPR write
+    -- port (we/addr/data) so wgx_csrs can mirror whichever GPR each
+    -- pulse parameter is pointed at.
+    signal rf_wr_en   : std_logic;
+    signal rf_wr_addr : std_logic_vector(4 downto 0);
+    signal rf_wr_data : std_logic_vector(XLEN-1 downto 0);
+
 begin
 
     u_cpu: leaf generic map (
@@ -73,6 +80,9 @@ begin
         cop_adr_o => csr_addr,
         cop_dat_o => csr_wdata,
         cop_we_o  => csr_we,
+        rf_wr_en_o   => rf_wr_en,
+        rf_wr_addr_o => rf_wr_addr,
+        rf_wr_data_o => rf_wr_data,
         inst_cyc_o   => inst_cyc_o,
         inst_stb_o   => inst_stb_o,
         inst_adr_o   => inst_adr_o,
@@ -99,6 +109,9 @@ begin
         wdata_i => csr_wdata,
         we_i    => csr_we,
         rdata_o => csr_rdata,
+        rf_we_i      => rf_wr_en,
+        rf_wr_addr_i => rf_wr_addr,
+        rf_wr_data_i => rf_wr_data,
         ftw_o   => wgen_ftw,
         pow_o   => wgen_pow,
         amp_o   => wgen_amp,
