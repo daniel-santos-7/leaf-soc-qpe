@@ -180,6 +180,9 @@ package leaf_soc_pkg is
             wdata_i : in  std_logic_vector(31 downto 0);
             we_i    : in  std_logic;
             rdata_o : out std_logic_vector(31 downto 0);
+            rf_we_i       : in  std_logic;
+            rf_wr_addr_i  : in  std_logic_vector(4 downto 0);
+            rf_wr_data_i  : in  std_logic_vector(31 downto 0);
             ftw_o   : out std_logic_vector(31 downto 0);
             pow_o   : out std_logic_vector(31 downto 0);
             amp_o   : out std_logic_vector(15 downto 0);

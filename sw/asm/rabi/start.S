@@ -7,7 +7,7 @@
 .equ DRAG_PI,  0x00000000
 .equ AMP_STEP, 41
 .equ AMP_MAX,  4095
-.equ REPEAT,   3
+.equ REPEAT,   1
 
 .include "../common/qp.inc"
 
