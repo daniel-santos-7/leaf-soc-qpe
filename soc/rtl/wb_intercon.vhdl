@@ -9,8 +9,21 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use work.leaf_soc_pkg.all;
 
+-- The forward path (stb/adr/we/sel/dat to the slaves) is combinational on the
+-- current CPU address. The response path (ack/err/dat back to the CPU) is muxed
+-- by a *registered* slave select, captured in the request cycle, so that a
+-- pipelined master which advances its address every cycle still gets the
+-- response matched to the request that produced it.
+--
+-- This assumes every slave acknowledges exactly one cycle after its strobe
+-- (true for wb_rom, wb_ram_dp ports A/B and uart_wbsl). wb_xip_ctrl takes ~68
+-- cycles, so it is not usable from a pipelined master until this is replaced by
+-- a select FIFO or the master is stalled for the duration of an XIP transfer.
+
 entity wb_intercon is
     port (
+        clk_i     : in   std_logic;
+        rst_i     : in   std_logic;
         cpu_cyc_i : in   std_logic;
         cpu_stb_i : in   std_logic;
         cpu_we_i  : in   std_logic;
@@ -71,6 +84,16 @@ architecture rtl of wb_intercon is
 
     signal sel_err : std_logic;
 
+    signal req : std_logic;
+
+    -- Slave select captured in the request cycle, used to steer the response
+    signal rom_sel_reg : std_logic;
+    signal io0_sel_reg : std_logic;
+    signal io1_sel_reg : std_logic;
+    signal xip_sel_reg : std_logic;
+    signal ram_sel_reg : std_logic;
+    signal err_reg     : std_logic;
+
 begin
 
     rom_sel <= '1' when cpu_adr_i(SOC_ADDR_WIDTH-1 downto ROM_ADDR_WIDTH) = ROM_BASE_ADDR(SOC_ADDR_WIDTH-1 downto ROM_ADDR_WIDTH) else '0';
@@ -81,8 +104,33 @@ begin
 
     sel_err <= not (rom_sel or io0_sel or io1_sel or xip_sel or ram_sel);
 
-    cpu_ack_o <= (rom_ack_i and rom_sel) or (io0_ack_i and io0_sel) or (io1_ack_i and io1_sel) or (xip_ack_i and xip_sel) or (ram_ack_i and ram_sel);
-    cpu_err_o <= cpu_cyc_i and cpu_stb_i and (sel_err or (xip_err_i and xip_sel));
+    req <= cpu_cyc_i and cpu_stb_i;
+
+    -- Gating with req is required: without it a stale select would survive into
+    -- cycles with no outstanding request and could let a phantom ack through.
+    sel_reg_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                rom_sel_reg <= '0';
+                io0_sel_reg <= '0';
+                io1_sel_reg <= '0';
+                xip_sel_reg <= '0';
+                ram_sel_reg <= '0';
+                err_reg     <= '0';
+            else
+                rom_sel_reg <= rom_sel and req;
+                io0_sel_reg <= io0_sel and req;
+                io1_sel_reg <= io1_sel and req;
+                xip_sel_reg <= xip_sel and req;
+                ram_sel_reg <= ram_sel and req;
+                err_reg     <= sel_err and req;
+            end if;
+        end if;
+    end process sel_reg_proc;
+
+    cpu_ack_o <= (rom_ack_i and rom_sel_reg) or (io0_ack_i and io0_sel_reg) or (io1_ack_i and io1_sel_reg) or (xip_ack_i and xip_sel_reg) or (ram_ack_i and ram_sel_reg);
+    cpu_err_o <= err_reg or (xip_err_i and xip_sel_reg);
 
     rom_cyc_o <= cpu_cyc_i;
     io0_cyc_o <= cpu_cyc_i;
@@ -112,11 +160,11 @@ begin
     xip_adr_o <= cpu_adr_i(XIP_ADDR_WIDTH-1 downto 2);
     ram_adr_o <= cpu_adr_i(RAM_ADDR_WIDTH-1 downto 2);
 
-    cpu_dat_o <= rom_dat_i when rom_sel = '1' else
-                 io0_dat_i when io0_sel = '1' else
-                 io1_dat_i when io1_sel = '1' else
-                 ram_dat_i when ram_sel = '1' else
-                 xip_dat_i when xip_sel = '1' else
+    cpu_dat_o <= rom_dat_i when rom_sel_reg = '1' else
+                 io0_dat_i when io0_sel_reg = '1' else
+                 io1_dat_i when io1_sel_reg = '1' else
+                 ram_dat_i when ram_sel_reg = '1' else
+                 xip_dat_i when xip_sel_reg = '1' else
                  (others => '0');
     io0_dat_o <= cpu_dat_i;
     io1_dat_o <= cpu_dat_i;
