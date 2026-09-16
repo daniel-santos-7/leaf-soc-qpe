@@ -56,8 +56,14 @@ $(WORKDIR) $(WAVESDIR):
 
 FORCE:
 
-$(WGEN_CFG): | soc/rtl
-	echo 'package wgen_cfg is constant WGEN_IF_COP : boolean := $(WGEN_CFG_BOOL); end package wgen_cfg;' > $@
+# Regenerated every invocation, but only rewritten when the value actually
+# changes: the rule has no dependency that encodes WGEN_IF, so without FORCE
+# the stale file survives and `make run WGEN_IF=...` silently builds the
+# previous mode. Rewriting unconditionally would re-analyse the design on
+# every build, hence the compare.
+$(WGEN_CFG): FORCE | soc/rtl
+	@echo 'package wgen_cfg is constant WGEN_IF_COP : boolean := $(WGEN_CFG_BOOL); end package wgen_cfg;' > $@.tmp
+	@if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 
 $(WORKDIR)/program.bin: FORCE | $(WORKDIR)
 	@if [ -n "$(RAM_INIT_FILE)" ]; then \
@@ -66,11 +72,15 @@ $(WORKDIR)/program.bin: FORCE | $(WORKDIR)
 	    rm -f "$@"; \
 	fi
 
+# Piping GHDL into tee put tee's exit status at the end of the pipeline, so
+# analysis/elaboration errors were swallowed, the stamp file was created
+# anyway, and `make run` reported success on a design that never built.
 $(WORKDIR)/.import: $(RTL_SRC) $(TBS_SRC) $(WGEN_CFG) | $(WORKDIR)
-	@$(GHDL) -i $(GHDLFLAGS) $(RTL_SRC) $(TBS_SRC) $(WGEN_CFG) | tee $@
+	@$(GHDL) -i $(GHDLFLAGS) $(RTL_SRC) $(TBS_SRC) $(WGEN_CFG)
+	@touch $@
 
 $(WORKDIR)/.make: $(WORKDIR)/.import $(WORKDIR)/program.bin
-	@$(GHDL) -m $(GHDLFLAGS) $(TOP_UNIT) 2>&1 | tee $@
+	@$(GHDL) -m $(GHDLFLAGS) $(TOP_UNIT)
 	@touch $@
 
 .PHONY: run plot clean
