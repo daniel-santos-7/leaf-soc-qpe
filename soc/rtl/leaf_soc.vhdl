@@ -3,7 +3,6 @@ use IEEE.std_logic_1164.all;
 use work.leaf_pkg.all;
 use work.leaf_soc_pkg.all;
 use work.uart_pkg.all;
-use work.sig_gen_pkg.all;
 use work.wgen_cfg.all;
 
 entity leaf_soc is
@@ -184,7 +183,7 @@ begin
 
         soc_cop_csr_rdata <= (others => '0');
 
-        soc_wb_sig_gen: wb_sig_gen port map (
+        soc_wb_sig_gen: entity work.wb_sig_gen port map (
             rst_i    => soc_syscon_rst,
             clk_i    => soc_syscon_clk,
             adr_i    => soc_data_io1_adr,
