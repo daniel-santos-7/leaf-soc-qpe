@@ -15,3 +15,16 @@ sw/**/*.vhdl
 soc/rtl/wgen_cfg.vhdl
 leaf_soc_tb_sim
 e~leaf_soc_tb_sim.o
+
+# TSMC RAM configuration + macro equivalence bench
+leaf_soc_tb_tsmc
+e~leaf_soc_tb_tsmc.o
+soc/tbs/xcheck/build/
+
+# Local Claude Code guidance, not versioned
+CLAUDE.md
+
+# Vendor memory model: TSMC confidential, supplied by the memory compiler.
+# Not redistributable, so it stays out of the repo -- drop your own copy in the
+# root to run soc/tbs/xcheck.
+ram.v

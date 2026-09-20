@@ -20,12 +20,23 @@ SOC_TBS  = $(wildcard ./soc/tbs/*.vhdl)
 RTL_SRC  = $(CPU_RTL) $(UART_RTL) $(WGEN_RTL) $(SOC_RTL)
 TBS_SRC  = $(UART_TBS) $(WGEN_TBS) $(SOC_TBS)
 
-TOP_UNIT = leaf_soc_tb_sim
-
 PROGRAM       ?= sw/asm/hello-world/hello-world.bin
 RAM_INIT_FILE = $(PROGRAM)
 RUN_CYCLES    ?= 500000
 WGEN_IF       ?= COP
+RAM           ?= BEHAV
+
+# Which RAM the testbench binds into the SoC.  Both configurations live in
+# soc/tbs/leaf_soc_tb_cfg.vhdl and elaborate the same leaf_soc(rtl); they only
+# differ in what gets bound to the soc_ram component, so switching is a
+# different top-level unit rather than a source edit.
+ifeq ($(RAM),TSMC)
+TOP_UNIT = leaf_soc_tb_tsmc
+else ifeq ($(RAM),BEHAV)
+TOP_UNIT = leaf_soc_tb_sim
+else
+$(error RAM must be BEHAV or TSMC, got '$(RAM)')
+endif
 
 # Generated config package
 WGEN_CFG = soc/rtl/wgen_cfg.vhdl

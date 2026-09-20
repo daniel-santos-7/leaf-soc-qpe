@@ -1,3 +1,4 @@
+-- Behavioural RAM (default): inferred array, preloaded from work/program.bin.
 configuration leaf_soc_tb_sim of leaf_soc_tb is
     for tb
         for uut : leaf_soc
