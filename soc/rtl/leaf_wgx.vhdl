@@ -2,7 +2,6 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use work.leaf_pkg.all;
 use work.leaf_soc_pkg.all;
-use work.sig_gen_pkg.all;
 
 entity leaf_wgx is
     generic (

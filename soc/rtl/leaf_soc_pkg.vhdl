@@ -1,6 +1,5 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
-use work.sig_gen_pkg.all;
 
 package leaf_soc_pkg is
 
@@ -19,7 +18,9 @@ package leaf_soc_pkg is
     constant XIP_ADDR_WIDTH : natural := 24;   -- 16 MB
     constant RAM_ADDR_WIDTH : natural := 15;   -- 32 KB
 
-    constant OUT_RES_BITS : natural := 12;
+    -- Output resolution follows the wgen IP's generated sine LUT; do not
+    -- hardcode it here, or the SoC ports stop matching sig_gen's.
+    constant OUT_RES_BITS : natural := work.sine_lut_pkg.OUT_RES_BITS;
 
     component wb_syscon is
         port (
