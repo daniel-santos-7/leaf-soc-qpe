@@ -73,8 +73,11 @@ begin
             addr_a := to_integer(unsigned(adr_i));
             addr_b := to_integer(unsigned(adr_b_i));
 
-            -- Port A: write (handshake protege)
-            if ack_reg = '0' and ram_req = '1' then
+            -- Port A: write. One request is accepted per cycle, matching the
+            -- unconditional ack below. Gating this on ack_reg = '0' -- as a
+            -- classic slave would -- silently drops the second of two requests
+            -- presented on consecutive cycles, while still acknowledging it.
+            if ram_req = '1' then
                 if we_i = '1' then
                     if sel_i(0) = '1' then
                         mem0(addr_a) <= dat_i(7 downto 0);
