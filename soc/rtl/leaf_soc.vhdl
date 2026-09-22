@@ -193,6 +193,9 @@ begin
             sel_i    => soc_data_io1_sel,
             dat_i    => soc_data_io1_dat,
             ack_o    => soc_io1_ack,
+            -- Pipelined-mode port: the CSR file never inserts wait states
+            -- (stall_o is tied low) and wb_intercon has no stall path.
+            stall_o  => open,
             dat_o    => soc_io1_dat,
             sig_i_o  => sig_i,
             sig_q_o  => sig_q,
