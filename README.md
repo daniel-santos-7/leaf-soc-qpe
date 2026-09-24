@@ -7,7 +7,7 @@ This repository carries the SoC together with a **QPE** (Quantum Pulse Extension
 ## :star: Features
 
 - **Leaf Processor:** 32-bit RISC-V core (RV32I) with a 2-stage pipeline.
-- **Wishbone B4 Bus:** Shared-bus interconnection for seamless peripheral integration.
+- **Wishbone B4 Bus:** Crossbar interconnect; instruction fetch and data accesses run in parallel.
 - **Memory System:** Integrated Boot ROM and 32 KB of internal dual-port RAM.
 - **Standard Peripherals:** Includes a robust UART for serial communication.
 - **Pulse Generator:** DDS signal generator with Gaussian envelopes and DRAG correction, reachable either as a coprocessor or as a memory-mapped peripheral.
@@ -16,13 +16,34 @@ This repository carries the SoC together with a **QPE** (Quantum Pulse Extension
 
 ## :gears: Microarchitecture
 
-The SoC architecture is centered around the **Wishbone B4** interconnect, which manages the communication between the Leaf master and several slave peripherals.
+The SoC architecture is centered around the **Wishbone B4** interconnect, which manages the communication between the Leaf core's two masters and the slave peripherals.
 
 ### Processor
 The **Leaf** core implements the RV32I base integer instruction set. It features a 2-stage pipeline (Fetch and Execute) and supports Machine-mode CSRs, hardware counters, and interrupts.
 
 ### Bus & Interconnect
-A central **Intercon** module performs address decoding and bus steering. It uses the Wishbone B4 protocol, supporting byte-selects (`SEL`) and error reporting (`ERR`). The CPU drives the bus as a **pipelined** master: it asserts `STB` for a single cycle and waits for `ACK` with `CYC` held.
+The Leaf core is Harvard: it has two Wishbone B4 masters, one for instruction fetch and one for data. Both drive the bus as **pipelined** masters: `STB` is asserted for a single cycle and `ACK` is awaited with `CYC` held. Byte selects (`SEL`) and error reporting (`ERR`) are supported.
+
+A single **Intercon** (`wb_intercon`) connects both masters to the slaves as a partial crossbar:
+
+| Master | ROM | XIP | RAM B | UART | IO1 | RAM A |
+|--------|:---:|:---:|:-----:|:----:|:---:|:-----:|
+| Instruction | ✓ | ✓ | ✓ | | | |
+| Data | | | | ✓ | ✓ | ✓ |
+
+The two sets of slaves are disjoint, so there is no arbitration and both channels run in parallel. The dual-port RAM appears as two slave interfaces, which is what lets a fetch and a load/store complete in the same cycle.
+
+`wb_intercon` is structural: one **`wb_channel`** per master, i.e. per CPU channel. `wb_channel` has a port group for every slave in the memory map (`rom_*`, `io0_*`, `io1_*`, `xip_*`, `ram_*`) and decodes them against the bases and widths in `leaf_soc_pkg`. The regions are disjoint, which keeps the select one-hot. Each instance connects the slaves routed to its master and ties off the others: their outputs are left `open`, and their inputs are tied to `ACK = '0'`, `ERR = '1'` and zero data.
+
+Inside `wb_channel`:
+
+- **Forward path:** combinational. A slave's `STB` is the master's `STB` gated by the decode of the current address.
+- **Response path:** `ACK`, `ERR` and read data are steered by a *registered* select, captured in the request cycle. That way a pipelined master that moves to a new address every cycle still gets each response matched to the request that produced it. The select is only captured while `CYC and STB` is high; otherwise a stale select would survive into idle cycles and could let a phantom `ACK` through.
+- **Unrouted accesses:** a tied-off slave answers through its fixed `ERR = '1'`, gated by the registered select like any response, and an address outside the map is answered by the decoder itself. Either way `ERR` arrives one cycle after the request (a load from ROM, a fetch from the UART, an unmapped address), and the CPU takes an access-fault trap instead of waiting for an `ACK` that never comes. A slave with no error signal of its own, when routed, has its `ERR` input tied to `'0'`.
+
+The response path assumes every slave acknowledges exactly one cycle after its strobe. This holds for the ROM, both RAM ports and the UART. The XIP controller takes about 68 cycles per word, so it is not usable from a pipelined master until `wb_channel` gets a select FIFO or the master is stalled for the duration of an XIP transfer (see [`ISSUES.md`](ISSUES.md)).
+
+Routing a slave to a master means connecting its port group on that master's `wb_channel` instead of tying it off. A new slave in the memory map needs a port group in `wb_channel`. A slave reachable from both masters also needs an arbiter in front of it.
 
 ### Memory Map
 The default address space allocation is defined as follows:

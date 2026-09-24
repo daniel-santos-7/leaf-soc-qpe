@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------
 -- Leaf project
 -- developed by: Daniel Santos
--- module: leaf system (SOC)
+-- module: Wishbone interconnect (INTERCON)
 -- 2026
 ----------------------------------------------------------------------
 
@@ -9,166 +9,185 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use work.leaf_soc_pkg.all;
 
--- The forward path (stb/adr/we/sel/dat to the slaves) is combinational on the
--- current CPU address. The response path (ack/err/dat back to the CPU) is muxed
--- by a *registered* slave select, captured in the request cycle, so that a
--- pipelined master which advances its address every cycle still gets the
--- response matched to the request that produced it.
---
--- This assumes every slave acknowledges exactly one cycle after its strobe
--- (true for wb_rom, wb_ram_dp ports A/B and uart_wbsl). wb_xip_ctrl takes ~68
--- cycles, so it is not usable from a pipelined master until this is replaced by
--- a select FIFO or the master is stalled for the duration of an XIP transfer.
-
 entity wb_intercon is
     port (
-        clk_i     : in   std_logic;
-        rst_i     : in   std_logic;
-        cpu_cyc_i : in   std_logic;
-        cpu_stb_i : in   std_logic;
-        cpu_we_i  : in   std_logic;
-        cpu_sel_i : in   std_logic_vector(3  downto 0);
-        cpu_adr_i : in   std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
-        cpu_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        rom_ack_i : in   std_logic;
-        io0_ack_i : in   std_logic;
-        io1_ack_i : in   std_logic;
-        xip_ack_i : in   std_logic;
-        ram_ack_i : in   std_logic;
-        xip_err_i : in   std_logic;
-        rom_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        io0_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        io1_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        xip_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        ram_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        cpu_ack_o : out  std_logic;
-        cpu_err_o : out  std_logic;
-        rom_cyc_o : out  std_logic;
-        io0_cyc_o : out  std_logic;
-        io1_cyc_o : out  std_logic;
-        xip_cyc_o : out  std_logic;
-        ram_cyc_o : out  std_logic;
-        rom_stb_o : out  std_logic;
-        io0_stb_o : out  std_logic;
-        io1_stb_o : out  std_logic;
-        xip_stb_o : out  std_logic;
-        ram_stb_o : out  std_logic;
-        io0_we_o  : out  std_logic;
-        io1_we_o  : out  std_logic;
-        xip_we_o  : out  std_logic;
-        ram_we_o  : out  std_logic;
-        io0_sel_o : out  std_logic_vector(3  downto 0);
-        io1_sel_o : out  std_logic_vector(3  downto 0);
-        xip_sel_o : out  std_logic_vector(3  downto 0);
-        ram_sel_o : out  std_logic_vector(3  downto 0);
-        rom_adr_o : out  std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
-        io0_adr_o : out  std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
-        io1_adr_o : out  std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
-        xip_adr_o : out  std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-        ram_adr_o : out  std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
-        cpu_dat_o : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        io0_dat_o : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        io1_dat_o : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        xip_dat_o : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        ram_dat_o : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
+        clk_i      : in  std_logic;
+        rst_i      : in  std_logic;
+        inst_cyc_i : in  std_logic;
+        inst_stb_i : in  std_logic;
+        inst_adr_i : in  std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+        inst_dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        inst_ack_o : out std_logic;
+        inst_err_o : out std_logic;
+        data_cyc_i : in  std_logic;
+        data_stb_i : in  std_logic;
+        data_we_i  : in  std_logic;
+        data_sel_i : in  std_logic_vector(3 downto 0);
+        data_adr_i : in  std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+        data_dat_i : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        data_dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        data_ack_o : out std_logic;
+        data_err_o : out std_logic;
+        rom_cyc_o  : out std_logic;
+        rom_stb_o  : out std_logic;
+        rom_adr_o  : out std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
+        rom_ack_i  : in  std_logic;
+        rom_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        xip_cyc_o  : out std_logic;
+        xip_stb_o  : out std_logic;
+        xip_we_o   : out std_logic;
+        xip_sel_o  : out std_logic_vector(3 downto 0);
+        xip_adr_o  : out std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+        xip_dat_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        xip_ack_i  : in  std_logic;
+        xip_err_i  : in  std_logic;
+        xip_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        ramb_cyc_o : out std_logic;
+        ramb_stb_o : out std_logic;
+        ramb_adr_o : out std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
+        ramb_ack_i : in  std_logic;
+        ramb_dat_i : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        io0_cyc_o  : out std_logic;
+        io0_stb_o  : out std_logic;
+        io0_we_o   : out std_logic;
+        io0_sel_o  : out std_logic_vector(3 downto 0);
+        io0_adr_o  : out std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
+        io0_dat_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        io0_ack_i  : in  std_logic;
+        io0_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        io1_cyc_o  : out std_logic;
+        io1_stb_o  : out std_logic;
+        io1_we_o   : out std_logic;
+        io1_sel_o  : out std_logic_vector(3 downto 0);
+        io1_adr_o  : out std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
+        io1_dat_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        io1_ack_i  : in  std_logic;
+        io1_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        rama_cyc_o : out std_logic;
+        rama_stb_o : out std_logic;
+        rama_we_o  : out std_logic;
+        rama_sel_o : out std_logic_vector(3 downto 0);
+        rama_adr_o : out std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
+        rama_dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        rama_ack_i : in  std_logic;
+        rama_dat_i : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
     );
 end entity wb_intercon;
 
 architecture rtl of wb_intercon is
 
-    signal rom_sel : std_logic;
-    signal io0_sel : std_logic;
-    signal io1_sel : std_logic;
-    signal xip_sel : std_logic;
-    signal ram_sel : std_logic;
-
-    signal sel_err : std_logic;
-
-    signal req : std_logic;
-
-    -- Slave select captured in the request cycle, used to steer the response
-    signal rom_sel_reg : std_logic;
-    signal io0_sel_reg : std_logic;
-    signal io1_sel_reg : std_logic;
-    signal xip_sel_reg : std_logic;
-    signal ram_sel_reg : std_logic;
-    signal err_reg     : std_logic;
-
 begin
 
-    rom_sel <= '1' when cpu_adr_i(SOC_ADDR_WIDTH-1 downto ROM_ADDR_WIDTH) = ROM_BASE_ADDR(SOC_ADDR_WIDTH-1 downto ROM_ADDR_WIDTH) else '0';
-    io0_sel <= '1' when cpu_adr_i(SOC_ADDR_WIDTH-1 downto IO0_ADDR_WIDTH) = IO0_BASE_ADDR(SOC_ADDR_WIDTH-1 downto IO0_ADDR_WIDTH) else '0';
-    io1_sel <= '1' when cpu_adr_i(SOC_ADDR_WIDTH-1 downto IO1_ADDR_WIDTH) = IO1_BASE_ADDR(SOC_ADDR_WIDTH-1 downto IO1_ADDR_WIDTH) else '0';
-    xip_sel <= '1' when cpu_adr_i(SOC_ADDR_WIDTH-1 downto XIP_ADDR_WIDTH) = XIP_BASE_ADDR(SOC_ADDR_WIDTH-1 downto XIP_ADDR_WIDTH) else '0';
-    ram_sel <= '1' when cpu_adr_i(SOC_ADDR_WIDTH-1 downto RAM_ADDR_WIDTH) = RAM_BASE_ADDR(SOC_ADDR_WIDTH-1 downto RAM_ADDR_WIDTH) else '0';
+    inst_channel: wb_channel port map (
+        clk_i     => clk_i,
+        rst_i     => rst_i,
+        cpu_cyc_i => inst_cyc_i,
+        cpu_stb_i => inst_stb_i,
+        cpu_we_i  => '0',
+        cpu_sel_i => (others => '1'),
+        cpu_adr_i => inst_adr_i,
+        cpu_dat_i => (others => '0'),
+        rom_ack_i => rom_ack_i,
+        io0_ack_i => '0',
+        io1_ack_i => '0',
+        xip_ack_i => xip_ack_i,
+        ram_ack_i => ramb_ack_i,
+        rom_err_i => '0',
+        io0_err_i => '1',
+        io1_err_i => '1',
+        xip_err_i => xip_err_i,
+        ram_err_i => '0',
+        rom_dat_i => rom_dat_i,
+        io0_dat_i => (others => '0'),
+        io1_dat_i => (others => '0'),
+        xip_dat_i => xip_dat_i,
+        ram_dat_i => ramb_dat_i,
+        cpu_ack_o => inst_ack_o,
+        cpu_err_o => inst_err_o,
+        rom_cyc_o => rom_cyc_o,
+        io0_cyc_o => open,
+        io1_cyc_o => open,
+        xip_cyc_o => xip_cyc_o,
+        ram_cyc_o => ramb_cyc_o,
+        rom_stb_o => rom_stb_o,
+        io0_stb_o => open,
+        io1_stb_o => open,
+        xip_stb_o => xip_stb_o,
+        ram_stb_o => ramb_stb_o,
+        io0_we_o  => open,
+        io1_we_o  => open,
+        xip_we_o  => xip_we_o,
+        ram_we_o  => open,
+        io0_sel_o => open,
+        io1_sel_o => open,
+        xip_sel_o => xip_sel_o,
+        ram_sel_o => open,
+        rom_adr_o => rom_adr_o,
+        io0_adr_o => open,
+        io1_adr_o => open,
+        xip_adr_o => xip_adr_o,
+        ram_adr_o => ramb_adr_o,
+        cpu_dat_o => inst_dat_o,
+        io0_dat_o => open,
+        io1_dat_o => open,
+        xip_dat_o => xip_dat_o,
+        ram_dat_o => open
+    );
 
-    sel_err <= not (rom_sel or io0_sel or io1_sel or xip_sel or ram_sel);
-
-    req <= cpu_cyc_i and cpu_stb_i;
-
-    -- Gating with req is required: without it a stale select would survive into
-    -- cycles with no outstanding request and could let a phantom ack through.
-    sel_reg_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                rom_sel_reg <= '0';
-                io0_sel_reg <= '0';
-                io1_sel_reg <= '0';
-                xip_sel_reg <= '0';
-                ram_sel_reg <= '0';
-                err_reg     <= '0';
-            else
-                rom_sel_reg <= rom_sel and req;
-                io0_sel_reg <= io0_sel and req;
-                io1_sel_reg <= io1_sel and req;
-                xip_sel_reg <= xip_sel and req;
-                ram_sel_reg <= ram_sel and req;
-                err_reg     <= sel_err and req;
-            end if;
-        end if;
-    end process sel_reg_proc;
-
-    cpu_ack_o <= (rom_ack_i and rom_sel_reg) or (io0_ack_i and io0_sel_reg) or (io1_ack_i and io1_sel_reg) or (xip_ack_i and xip_sel_reg) or (ram_ack_i and ram_sel_reg);
-    cpu_err_o <= err_reg or (xip_err_i and xip_sel_reg);
-
-    rom_cyc_o <= cpu_cyc_i;
-    io0_cyc_o <= cpu_cyc_i;
-    io1_cyc_o <= cpu_cyc_i;
-    xip_cyc_o <= cpu_cyc_i;
-    ram_cyc_o <= cpu_cyc_i;
-
-    rom_stb_o <= cpu_stb_i and rom_sel;
-    io0_stb_o <= cpu_stb_i and io0_sel;
-    io1_stb_o <= cpu_stb_i and io1_sel;
-    xip_stb_o <= cpu_stb_i and xip_sel;
-    ram_stb_o <= cpu_stb_i and ram_sel;
-
-    io0_we_o <= cpu_we_i;
-    io1_we_o <= cpu_we_i;
-    xip_we_o <= cpu_we_i;
-    ram_we_o <= cpu_we_i;
-
-    io0_sel_o <= cpu_sel_i;
-    io1_sel_o <= cpu_sel_i;
-    xip_sel_o <= cpu_sel_i;
-    ram_sel_o <= cpu_sel_i;
-
-    rom_adr_o <= cpu_adr_i(ROM_ADDR_WIDTH-1 downto 2);
-    io0_adr_o <= cpu_adr_i(IO0_ADDR_WIDTH-1 downto 2);
-    io1_adr_o <= cpu_adr_i(IO1_ADDR_WIDTH-1 downto 2);
-    xip_adr_o <= cpu_adr_i(XIP_ADDR_WIDTH-1 downto 2);
-    ram_adr_o <= cpu_adr_i(RAM_ADDR_WIDTH-1 downto 2);
-
-    cpu_dat_o <= rom_dat_i when rom_sel_reg = '1' else
-                 io0_dat_i when io0_sel_reg = '1' else
-                 io1_dat_i when io1_sel_reg = '1' else
-                 ram_dat_i when ram_sel_reg = '1' else
-                 xip_dat_i when xip_sel_reg = '1' else
-                 (others => '0');
-    io0_dat_o <= cpu_dat_i;
-    io1_dat_o <= cpu_dat_i;
-    xip_dat_o <= cpu_dat_i;
-    ram_dat_o <= cpu_dat_i;
+    data_channel: wb_channel port map (
+        clk_i     => clk_i,
+        rst_i     => rst_i,
+        cpu_cyc_i => data_cyc_i,
+        cpu_stb_i => data_stb_i,
+        cpu_we_i  => data_we_i,
+        cpu_sel_i => data_sel_i,
+        cpu_adr_i => data_adr_i,
+        cpu_dat_i => data_dat_i,
+        rom_ack_i => '0',
+        io0_ack_i => io0_ack_i,
+        io1_ack_i => io1_ack_i,
+        xip_ack_i => '0',
+        ram_ack_i => rama_ack_i,
+        rom_err_i => '1',
+        io0_err_i => '0',
+        io1_err_i => '0',
+        xip_err_i => '1',
+        ram_err_i => '0',
+        rom_dat_i => (others => '0'),
+        io0_dat_i => io0_dat_i,
+        io1_dat_i => io1_dat_i,
+        xip_dat_i => (others => '0'),
+        ram_dat_i => rama_dat_i,
+        cpu_ack_o => data_ack_o,
+        cpu_err_o => data_err_o,
+        rom_cyc_o => open,
+        io0_cyc_o => io0_cyc_o,
+        io1_cyc_o => io1_cyc_o,
+        xip_cyc_o => open,
+        ram_cyc_o => rama_cyc_o,
+        rom_stb_o => open,
+        io0_stb_o => io0_stb_o,
+        io1_stb_o => io1_stb_o,
+        xip_stb_o => open,
+        ram_stb_o => rama_stb_o,
+        io0_we_o  => io0_we_o,
+        io1_we_o  => io1_we_o,
+        xip_we_o  => open,
+        ram_we_o  => rama_we_o,
+        io0_sel_o => io0_sel_o,
+        io1_sel_o => io1_sel_o,
+        xip_sel_o => open,
+        ram_sel_o => rama_sel_o,
+        rom_adr_o => open,
+        io0_adr_o => io0_adr_o,
+        io1_adr_o => io1_adr_o,
+        xip_adr_o => open,
+        ram_adr_o => rama_adr_o,
+        cpu_dat_o => data_dat_o,
+        io0_dat_o => io0_dat_o,
+        io1_dat_o => io1_dat_o,
+        xip_dat_o => open,
+        ram_dat_o => rama_dat_o
+    );
 
 end architecture rtl;
