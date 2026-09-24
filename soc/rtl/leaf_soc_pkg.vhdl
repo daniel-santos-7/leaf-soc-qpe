@@ -66,10 +66,10 @@ package leaf_soc_pkg is
         );
     end component wb_rom;
 
-    component wb_intercon is
+    component wb_channel is
         port (
-            clk_i     : in  std_logic;
-            rst_i     : in  std_logic;
+            clk_i     : in   std_logic;
+            rst_i     : in   std_logic;
             cpu_cyc_i : in   std_logic;
             cpu_stb_i : in   std_logic;
             cpu_we_i  : in   std_logic;
@@ -81,7 +81,11 @@ package leaf_soc_pkg is
             io1_ack_i : in   std_logic;
             xip_ack_i : in   std_logic;
             ram_ack_i : in   std_logic;
+            rom_err_i : in   std_logic;
+            io0_err_i : in   std_logic;
+            io1_err_i : in   std_logic;
             xip_err_i : in   std_logic;
+            ram_err_i : in   std_logic;
             rom_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             io0_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             io1_dat_i : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
@@ -117,6 +121,71 @@ package leaf_soc_pkg is
             io1_dat_o : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             xip_dat_o : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             ram_dat_o : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
+        );
+    end component wb_channel;
+
+    component wb_intercon is
+        port (
+            clk_i      : in  std_logic;
+            rst_i      : in  std_logic;
+            inst_cyc_i : in  std_logic;
+            inst_stb_i : in  std_logic;
+            inst_adr_i : in  std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+            inst_dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            inst_ack_o : out std_logic;
+            inst_err_o : out std_logic;
+            data_cyc_i : in  std_logic;
+            data_stb_i : in  std_logic;
+            data_we_i  : in  std_logic;
+            data_sel_i : in  std_logic_vector(3 downto 0);
+            data_adr_i : in  std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+            data_dat_i : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            data_dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            data_ack_o : out std_logic;
+            data_err_o : out std_logic;
+            rom_cyc_o  : out std_logic;
+            rom_stb_o  : out std_logic;
+            rom_adr_o  : out std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
+            rom_ack_i  : in  std_logic;
+            rom_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            xip_cyc_o  : out std_logic;
+            xip_stb_o  : out std_logic;
+            xip_we_o   : out std_logic;
+            xip_sel_o  : out std_logic_vector(3 downto 0);
+            xip_adr_o  : out std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+            xip_dat_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            xip_ack_i  : in  std_logic;
+            xip_err_i  : in  std_logic;
+            xip_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            ramb_cyc_o : out std_logic;
+            ramb_stb_o : out std_logic;
+            ramb_adr_o : out std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
+            ramb_ack_i : in  std_logic;
+            ramb_dat_i : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            io0_cyc_o  : out std_logic;
+            io0_stb_o  : out std_logic;
+            io0_we_o   : out std_logic;
+            io0_sel_o  : out std_logic_vector(3 downto 0);
+            io0_adr_o  : out std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
+            io0_dat_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            io0_ack_i  : in  std_logic;
+            io0_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            io1_cyc_o  : out std_logic;
+            io1_stb_o  : out std_logic;
+            io1_we_o   : out std_logic;
+            io1_sel_o  : out std_logic_vector(3 downto 0);
+            io1_adr_o  : out std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
+            io1_dat_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            io1_ack_i  : in  std_logic;
+            io1_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            rama_cyc_o : out std_logic;
+            rama_stb_o : out std_logic;
+            rama_we_o  : out std_logic;
+            rama_sel_o : out std_logic_vector(3 downto 0);
+            rama_adr_o : out std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
+            rama_dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            rama_ack_i : in  std_logic;
+            rama_dat_i : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
         );
     end component wb_intercon;
 

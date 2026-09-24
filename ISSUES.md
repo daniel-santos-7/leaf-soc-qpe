@@ -50,22 +50,22 @@ exercises the XIP path.
 ## 2. XIP acknowledgements never reach the CPU
 
 **Status:** analysis.
-**Files:** `soc/rtl/wb_intercon.vhdl:125`, `:132`; `ips/cpu/rtl/if_stage.vhdl:128`
+**Files:** `soc/rtl/wb_channel.vhdl:115`, `:122`; `ips/cpu/rtl/if_stage.vhdl:128`
 
-`wb_intercon` matches responses to requests through a registered slave select:
+`wb_channel` matches responses to requests through a registered slave select:
 
 ```vhdl
-xip_sel_reg <= xip_sel and req;                                  -- :125, req = cyc and stb
-cpu_ack_o   <= ... or (xip_ack_i and xip_sel_reg) or ...;        -- :132
+xip_sel_reg <= xip_sel and req;                                  -- :115, req = cyc and stb
+cpu_ack_o   <= ... or (xip_ack_i and xip_sel_reg) or ...;        -- :122
 ```
 
 `if_stage` is a pipelined fetcher — `inst_stb_o <= if_adr_buf_ready` — so it
 issues a new address every cycle it can and drops `stb` once its address FIFO
 fills. `wb_xip_ctrl` needs ~68 cycles per word. By the time it raises `ack_o`,
-`xip_sel_reg` has long since gone low, and the `and` at line 132 discards the
+`xip_sel_reg` has long since gone low, and the `and` at line 122 discards the
 acknowledgement. With no bus timeout anywhere, the fetch never completes.
 
-The header comment at `wb_intercon.vhdl:17-21` already records that the
+The "Bus & Interconnect" section of `README.md` already records that the
 response mux assumes a one-cycle acknowledge and that XIP does not satisfy it.
 The point here is that the consequence is a deadlock, not just reduced
 throughput — combined with issue 1, the XIP peripheral is non-functional.
@@ -82,7 +82,7 @@ that receives neither an acknowledge nor an error, with nothing to time it out.
 ## 3. `wb_xip_ctrl`: the whole `err_o` path is unreachable
 
 **Status:** analysis.
-**Files:** `soc/rtl/wb_xip_ctrl.vhdl:79-80`, `:121`; `soc/rtl/leaf_soc.vhdl:215`
+**Files:** `soc/rtl/wb_xip_ctrl.vhdl:79-80`, `:121`; `soc/rtl/wb_intercon.vhdl:86`
 
 ```vhdl
 err_o <= '1' when cyc_i = '1' and stb_i = '1' and we_i = '1' else '0';   -- :121
@@ -91,10 +91,10 @@ err_o <= '1' when cyc_i = '1' and stb_i = '1' and we_i = '1' else '0';   -- :121
 Two independent reasons this can never fire:
 
 1. `err_o` is combinational on the request cycle, but the interconnect only
-   admits it through `xip_sel_reg`, which is high one cycle *later* — by then
+   admits it through `xip_sel_reg` in `wb_channel`, which is high one cycle *later* — by then
    `stb_i` has dropped.
-2. XIP is wired only to the instruction channel, and that interconnect drives
-   `cpu_we_i => '0'` (`leaf_soc.vhdl:215`). `we_i` is therefore never `'1'`.
+2. XIP is routed only from the instruction master, and the interconnect drives
+   `cpu_we_i => '0'` into its channel (`wb_intercon.vhdl:86`). `we_i` is therefore never `'1'`.
 
 The same applies to the `if we_i = '1' then null;` branch in `IDLE`
 (`:79-80`). Three pieces of logic that cannot execute.
@@ -212,6 +212,43 @@ or made to fail loudly. See `README.md` for the current flat register map.
 - **Pointless intermediate signals.** `leaf_wgx.vhdl:140-141` routes `sig_i_o`
   through `wgen_sig_i` and `active_o` through `wgen_active`, while `sig_q_o` is
   driven straight from the instance. All three can connect directly.
+
+---
+
+## 8. Unrouted accesses hung the CPU instead of faulting — FIXED
+
+**Status:** fixed. Was verified in simulation before the change.
+**Files:** `soc/rtl/wb_intercon.vhdl`, `soc/rtl/wb_channel.vhdl`, `soc/rtl/leaf_soc.vhdl`
+
+The SoC instantiated `wb_intercon` twice, once per CPU channel, each a
+decoder for the whole five-slave map with the slaves of the other channel tied
+off (`ack => '0'`). An address in a tied-off region still decoded as a hit, so
+`sel_err` stayed low and the access received neither `ack` nor `err`: a load
+from ROM or XIP, a store to XIP, or a fetch from the UART stalled the CPU
+forever.
+
+`wb_intercon` is now the single INTERCON of the Wishbone spec: one module with
+an instruction and a data master port, arranged as a partial crossbar (inst →
+ROM, XIP, RAM B; data → UART, IO1, RAM A). Inside it, one `wb_channel` per master
+(the old intercon, plus an `err_i` per slave) has the slaves not routed to that
+master tied off with `ack => '0'` and `err => '1'`, so an access to one of them,
+like an unmapped address, gets `err` one cycle later, which the CPU takes as an
+access fault. Routed accesses are unchanged: the CPU-side bus trace
+(`soc_cpu_inst_*`, `soc_cpu_data_*`) is identical cycle for cycle before and
+after for `hello_world` (C and asm) and `ramsey` in COP mode, and for
+`hello_world` and an MMIO build of `wgen_demo` in MMIO mode, including the
+10583 non-zero I/Q samples the latter emits.
+
+A probe doing one unrouted access of each kind, with a trap handler that
+prints `mcause`, in both `WGEN_IF` modes:
+
+```
+before:  rom load:                  -- hangs here
+after:   rom load: F                -- mcause 5, load access fault
+         xip store: H               -- mcause 7, store access fault
+         uart fetch: B              -- mcause 1, instruction access fault
+         end
+```
 
 ---
 
