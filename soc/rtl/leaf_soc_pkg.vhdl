@@ -212,7 +212,7 @@ package leaf_soc_pkg is
         );
     end component leaf_soc;
 
-    component leaf_wgx is
+    component leaf_qpe is
         generic (
             RESET_ADDR : std_logic_vector(31 downto 0) := (others => '0')
         );
@@ -246,7 +246,7 @@ package leaf_soc_pkg is
             sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             active_o  : out std_logic
         );
-    end component leaf_wgx;
+    end component leaf_qpe;
 
     component wgx_csrs is
         port (

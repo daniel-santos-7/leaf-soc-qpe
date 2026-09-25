@@ -3,7 +3,7 @@ use IEEE.std_logic_1164.all;
 use work.leaf_pkg.all;
 use work.leaf_soc_pkg.all;
 
-entity leaf_wgx is
+entity leaf_qpe is
     generic (
         RESET_ADDR : std_logic_vector(XLEN-1 downto 0) := (others => '0')
     );
@@ -37,9 +37,9 @@ entity leaf_wgx is
         sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         active_o  : out std_logic
     );
-end entity leaf_wgx;
+end entity leaf_qpe;
 
-architecture rtl of leaf_wgx is
+architecture rtl of leaf_qpe is
 
     signal csr_rdata : std_logic_vector(XLEN-1 downto 0);
     signal csr_addr  : std_logic_vector(5 downto 0);
