@@ -1,10 +1,14 @@
 # Known issues in `soc/rtl/`
 
-Findings from a read of every file under `soc/rtl/`, on `develop` @ `1c06fa7`.
+Issues 1–9 come from a read of every file under `soc/rtl/`, on `develop` @
+`1c06fa7`. Issues 10–16 come from a second pass aimed at the ASIC tapeout, on
+`develop` @ `d832821`, which also covered the RTL of the three IPs and a generic
+Yosys synthesis of `leaf_soc` in both `WGEN_IF` modes.
 
-Each entry says whether it was **verified** (reproduced in simulation) or is
-**analysis** (read from the RTL, not yet observed). Ordered by severity.
-Issue 9 is the exception: a software issue, found while testing issue 8.
+Each entry says whether it was **verified** (reproduced in simulation or
+synthesis) or is **analysis** (read from the RTL, not yet observed). Issues 1–9
+are ordered by severity. Issue 9 is the exception: a software issue, found
+while testing issue 8.
 
 ---
 
@@ -43,6 +47,10 @@ one-cycle strobe:
 
 This is latent only because nothing in `sw/` jumps to `0x20000000`, so no test
 exercises the XIP path.
+
+In silicon the counter is 6 bits wide, so 64 wraps to 0 and the state machine
+still moves to `CS_HOLD`: this one aborts the simulation but is harmless on the
+chip. Issues 2 and 10 are not.
 
 **Fix:** guard the increment, e.g. `if bit_cnt < 63 then bit_cnt <= bit_cnt + 1; end if;`
 
@@ -298,12 +306,175 @@ and one that wants its own handler just overwrites `mtvec`. Changing the boot
 ROM means `make -C sw/asm/boot` and copying the generated package over
 `soc/rtl/boot_pkg.vhdl`.
 
+This has to land before tapeout. `boot_pkg.vhdl` becomes fixed logic in
+silicon, and the UART bootloader is the only way to load a program: the chip
+has no JTAG or debug port. Whatever the boot ROM does at tapeout, it does for
+the life of the chip.
+
+---
+
+## 10. `wb_xip_ctrl`: the flash receives command `0x01` instead of `0x03`
+
+**Status:** verified in simulation.
+**File:** `soc/rtl/wb_xip_ctrl.vhdl:56`, `:61`, `:95`, `:99`
+
+`sck_phase` toggles in every state except `IDLE`, so it is already `'1'` in the
+first `TRANSFER` cycle, and `spi_clk` (`:61`) rises right away. `spi_mosi` is
+only loaded in the `sck_phase = '0'` cycles (`:95`), which come after that
+first edge. The flash therefore samples a stale MOSI on the first rising edge
+and every bit after it one edge late.
+
+A standalone testbench driving one read request and shifting in MOSI on the
+first 8 rising edges of `spi_clk`:
+
+```
+command byte seen by the flash on the first 8 SCK rising edges: 00000001
+```
+
+`0x01` is Write Status Register on common SPI flashes, not Read (`0x03`). It is
+ignored without a preceding Write Enable, so nothing gets written, but the read
+never happens. The address that follows is shifted the same way.
+
+Separately, `rx_shift` samples `spi_miso` (`:99`) in the cycle where SCK is
+high, i.e. on the clock edge that also drops SCK. The flash changes MISO after
+the falling edge, so this depends on the flash's output hold time with no
+margin for pad and board delays.
+
+**Fix:** load the first MOSI bit before SCK can rise (for example in
+`CS_SETUP`), and sample MISO on the SCK rising edge. The testbench's
+`spi_flash_model` already checks for `0x03` (`soc/tbs/spi_flash_model.vhdl:97`),
+so it would reject today's transfer; no SoC simulation gets that far because
+of issues 1 and 2.
+
+---
+
+## 11. `wb_ram_dp` is inferred as flip-flops on `develop`
+
+**Status:** verified in synthesis.
+**File:** `soc/rtl/wb_ram_dp.vhdl:36-41`
+
+The 32 KB RAM is written as four `mem_array`s of 8192 × 8 bits with two read
+ports and one write port. Yosys keeps them as `$mem_v2` cells of exactly that
+shape. A generic ASIC flow has no RAM to map them to and builds 262,144
+flip-flops plus the read muxes, which dwarfs the rest of the chip.
+
+The macro-based version (`wb_ram_dp_tsmc`, eight TSDN65LPA2048X16M8M) only
+exists on `feature/tsmc-ram`, which is one commit on top of `1619e06` and 10
+commits behind `develop`. It predates issue 4's fix, the interconnect rework
+and the renames.
+
+**Fix:** bring `wb_ram_dp_tsmc` onto `develop`, make it what `leaf_soc`
+instantiates for synthesis, and rerun `sw/c/ram_test` and `soc/tbs/xcheck`
+there.
+
+---
+
+## 12. `wb_xip_ctrl`: `spi_clk` is a combinational output
+
+**Status:** analysis.
+**File:** `soc/rtl/wb_xip_ctrl.vhdl:61`
+
+```vhdl
+spi_clk <= sck_phase when state = TRANSFER else '0';
+```
+
+The pin that clocks the external flash is a register ANDed with a decode of
+the state register. When `state` changes more than one bit at once, as in
+`CS_SETUP → TRANSFER` with a binary encoding, the decode can glitch, and the
+glitch goes straight to a clock pin. Synthesis may also choose a different
+encoding, so the RTL gives no guarantee either way.
+
+**Fix:** drive `spi_clk` from a flip-flop, computed one cycle ahead.
+
+---
+
+## 13. The reset pin is active low but named `rst`
+
+**Status:** verified in the testbench.
+**Files:** `soc/rtl/wb_syscon.vhdl:23`, `soc/tbs/leaf_soc_tb.vhdl:123`, `:130`
+
+`wb_syscon` synchronises `not rst`, and the testbench holds `rst = '0'` during
+reset and releases it to `'1'`. The polarity is only visible by reading both.
+For the chip the pin's polarity goes into the padframe, the timing constraints
+and the board design.
+
+The reset is also synchronous everywhere, including its assertion: until the
+clock runs for a couple of cycles, nothing is reset. Outputs such as `tx` and
+`spi_cs_n` are undefined at power-up until then, so the board must supply the
+clock while reset is held.
+
+**Fix:** rename the port `rst_n`. Record the clock-during-reset requirement
+with the pinout.
+
+---
+
+## 14. No bus timeout
+
+**Status:** analysis.
+**Files:** `soc/rtl/wb_channel.vhdl`, `ips/cpu/rtl/dmls_block.vhdl`, `ips/cpu/rtl/if_stage.vhdl`
+
+A routed slave that never answers leaves the CPU waiting forever: neither
+`wb_channel` nor the CPU counts cycles, and there is no watchdog. Only reset
+recovers. On the chip this is reachable today through issue 2 (any fetch from
+XIP), and it would be again for any future slave with a bug of its own.
+
+**Fix:** a cycle counter in `wb_channel` that answers with `err` when a
+request goes unanswered for N cycles, so the CPU traps instead of hanging.
+Alternatively a watchdog that resets the chip.
+
+---
+
+## 15. `time` duplicates `cycle`, and nothing can raise a timer interrupt
+
+**Status:** analysis.
+**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:121-123`
+
+`counters` keeps `timer_reg` and `cycle_reg` as two identical 64-bit counters,
+both incremented every clock: 64 flip-flops and an adder with no function.
+The SoC ties `ex_irq_i`, `sw_irq_i` and `tm_irq_i` to `'0'` and has no
+`mtimecmp`, so the chip has no interrupt source at all.
+
+**Fix:** either drive `time` from a real time base with an `mtimecmp` that
+raises `tm_irq_i`, or read `time` from the cycle counter and drop the
+duplicate. The first is a change in the CPU submodule.
+
+---
+
+## 16. No sample clock goes out with `sig_i` / `sig_q`
+
+**Status:** analysis.
+**File:** `soc/rtl/leaf_soc.vhdl:16-18`
+
+The I/Q samples leave the chip registered on the internal clock, one new
+sample per cycle, but no pin carries a clock to latch them with. The external
+DAC has to run from the board clock, and the output delay of 21 pins has to fit
+inside one period with the DAC's setup and hold.
+
+**Fix:** decide with the board design how the DAC is clocked. A forwarded clock
+(an output pin driven from a flip-flop toggling in phase with the data) is the
+usual answer.
+
 ---
 
 ## Suggested order
 
-Issues 4 and 8 are done. Issue 9 is a boot ROM change and should come next:
-until it lands, any trap in any program loops silently. Issue 1 is a few lines and can go in immediately; issue 5 is a
-one-line change with real consequences on hardware. Issue 2 is an architectural
-decision (select FIFO versus stalling the master) and issue 3 falls out of
-whatever is decided there.
+Issues 4 and 8 are done.
+
+Before tapeout:
+
+- **Issue 11**, the RAM. Nothing else matters until the RAM is a macro.
+- **Issue 9**, the boot ROM trap handler, because the ROM cannot change after
+  tapeout. Test the whole bootloader with it, not just the handler.
+- **XIP (issues 1, 2, 3, 10, 12)**: either fix all five and verify the path
+  against a flash model, or leave XIP out of the tapeout and free its four
+  pins. Half a fix leaves a region that hangs the CPU (issue 2).
+- **Issues 13 and 16**, because they fix the pinout.
+
+Then, in any order: issue 14 (timeout), issue 5, issue 15, issues 6 and 7.
+
+This list does not replace the rest of the ASIC flow. Synthesis with the PDK
+library and timing constraints, static timing analysis at the target clock,
+gate-level simulation and DFT insertion are all still to be done. The generic
+synthesis found no latches, no combinational loops and no multiple drivers,
+one clock domain and a synchronous reset throughout, which is a good starting
+point for all of them.
