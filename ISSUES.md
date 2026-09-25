@@ -183,10 +183,10 @@ the description.
 
 ---
 
-## 6. `wgx_csrs`: writes outside `0x7C0–0x7C6` are silently discarded
+## 6. `qpe_csrs`: writes outside `0x7C0–0x7C6` are silently discarded
 
 **Status:** analysis.
-**File:** `soc/rtl/wgx_csrs.vhdl:103`
+**File:** `soc/rtl/qpe_csrs.vhdl:103`
 
 `when others => null;` — everything above `REG_TRIG` is dropped and reads
 return zero. This is the hardware half of the mismatch with the banked
@@ -204,7 +204,7 @@ or made to fail loudly. See `README.md` for the current flat register map.
 
 **Status:** analysis. Cosmetic, but they are the kind of thing that drifts.
 
-- **Missing file headers.** `wb_syscon`, `wb_ram_dp`, `wgx_csrs`, `leaf_qpe`
+- **Missing file headers.** `wb_syscon`, `wb_ram_dp`, `qpe_csrs`, `leaf_qpe`
   and `leaf_soc_pkg` lack the `-- Leaf project / module: / year` block that
   `wb_rom`, `wb_xip_ctrl` and `leaf_soc` carry.
 - **Portuguese comments in an otherwise English codebase.**
