@@ -4,6 +4,7 @@ Findings from a read of every file under `soc/rtl/`, on `develop` @ `1c06fa7`.
 
 Each entry says whether it was **verified** (reproduced in simulation) or is
 **analysis** (read from the RTL, not yet observed). Ordered by severity.
+Issue 9 is the exception: a software issue, found while testing issue 8.
 
 ---
 
@@ -50,19 +51,19 @@ exercises the XIP path.
 ## 2. XIP acknowledgements never reach the CPU
 
 **Status:** analysis.
-**Files:** `soc/rtl/wb_channel.vhdl:115`, `:122`; `ips/cpu/rtl/if_stage.vhdl:128`
+**Files:** `soc/rtl/wb_channel.vhdl:116`, `:123`; `ips/cpu/rtl/if_stage.vhdl:128`
 
 `wb_channel` matches responses to requests through a registered slave select:
 
 ```vhdl
-xip_sel_reg <= xip_sel and req;                                  -- :115, req = cyc and stb
-cpu_ack_o   <= ... or (xip_ack_i and xip_sel_reg) or ...;        -- :122
+xip_sel_reg <= xip_sel and req;                                  -- :116, req = cyc and stb
+cpu_ack_o   <= ... or (xip_ack_i and xip_sel_reg) or ...;        -- :123
 ```
 
 `if_stage` is a pipelined fetcher — `inst_stb_o <= if_adr_buf_ready` — so it
 issues a new address every cycle it can and drops `stb` once its address FIFO
 fills. `wb_xip_ctrl` needs ~68 cycles per word. By the time it raises `ack_o`,
-`xip_sel_reg` has long since gone low, and the `and` at line 122 discards the
+`xip_sel_reg` has long since gone low, and the `and` at line 123 discards the
 acknowledgement. With no bus timeout anywhere, the fetch never completes.
 
 The "Bus & Interconnect" section of `README.md` already records that the
@@ -71,8 +72,8 @@ The point here is that the consequence is a deadlock, not just reduced
 throughput — combined with issue 1, the XIP peripheral is non-functional.
 
 **Fix:** either a select FIFO in the interconnect, or stall the master for the
-duration of a slow slave's transfer (`inst_stall_i` is currently tied to `'0'`
-in `leaf_soc.vhdl:206`).
+duration of a slow slave's transfer (`wb_channel` drives `cpu_stall_o`, which
+reaches the CPU's `inst_stall_i`, to a constant `'0'` at `wb_channel.vhdl:125`).
 
 Related: issue #1 on GitHub, which is the same underlying mechanism — a request
 that receives neither an acknowledge nor an error, with nothing to time it out.
@@ -82,7 +83,7 @@ that receives neither an acknowledge nor an error, with nothing to time it out.
 ## 3. `wb_xip_ctrl`: the whole `err_o` path is unreachable
 
 **Status:** analysis.
-**Files:** `soc/rtl/wb_xip_ctrl.vhdl:79-80`, `:121`; `soc/rtl/wb_intercon.vhdl:86`
+**Files:** `soc/rtl/wb_xip_ctrl.vhdl:79-80`, `:121`; `soc/rtl/wb_intercon.vhdl:89`
 
 ```vhdl
 err_o <= '1' when cyc_i = '1' and stb_i = '1' and we_i = '1' else '0';   -- :121
@@ -94,7 +95,7 @@ Two independent reasons this can never fire:
    admits it through `xip_sel_reg` in `wb_channel`, which is high one cycle *later* — by then
    `stb_i` has dropped.
 2. XIP is routed only from the instruction master, and the interconnect drives
-   `cpu_we_i => '0'` into its channel (`wb_intercon.vhdl:86`). `we_i` is therefore never `'1'`.
+   `cpu_we_i => '0'` into its channel (`wb_intercon.vhdl:89`). `we_i` is therefore never `'1'`.
 
 The same applies to the `if we_i = '1' then null;` branch in `IDLE`
 (`:79-80`). Three pieces of logic that cannot execute.
@@ -252,9 +253,57 @@ after:   rom load: F                -- mcause 5, load access fault
 
 ---
 
+## 9. No trap vector is set, so any trap loops at address 0 (software)
+
+**Status:** verified in simulation.
+**Files:** `sw/asm/boot/start.S`, `sw/c/common/crt0.S`
+
+Not a hardware defect: the privileged spec leaves `mtvec`'s reset value to the
+implementation, and the Leaf core resets it to `0`
+(`ips/cpu/rtl/csrs.vhdl:276`). Setting it before a trap can happen is
+software's job, and nothing under `sw/` does — not the boot ROM, not `crt0.S`,
+not the assembly examples. Only the CPU tests in `ips/cpu/verif/tests` write
+`mtvec`.
+
+`0x0` is outside the memory map (the ROM starts at `0x1000`), so the first trap
+of any kind fetches from `0`, gets `err`, takes an instruction access fault and
+traps to `0` again, forever. From the second round on, `mepc` and `mtval` read
+`0`, so the address that caused the first trap is lost.
+
+Reproduced with a two-instruction program, `li t0, 0x10000000` / `jr t0` (a
+fetch from the UART, which is not routed to the instruction channel), in COP
+mode:
+
+```
+ 88145 ns  adr=0x10000000 stb=1 ack=1 err=0   -- ack for the last RAM fetch
+ 88155 ns  adr=0x10000004 stb=1 ack=0 err=1   -- err for the fetch at 0x10000000
+ 88165 ns  adr=0x10000008 stb=1 ack=0 err=1   -- prefetches, flushed by the trap
+ 88175 ns  adr=0x1000000c stb=1 ack=0 err=1
+ 88185 ns  adr=0x0        stb=1 ack=0 err=1   -- trap to mtvec = 0
+ 88195 ns  adr=0x4        stb=1 ack=0 err=1
+ 88205 ns  adr=0x8        stb=1 ack=0 err=1
+ 88215 ns  adr=0xc        stb=1 ack=0 err=1
+ 88225 ns  adr=0x0        ...                 -- and again, forever
+```
+
+28235 of the 37048 simulated cycles had `inst_err = 1`.
+
+The CPU no longer stalls on the bus (issue 8), but the program still never
+continues; the difference is that this one is recoverable in software.
+
+**Fix:** have the boot ROM point `mtvec` at a handler inside the ROM before it
+jumps to the program, and have that handler report `mcause`, `mepc` and
+`mtval` over the UART and stop. Every program, C or assembly, is then covered,
+and one that wants its own handler just overwrites `mtvec`. Changing the boot
+ROM means `make -C sw/asm/boot` and copying the generated package over
+`soc/rtl/boot_pkg.vhdl`.
+
+---
+
 ## Suggested order
 
-Issue 4 is done. Issue 1 is a few lines and can go in immediately; issue 5 is a
+Issues 4 and 8 are done. Issue 9 is a boot ROM change and should come next:
+until it lands, any trap in any program loops silently. Issue 1 is a few lines and can go in immediately; issue 5 is a
 one-line change with real consequences on hardware. Issue 2 is an architectural
 decision (select FIFO versus stalling the master) and issue 3 falls out of
 whatever is decided there.
