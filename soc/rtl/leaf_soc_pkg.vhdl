@@ -38,14 +38,14 @@ package leaf_soc_pkg is
         port (
             clk_i   : in  std_logic;
             rst_i   : in  std_logic;
-            dat_i   : in  std_logic_vector(31 downto 0);
-            cyc_i   : in  std_logic;
-            stb_i   : in  std_logic;
-            we_i    : in  std_logic;
-            sel_i   : in  std_logic_vector(3 downto 0);
-            adr_i   : in  std_logic_vector(BITS-3 downto 0);
-            ack_o   : out std_logic;
-            dat_o   : out std_logic_vector(31 downto 0);
+            dat_a_i : in  std_logic_vector(31 downto 0);
+            cyc_a_i : in  std_logic;
+            stb_a_i : in  std_logic;
+            we_a_i  : in  std_logic;
+            sel_a_i : in  std_logic_vector(3 downto 0);
+            adr_a_i : in  std_logic_vector(BITS-3 downto 0);
+            ack_a_o : out std_logic;
+            dat_a_o : out std_logic_vector(31 downto 0);
             cyc_b_i : in  std_logic;
             stb_b_i : in  std_logic;
             adr_b_i : in  std_logic_vector(BITS-3 downto 0);
