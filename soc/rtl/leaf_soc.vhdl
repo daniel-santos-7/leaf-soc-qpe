@@ -3,9 +3,11 @@ use IEEE.std_logic_1164.all;
 use work.leaf_pkg.all;
 use work.leaf_soc_pkg.all;
 use work.uart_pkg.all;
-use work.wgen_cfg.all;
 
 entity leaf_soc is
+    generic (
+        WGEN_IF_COP : boolean := true
+    );
     port (
         clk      : in  std_logic;
         rst      : in  std_logic;
@@ -92,6 +94,7 @@ architecture rtl of leaf_soc is
     signal soc_io0_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_io1_ack : std_logic;
+    signal soc_io1_err : std_logic;
     signal soc_io1_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_xip_ack : std_logic;
@@ -141,6 +144,7 @@ begin
         );
 
         soc_io1_ack <= '0';
+        soc_io1_err <= '1';
         soc_io1_dat <= (others => '0');
     end generate;
 
@@ -180,6 +184,7 @@ begin
         );
 
         soc_cop_csr_rdata <= (others => '0');
+        soc_io1_err <= '0';
 
         soc_wb_sig_gen: entity work.wb_sig_gen port map (
             rst_i    => soc_syscon_rst,
@@ -192,7 +197,7 @@ begin
             dat_i    => soc_data_io1_dat,
             ack_o    => soc_io1_ack,
             -- Pipelined-mode port: the CSR file never inserts wait states
-            -- (stall_o is tied low) and wb_intercon has no stall path.
+            -- (stall_o is tied low) and wb_intercon takes no stall from slaves.
             stall_o  => open,
             dat_o    => soc_io1_dat,
             sig_i_o  => sig_i,
@@ -201,70 +206,70 @@ begin
         );
     end generate;
 
-    soc_cpu_inst_stall <= '0';
-    soc_cpu_data_stall <= '0';
-
     soc_intercon: wb_intercon port map (
-        clk_i      => soc_syscon_clk,
-        rst_i      => soc_syscon_rst,
-        inst_cyc_i => soc_cpu_inst_cyc,
-        inst_stb_i => soc_cpu_inst_stb,
-        inst_adr_i => soc_cpu_inst_adr,
-        inst_dat_o => soc_cpu_inst_dat,
-        inst_ack_o => soc_cpu_inst_ack,
-        inst_err_o => soc_cpu_inst_err,
-        data_cyc_i => soc_cpu_data_cyc,
-        data_stb_i => soc_cpu_data_stb,
-        data_we_i  => soc_cpu_data_we,
-        data_sel_i => soc_cpu_data_sel,
-        data_adr_i => soc_cpu_data_adr,
-        data_dat_i => soc_cpu_data_dat,
-        data_dat_o => soc_cpu_data_dat_rd,
-        data_ack_o => soc_cpu_data_ack,
-        data_err_o => soc_cpu_data_err,
-        rom_cyc_o  => soc_inst_rom_cyc,
-        rom_stb_o  => soc_inst_rom_stb,
-        rom_adr_o  => soc_inst_rom_adr,
-        rom_ack_i  => soc_rom_ack,
-        rom_dat_i  => soc_rom_dat,
-        xip_cyc_o  => soc_inst_xip_cyc,
-        xip_stb_o  => soc_inst_xip_stb,
-        xip_we_o   => soc_inst_xip_we,
-        xip_sel_o  => soc_inst_xip_sel,
-        xip_adr_o  => soc_inst_xip_adr,
-        xip_dat_o  => soc_inst_xip_dat,
-        xip_ack_i  => soc_xip_ack,
-        xip_err_i  => soc_xip_err,
-        xip_dat_i  => soc_xip_dat,
-        ramb_cyc_o => soc_ram_b_cyc,
-        ramb_stb_o => soc_ram_b_stb,
-        ramb_adr_o => soc_ram_b_adr,
-        ramb_ack_i => soc_ram_b_ack,
-        ramb_dat_i => soc_ram_b_dat,
-        io0_cyc_o  => soc_data_io0_cyc,
-        io0_stb_o  => soc_data_io0_stb,
-        io0_we_o   => soc_data_io0_we,
-        io0_sel_o  => soc_data_io0_sel,
-        io0_adr_o  => soc_data_io0_adr,
-        io0_dat_o  => soc_data_io0_dat,
-        io0_ack_i  => soc_io0_ack,
-        io0_dat_i  => soc_io0_dat,
-        io1_cyc_o  => soc_data_io1_cyc,
-        io1_stb_o  => soc_data_io1_stb,
-        io1_we_o   => soc_data_io1_we,
-        io1_sel_o  => soc_data_io1_sel,
-        io1_adr_o  => soc_data_io1_adr,
-        io1_dat_o  => soc_data_io1_dat,
-        io1_ack_i  => soc_io1_ack,
-        io1_dat_i  => soc_io1_dat,
-        rama_cyc_o => soc_ram_a_cyc,
-        rama_stb_o => soc_ram_a_stb,
-        rama_we_o  => soc_ram_a_we,
-        rama_sel_o => soc_ram_a_sel,
-        rama_adr_o => soc_ram_a_adr,
-        rama_dat_o => soc_ram_a_dat_wr,
-        rama_ack_i => soc_ram_a_ack,
-        rama_dat_i => soc_ram_a_dat_rd
+        clk_i        => soc_syscon_clk,
+        rst_i        => soc_syscon_rst,
+        inst_cyc_i   => soc_cpu_inst_cyc,
+        inst_stb_i   => soc_cpu_inst_stb,
+        inst_adr_i   => soc_cpu_inst_adr,
+        inst_dat_o   => soc_cpu_inst_dat,
+        inst_ack_o   => soc_cpu_inst_ack,
+        inst_err_o   => soc_cpu_inst_err,
+        inst_stall_o => soc_cpu_inst_stall,
+        data_cyc_i   => soc_cpu_data_cyc,
+        data_stb_i   => soc_cpu_data_stb,
+        data_we_i    => soc_cpu_data_we,
+        data_sel_i   => soc_cpu_data_sel,
+        data_adr_i   => soc_cpu_data_adr,
+        data_dat_i   => soc_cpu_data_dat,
+        data_dat_o   => soc_cpu_data_dat_rd,
+        data_ack_o   => soc_cpu_data_ack,
+        data_err_o   => soc_cpu_data_err,
+        data_stall_o => soc_cpu_data_stall,
+        rom_cyc_o    => soc_inst_rom_cyc,
+        rom_stb_o    => soc_inst_rom_stb,
+        rom_adr_o    => soc_inst_rom_adr,
+        rom_ack_i    => soc_rom_ack,
+        rom_dat_i    => soc_rom_dat,
+        xip_cyc_o    => soc_inst_xip_cyc,
+        xip_stb_o    => soc_inst_xip_stb,
+        xip_we_o     => soc_inst_xip_we,
+        xip_sel_o    => soc_inst_xip_sel,
+        xip_adr_o    => soc_inst_xip_adr,
+        xip_dat_o    => soc_inst_xip_dat,
+        xip_ack_i    => soc_xip_ack,
+        xip_err_i    => soc_xip_err,
+        xip_dat_i    => soc_xip_dat,
+        ramb_cyc_o   => soc_ram_b_cyc,
+        ramb_stb_o   => soc_ram_b_stb,
+        ramb_adr_o   => soc_ram_b_adr,
+        ramb_ack_i   => soc_ram_b_ack,
+        ramb_dat_i   => soc_ram_b_dat,
+        io0_cyc_o    => soc_data_io0_cyc,
+        io0_stb_o    => soc_data_io0_stb,
+        io0_we_o     => soc_data_io0_we,
+        io0_sel_o    => soc_data_io0_sel,
+        io0_adr_o    => soc_data_io0_adr,
+        io0_dat_o    => soc_data_io0_dat,
+        io0_ack_i    => soc_io0_ack,
+        io0_dat_i    => soc_io0_dat,
+        io1_cyc_o    => soc_data_io1_cyc,
+        io1_stb_o    => soc_data_io1_stb,
+        io1_we_o     => soc_data_io1_we,
+        io1_sel_o    => soc_data_io1_sel,
+        io1_adr_o    => soc_data_io1_adr,
+        io1_dat_o    => soc_data_io1_dat,
+        io1_ack_i    => soc_io1_ack,
+        io1_err_i    => soc_io1_err,
+        io1_dat_i    => soc_io1_dat,
+        rama_cyc_o   => soc_ram_a_cyc,
+        rama_stb_o   => soc_ram_a_stb,
+        rama_we_o    => soc_ram_a_we,
+        rama_sel_o   => soc_ram_a_sel,
+        rama_adr_o   => soc_ram_a_adr,
+        rama_dat_o   => soc_ram_a_dat_wr,
+        rama_ack_i   => soc_ram_a_ack,
+        rama_dat_i   => soc_ram_a_dat_rd
     );
 
     soc_rom: wb_rom port map (

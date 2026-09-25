@@ -27,15 +27,6 @@ RAM_INIT_FILE = $(PROGRAM)
 RUN_CYCLES    ?= 500000
 WGEN_IF       ?= COP
 
-# Generated config package
-WGEN_CFG = soc/rtl/wgen_cfg.vhdl
-
-ifeq ($(WGEN_IF),MMIO)
-WGEN_CFG_BOOL := false
-else
-WGEN_CFG_BOOL := true
-endif
-
 PROGRAM_NAME ?= $(shell basename $(PROGRAM) .bin)
 GHW_WAVEFORM ?= $(PROGRAM_NAME).ghw
 FST_WAVEFORM ?= $(PROGRAM_NAME).fst
@@ -50,20 +41,12 @@ GHDLXOPTS += --fst=$(WAVESDIR)/$(FST_WAVEFORM)
 endif
 
 GHDLXOPTS += $(if $(filter 1,$(SAMPLES)),-gSAMPLES_FILE=$(WAVESDIR)/$(SAMPLES_CSV),)
+GHDLXOPTS += $(if $(filter MMIO,$(WGEN_IF)),-gWGEN_IF_COP=false,)
 
 $(WORKDIR) $(WAVESDIR):
 	mkdir -p $@
 
 FORCE:
-
-# Regenerated every invocation, but only rewritten when the value actually
-# changes: the rule has no dependency that encodes WGEN_IF, so without FORCE
-# the stale file survives and `make run WGEN_IF=...` silently builds the
-# previous mode. Rewriting unconditionally would re-analyse the design on
-# every build, hence the compare.
-$(WGEN_CFG): FORCE | soc/rtl
-	@echo 'package wgen_cfg is constant WGEN_IF_COP : boolean := $(WGEN_CFG_BOOL); end package wgen_cfg;' > $@.tmp
-	@if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 
 $(WORKDIR)/program.bin: FORCE | $(WORKDIR)
 	@if [ -n "$(RAM_INIT_FILE)" ]; then \
@@ -75,8 +58,8 @@ $(WORKDIR)/program.bin: FORCE | $(WORKDIR)
 # Piping GHDL into tee put tee's exit status at the end of the pipeline, so
 # analysis/elaboration errors were swallowed, the stamp file was created
 # anyway, and `make run` reported success on a design that never built.
-$(WORKDIR)/.import: $(RTL_SRC) $(TBS_SRC) $(WGEN_CFG) | $(WORKDIR)
-	@$(GHDL) -i $(GHDLFLAGS) $(RTL_SRC) $(TBS_SRC) $(WGEN_CFG)
+$(WORKDIR)/.import: $(RTL_SRC) $(TBS_SRC) | $(WORKDIR)
+	@$(GHDL) -i $(GHDLFLAGS) $(RTL_SRC) $(TBS_SRC)
 	@touch $@
 
 $(WORKDIR)/.make: $(WORKDIR)/.import $(WORKDIR)/program.bin
@@ -103,5 +86,4 @@ plot: run $(PLOT_VENV)/bin/python3
 
 clean:
 	$(GHDL) clean --workdir=$(WORKDIR)
-	rm -f $(WGEN_CFG)
 	rm -rf .import .make $(WORKDIR) $(WAVESDIR) $(PLOT_VENV)

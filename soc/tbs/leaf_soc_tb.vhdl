@@ -11,7 +11,8 @@ entity leaf_soc_tb is
         PROGRAM : string;
         SKIP_UART_LOAD : boolean := false;
         RUN_CYCLES : natural := 500000;
-        SAMPLES_FILE : string := ""
+        SAMPLES_FILE : string := "";
+        WGEN_IF_COP : boolean := true
     );
 end entity leaf_soc_tb;
 
@@ -38,7 +39,9 @@ architecture tb of leaf_soc_tb is
 
 begin
 
-    uut: leaf_soc port map (
+    uut: leaf_soc generic map (
+        WGEN_IF_COP => WGEN_IF_COP
+    ) port map (
         clk      => clk,
         rst      => rst,
         rx       => rx,

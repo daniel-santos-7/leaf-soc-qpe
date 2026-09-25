@@ -12,6 +12,5 @@ sw/**/*.disass
 sw/**/*.debug
 sw/**/*.vhdl
 
-soc/rtl/wgen_cfg.vhdl
 leaf_soc_tb_sim
 e~leaf_soc_tb_sim.o
