@@ -40,6 +40,7 @@ Inside `wb_channel`:
 - **Forward path:** combinational. A slave's `STB` is the master's `STB` gated by the decode of the current address.
 - **Response path:** `ACK`, `ERR` and read data are steered by a *registered* select, captured in the request cycle. That way a pipelined master that moves to a new address every cycle still gets each response matched to the request that produced it. The select is only captured while `CYC and STB` is high; otherwise a stale select would survive into idle cycles and could let a phantom `ACK` through.
 - **Unrouted accesses:** a tied-off slave answers through its fixed `ERR = '1'`, gated by the registered select like any response, and an address outside the map is answered by the decoder itself. Either way `ERR` arrives one cycle after the request (a load from ROM, a fetch from the UART, an unmapped address), and the CPU takes an access-fault trap instead of waiting for an `ACK` that never comes. A slave with no error signal of its own, when routed, has its `ERR` input tied to `'0'`.
+- **Stall:** each channel drives its master's `STALL`, constant `'0'` today: no slave inserts wait states, and `wb_sig_gen`'s `stall_o`, tied low, is left open.
 
 The response path assumes every slave acknowledges exactly one cycle after its strobe. This holds for the ROM, both RAM ports and the UART. The XIP controller takes about 68 cycles per word, so it is not usable from a pipelined master until `wb_channel` gets a select FIFO or the master is stalled for the duration of an XIP transfer (see [`ISSUES.md`](ISSUES.md)).
 
@@ -63,9 +64,9 @@ The **Syscon** module handles global clock buffering and synchronized reset gene
 
 ## :zap: Pulse Generator (QPE)
 
-The waveform generator can be reached through two mutually exclusive interfaces, selected at elaboration time by the `WGEN_IF` variable. The Makefile generates `soc/rtl/wgen_cfg.vhdl` from it, and `leaf_soc.vhdl` picks between two `generate` blocks — no source edit is needed to switch.
+The waveform generator can be reached through two mutually exclusive interfaces, selected at elaboration time by the `WGEN_IF_COP` generic of `leaf_soc`, which picks between two `generate` blocks. The testbench passes it through, and the Makefile sets it from the `WGEN_IF` variable (`-gWGEN_IF_COP=false` for `MMIO`) when the simulation starts, so both modes are built into the same executable and switching recompiles nothing.
 
-- **`COP` (default):** `leaf_wgx` replaces the plain core, instantiating `leaf` + `wgx_csrs` + `sig_gen`. Pulse parameters live in the CPU's custom CSR window `0x7C0`–`0x7FF`, so a trigger costs no bus transaction. IO1 is tied off.
+- **`COP` (default):** `leaf_wgx` replaces the plain core, instantiating `leaf` + `wgx_csrs` + `sig_gen`. Pulse parameters live in the CPU's custom CSR window `0x7C0`–`0x7FF`, so a trigger costs no bus transaction. Nothing is attached to IO1, which answers every access with `ERR`, so a stray MMIO access traps instead of hanging.
 - **`MMIO`:** the plain core plus `wb_sig_gen` hung off IO1 as an ordinary Wishbone peripheral.
 
 Seven parameters, in the same order in both modes — CSR `0x7C0 + n` in COP, word `IO1_BASE + 4n` in MMIO:
@@ -156,7 +157,7 @@ To build and simulate the project, ensure the following tools are installed:
 | `WAVEFORM` | *(none)* | `ghw` or `fst`; written to `waves/<program>.<ext>` |
 | `SAMPLES` | *(none)* | `1` dumps every active I/Q sample to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
 
-`make clean` runs `ghdl clean` and drops `work/`, `waves/` and the generated `wgen_cfg.vhdl`. The build globs the RTL directories and records the import in a stamp file, so *adding* a source is picked up automatically — but *renaming or deleting* one leaves a stale unit behind and needs a `make clean`.
+`make clean` runs `ghdl clean` and drops `work/` and `waves/`. The build globs the RTL directories and records the import in a stamp file, so *adding* a source is picked up automatically — but *renaming or deleting* one leaves a stale unit behind and needs a `make clean`.
 
 ### Other Targets
 
