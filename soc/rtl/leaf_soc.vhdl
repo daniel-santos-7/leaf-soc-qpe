@@ -113,7 +113,7 @@ begin
     );
 
     cop_wgx_gen: if WGEN_IF_COP generate
-        soc_cpu: leaf_wgx generic map (
+        soc_cpu: leaf_qpe generic map (
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (
             clk_i    => soc_syscon_clk,

@@ -204,13 +204,13 @@ or made to fail loudly. See `README.md` for the current flat register map.
 
 **Status:** analysis. Cosmetic, but they are the kind of thing that drifts.
 
-- **Missing file headers.** `wb_syscon`, `wb_ram_dp`, `wgx_csrs`, `leaf_wgx`
+- **Missing file headers.** `wb_syscon`, `wb_ram_dp`, `wgx_csrs`, `leaf_qpe`
   and `leaf_soc_pkg` lack the `-- Leaf project / module: / year` block that
   `wb_rom`, `wb_xip_ctrl` and `leaf_soc` carry.
 - **Portuguese comments in an otherwise English codebase.**
   `wb_ram_dp.vhdl` has "handshake protege" and "Leitura contínua de ambas as
   portas"; every other comment under `soc/rtl/` is in English.
-- **Pointless intermediate signals.** `leaf_wgx.vhdl:140-141` routes `sig_i_o`
+- **Pointless intermediate signals.** `leaf_qpe.vhdl:140-141` routes `sig_i_o`
   through `wgen_sig_i` and `active_o` through `wgen_active`, while `sig_q_o` is
   driven straight from the instance. All three can connect directly.
 
