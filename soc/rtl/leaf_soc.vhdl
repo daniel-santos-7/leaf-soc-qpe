@@ -112,7 +112,7 @@ begin
         rst_o => soc_syscon_rst
     );
 
-    cop_wgx_gen: if WGEN_IF_COP generate
+    cop_qpe_gen: if WGEN_IF_COP generate
         soc_cpu: leaf_qpe generic map (
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (
@@ -148,7 +148,7 @@ begin
         soc_io1_dat <= (others => '0');
     end generate;
 
-    mmio_wgx_gen: if not WGEN_IF_COP generate
+    mmio_qpe_gen: if not WGEN_IF_COP generate
         soc_cpu: leaf generic map (
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (

@@ -66,7 +66,7 @@ The **Syscon** module handles global clock buffering and synchronized reset gene
 
 The waveform generator can be reached through two mutually exclusive interfaces, selected at elaboration time by the `WGEN_IF_COP` generic of `leaf_soc`, which picks between two `generate` blocks. The testbench passes it through, and the Makefile sets it from the `WGEN_IF` variable (`-gWGEN_IF_COP=false` for `MMIO`) when the simulation starts, so both modes are built into the same executable and switching recompiles nothing.
 
-- **`COP` (default):** `leaf_qpe` replaces the plain core, instantiating `leaf` + `wgx_csrs` + `sig_gen`. Pulse parameters live in the CPU's custom CSR window `0x7C0`–`0x7FF`, so a trigger costs no bus transaction. Nothing is attached to IO1, which answers every access with `ERR`, so a stray MMIO access traps instead of hanging.
+- **`COP` (default):** `leaf_qpe` replaces the plain core, instantiating `leaf` + `qpe_csrs` + `sig_gen`. Pulse parameters live in the CPU's custom CSR window `0x7C0`–`0x7FF`, so a trigger costs no bus transaction. Nothing is attached to IO1, which answers every access with `ERR`, so a stray MMIO access traps instead of hanging.
 - **`MMIO`:** the plain core plus `wb_sig_gen` hung off IO1 as an ordinary Wishbone peripheral.
 
 Seven parameters, in the same order in both modes — CSR `0x7C0 + n` in COP, word `IO1_BASE + 4n` in MMIO:
@@ -85,7 +85,7 @@ Seven parameters, in the same order in both modes — CSR `0x7C0 + n` in COP, wo
 
 The I/Q output width is **not** fixed by the SoC: it follows `OUT_RES_BITS` in the generated `ips/wgen/rtl/sine_lut_pkg.vhd` (currently 10 bits), which `leaf_soc_pkg.vhdl` derives its own constant from.
 
-> **Note — the COP registers hold pointers, not values.** Writing a parameter CSR stores `wdata[4:0]` as a *GPR index*; `wgx_csrs` then snoops the register-file write port and mirrors whatever lands in that GPR. Bind first, then load the register:
+> **Note — the COP registers hold pointers, not values.** Writing a parameter CSR stores `wdata[4:0]` as a *GPR index*; `qpe_csrs` then snoops the register-file write port and mirrors whatever lands in that GPR. Bind first, then load the register:
 >
 > ```asm
 > li  t0, 22

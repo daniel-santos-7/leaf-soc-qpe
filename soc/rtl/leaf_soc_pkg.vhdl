@@ -248,7 +248,7 @@ package leaf_soc_pkg is
         );
     end component leaf_qpe;
 
-    component wgx_csrs is
+    component qpe_csrs is
         port (
             clk_i   : in  std_logic;
             rst_i   : in  std_logic;
@@ -268,7 +268,7 @@ package leaf_soc_pkg is
             valid_o : out std_logic;
             ready_i : in  std_logic
         );
-    end component wgx_csrs;
+    end component qpe_csrs;
 
     component wb_xip_ctrl is
         port (

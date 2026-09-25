@@ -59,7 +59,7 @@ architecture rtl of leaf_qpe is
     signal wgen_active : std_logic;
 
     -- Register-file write snoop bus: broadcasts the CPU's own GPR write
-    -- port (we/addr/data) so wgx_csrs can mirror whichever GPR each
+    -- port (we/addr/data) so qpe_csrs can mirror whichever GPR each
     -- pulse parameter is pointed at.
     signal rf_wr_en   : std_logic;
     signal rf_wr_addr : std_logic_vector(4 downto 0);
@@ -101,7 +101,7 @@ begin
         data_stall_i => data_stall_i
     );
 
-    u_csrs: entity work.wgx_csrs port map (
+    u_csrs: entity work.qpe_csrs port map (
         clk_i   => clk_i,
         rst_i   => rst_i,
         addr_i  => csr_addr,
