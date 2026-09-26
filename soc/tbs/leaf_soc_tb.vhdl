@@ -60,7 +60,6 @@ begin
             INIT_FILE => PROGRAM
         )
         port map (
-            clk_i    => clk,
             spi_clk  => spi_clk,
             spi_mosi => spi_mosi,
             spi_miso => spi_miso,

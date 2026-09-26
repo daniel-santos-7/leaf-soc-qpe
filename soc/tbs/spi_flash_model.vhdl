@@ -14,7 +14,6 @@ entity spi_flash_model is
         INIT_FILE : string := ""
     );
     port (
-        clk_i    : in  std_logic;
         spi_clk  : in  std_logic;
         spi_mosi : in  std_logic;
         spi_miso : out std_logic;
@@ -24,40 +23,25 @@ end entity spi_flash_model;
 
 architecture sim of spi_flash_model is
 
-    type mem_array_t is array (0 to 16#7FFFF#) of std_logic_vector(7 downto 0);
+    constant MEM_BITS : natural := 19;
+
+    type mem_array_t is array (0 to 2**MEM_BITS-1) of std_logic_vector(7 downto 0);
     signal memory : mem_array_t := (others => (others => '0'));
 
-    type state_t is (IDLE, CAPTURE_ADDR, READ_DATA);
+    type state_t is (CMD, ADDR, DATA, IGNORE);
     signal state : state_t;
 
-    signal shift_reg : std_logic_vector(7 downto 0);
-    signal bit_cnt   : natural range 0 to 7;
-    signal addr_reg  : std_logic_vector(23 downto 0);
-    signal byte_cnt  : natural range 0 to 2;
-    signal data_byte : std_logic_vector(7 downto 0);
-    signal data_bit_cnt : natural range 0 to 7;
+    signal bit_cnt  : natural range 0 to 23;
+    signal cmd_reg  : std_logic_vector(6 downto 0);
+    signal addr_reg : std_logic_vector(22 downto 0);
+    signal base     : unsigned(MEM_BITS-1 downto 0);
 
-    signal spi_clk_prev : std_logic;
-    signal spi_clk_rise : std_logic;
-    signal spi_clk_fall : std_logic;
-
-    signal mem_init_done : boolean := false;
+    signal out_bit  : natural range 0 to 7;
+    signal out_byte : unsigned(MEM_BITS-1 downto 0);
 
 begin
 
-    -- SPI clock edge detection
-    process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            spi_clk_prev <= spi_clk;
-        end if;
-    end process;
-
-    spi_clk_rise <= spi_clk and not spi_clk_prev;
-    spi_clk_fall <= not spi_clk and spi_clk_prev;
-
-    -- Memory initialization
-    process
+    init_proc: process
         type bin_file_t is file of character;
         file f : bin_file_t;
         variable byte : character;
@@ -72,71 +56,63 @@ begin
             end loop;
             file_close(f);
         end if;
-        mem_init_done <= true;
         wait;
-    end process;
+    end process init_proc;
 
-    -- SPI flash state machine
-    process(clk_i)
+    rise_proc: process(spi_clk, spi_cs_n)
     begin
-        if rising_edge(clk_i) then
-            if spi_cs_n = '1' or not mem_init_done then
-                state <= IDLE;
-                bit_cnt <= 0;
-                byte_cnt <= 0;
-                shift_reg <= (others => '0');
-                addr_reg <= (others => '0');
-                spi_miso <= 'Z';
-            else
-                case state is
-                    when IDLE =>
-                        if spi_clk_rise = '1' then
-                            shift_reg <= shift_reg(6 downto 0) & spi_mosi;
-                            bit_cnt <= bit_cnt + 1;
-                            if bit_cnt = 7 then
-                                if shift_reg(6 downto 0) & spi_mosi = x"03" then
-                                    state <= CAPTURE_ADDR;
-                                    byte_cnt <= 0;
-                                else
-                                    state <= IDLE;
-                                end if;
-                                bit_cnt <= 0;
-                            end if;
+        if spi_cs_n = '1' then
+            state   <= CMD;
+            bit_cnt <= 0;
+        elsif rising_edge(spi_clk) then
+            case state is
+                when CMD =>
+                    cmd_reg <= cmd_reg(5 downto 0) & spi_mosi;
+                    if bit_cnt = 7 then
+                        bit_cnt <= 0;
+                        if (cmd_reg & spi_mosi) = x"03" then
+                            state <= ADDR;
+                        else
+                            state <= IGNORE;
                         end if;
+                    else
+                        bit_cnt <= bit_cnt + 1;
+                    end if;
 
-                    when CAPTURE_ADDR =>
-                        if spi_clk_rise = '1' then
-                            addr_reg <= addr_reg(22 downto 0) & spi_mosi;
-                            bit_cnt <= bit_cnt + 1;
-                            if bit_cnt = 7 then
-                                byte_cnt <= byte_cnt + 1;
-                                bit_cnt <= 0;
-                                if byte_cnt = 2 then
-                                    state <= READ_DATA;
-                                    data_bit_cnt <= 0;
-                                    data_byte <= memory(to_integer(unsigned(addr_reg(22 downto 0) & spi_mosi)));
-                                end if;
-                            end if;
-                        end if;
+                when ADDR =>
+                    addr_reg <= addr_reg(21 downto 0) & spi_mosi;
+                    if bit_cnt = 23 then
+                        base  <= unsigned(addr_reg(MEM_BITS-2 downto 0) & spi_mosi);
+                        state <= DATA;
+                    else
+                        bit_cnt <= bit_cnt + 1;
+                    end if;
 
-                    when READ_DATA =>
-                        if spi_clk_fall = '1' then
-                            spi_miso <= data_byte(7);
-                            data_byte <= data_byte(6 downto 0) & '0';
-                            data_bit_cnt <= data_bit_cnt + 1;
-                            if data_bit_cnt = 7 then
-                                if byte_cnt < 3 then
-                                    addr_reg <= std_logic_vector(unsigned(addr_reg) + 1);
-                                    data_byte <= memory(to_integer(unsigned(addr_reg)));
-                                    data_bit_cnt <= 0;
-                                else
-                                    state <= IDLE;
-                                end if;
-                            end if;
-                        end if;
-                end case;
+                when DATA | IGNORE =>
+                    null;
+            end case;
+        end if;
+    end process rise_proc;
+
+    fall_proc: process(spi_clk, spi_cs_n)
+        variable byte : std_logic_vector(7 downto 0);
+    begin
+        if spi_cs_n = '1' then
+            spi_miso <= 'Z';
+            out_bit  <= 0;
+            out_byte <= (others => '0');
+        elsif falling_edge(spi_clk) then
+            if state = DATA then
+                byte     := memory(to_integer(base + out_byte));
+                spi_miso <= byte(7 - out_bit);
+                if out_bit = 7 then
+                    out_bit  <= 0;
+                    out_byte <= out_byte + 1;
+                else
+                    out_bit <= out_bit + 1;
+                end if;
             end if;
         end if;
-    end process;
+    end process fall_proc;
 
 end architecture sim;
