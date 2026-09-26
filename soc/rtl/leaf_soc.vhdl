@@ -56,15 +56,17 @@ architecture rtl of leaf_soc is
     signal soc_inst_rom_adr : std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
     signal soc_inst_xip_cyc : std_logic;
     signal soc_inst_xip_stb : std_logic;
-    signal soc_inst_xip_we  : std_logic;
-    signal soc_inst_xip_sel : std_logic_vector(3 downto 0);
     signal soc_inst_xip_adr : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-    signal soc_inst_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_b_cyc : std_logic;
-    signal soc_ram_b_stb : std_logic;
-    signal soc_ram_b_adr : std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
-    signal soc_ram_b_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_b_ack : std_logic;
+    signal soc_ram0_b_cyc : std_logic;
+    signal soc_ram0_b_stb : std_logic;
+    signal soc_ram0_b_adr : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
+    signal soc_ram0_b_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram0_b_ack : std_logic;
+    signal soc_ram1_b_cyc : std_logic;
+    signal soc_ram1_b_stb : std_logic;
+    signal soc_ram1_b_adr : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
+    signal soc_ram1_b_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram1_b_ack : std_logic;
 
     signal soc_data_io0_cyc : std_logic;
     signal soc_data_io0_stb : std_logic;
@@ -78,14 +80,22 @@ architecture rtl of leaf_soc is
     signal soc_data_io1_sel : std_logic_vector(3 downto 0);
     signal soc_data_io1_adr : std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
     signal soc_data_io1_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_a_cyc : std_logic;
-    signal soc_ram_a_stb : std_logic;
-    signal soc_ram_a_we  : std_logic;
-    signal soc_ram_a_sel : std_logic_vector(3 downto 0);
-    signal soc_ram_a_adr : std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
-    signal soc_ram_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_a_ack : std_logic;
+    signal soc_ram0_a_cyc : std_logic;
+    signal soc_ram0_a_stb : std_logic;
+    signal soc_ram0_a_we  : std_logic;
+    signal soc_ram0_a_sel : std_logic_vector(3 downto 0);
+    signal soc_ram0_a_adr : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
+    signal soc_ram0_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram0_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram0_a_ack : std_logic;
+    signal soc_ram1_a_cyc : std_logic;
+    signal soc_ram1_a_stb : std_logic;
+    signal soc_ram1_a_we  : std_logic;
+    signal soc_ram1_a_sel : std_logic_vector(3 downto 0);
+    signal soc_ram1_a_adr : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
+    signal soc_ram1_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram1_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram1_a_ack : std_logic;
 
     signal soc_rom_ack : std_logic;
     signal soc_rom_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
@@ -98,7 +108,6 @@ architecture rtl of leaf_soc is
     signal soc_io1_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_xip_ack : std_logic;
-    signal soc_xip_err : std_logic;
     signal soc_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_cop_csr_rdata : std_logic_vector(31 downto 0);
@@ -233,18 +242,19 @@ begin
         rom_dat_i    => soc_rom_dat,
         xip_cyc_o    => soc_inst_xip_cyc,
         xip_stb_o    => soc_inst_xip_stb,
-        xip_we_o     => soc_inst_xip_we,
-        xip_sel_o    => soc_inst_xip_sel,
         xip_adr_o    => soc_inst_xip_adr,
-        xip_dat_o    => soc_inst_xip_dat,
         xip_ack_i    => soc_xip_ack,
-        xip_err_i    => soc_xip_err,
         xip_dat_i    => soc_xip_dat,
-        ramb_cyc_o   => soc_ram_b_cyc,
-        ramb_stb_o   => soc_ram_b_stb,
-        ramb_adr_o   => soc_ram_b_adr,
-        ramb_ack_i   => soc_ram_b_ack,
-        ramb_dat_i   => soc_ram_b_dat,
+        ram0b_cyc_o  => soc_ram0_b_cyc,
+        ram0b_stb_o  => soc_ram0_b_stb,
+        ram0b_adr_o  => soc_ram0_b_adr,
+        ram0b_ack_i  => soc_ram0_b_ack,
+        ram0b_dat_i  => soc_ram0_b_dat,
+        ram1b_cyc_o  => soc_ram1_b_cyc,
+        ram1b_stb_o  => soc_ram1_b_stb,
+        ram1b_adr_o  => soc_ram1_b_adr,
+        ram1b_ack_i  => soc_ram1_b_ack,
+        ram1b_dat_i  => soc_ram1_b_dat,
         io0_cyc_o    => soc_data_io0_cyc,
         io0_stb_o    => soc_data_io0_stb,
         io0_we_o     => soc_data_io0_we,
@@ -262,14 +272,22 @@ begin
         io1_ack_i    => soc_io1_ack,
         io1_err_i    => soc_io1_err,
         io1_dat_i    => soc_io1_dat,
-        rama_cyc_o   => soc_ram_a_cyc,
-        rama_stb_o   => soc_ram_a_stb,
-        rama_we_o    => soc_ram_a_we,
-        rama_sel_o   => soc_ram_a_sel,
-        rama_adr_o   => soc_ram_a_adr,
-        rama_dat_o   => soc_ram_a_dat_wr,
-        rama_ack_i   => soc_ram_a_ack,
-        rama_dat_i   => soc_ram_a_dat_rd
+        ram0a_cyc_o  => soc_ram0_a_cyc,
+        ram0a_stb_o  => soc_ram0_a_stb,
+        ram0a_we_o   => soc_ram0_a_we,
+        ram0a_sel_o  => soc_ram0_a_sel,
+        ram0a_adr_o  => soc_ram0_a_adr,
+        ram0a_dat_o  => soc_ram0_a_dat_wr,
+        ram0a_ack_i  => soc_ram0_a_ack,
+        ram0a_dat_i  => soc_ram0_a_dat_rd,
+        ram1a_cyc_o  => soc_ram1_a_cyc,
+        ram1a_stb_o  => soc_ram1_a_stb,
+        ram1a_we_o   => soc_ram1_a_we,
+        ram1a_sel_o  => soc_ram1_a_sel,
+        ram1a_adr_o  => soc_ram1_a_adr,
+        ram1a_dat_o  => soc_ram1_a_dat_wr,
+        ram1a_ack_i  => soc_ram1_a_ack,
+        ram1a_dat_i  => soc_ram1_a_dat_rd
     );
 
     soc_rom: wb_rom port map (
@@ -303,12 +321,8 @@ begin
         rst_i     => soc_syscon_rst,
         cyc_i     => soc_inst_xip_cyc,
         stb_i     => soc_inst_xip_stb,
-        we_i      => soc_inst_xip_we,
-        sel_i     => soc_inst_xip_sel,
         adr_i     => soc_inst_xip_adr,
-        dat_i     => soc_inst_xip_dat,
         ack_o     => soc_xip_ack,
-        err_o     => soc_xip_err,
         dat_o     => soc_xip_dat,
         spi_clk   => spi_clk,
         spi_mosi  => spi_mosi,
@@ -317,24 +331,44 @@ begin
     );
 
     -- memory 32 kB (dual-port: A = data R/W, B = instruction R/O)
-    soc_ram: wb_ram_dp generic map (
-        BITS  => RAM_ADDR_WIDTH
+    soc_ram0: wb_ram_dp generic map (
+        BITS  => RAM0_ADDR_WIDTH
     ) port map (
         clk_i   => soc_syscon_clk,
         rst_i   => soc_syscon_rst,
-        dat_a_i => soc_ram_a_dat_wr,
-        cyc_a_i => soc_ram_a_cyc,
-        stb_a_i => soc_ram_a_stb,
-        we_a_i  => soc_ram_a_we,
-        sel_a_i => soc_ram_a_sel,
-        adr_a_i => soc_ram_a_adr,
-        ack_a_o => soc_ram_a_ack,
-        dat_a_o => soc_ram_a_dat_rd,
-        cyc_b_i => soc_ram_b_cyc,
-        stb_b_i => soc_ram_b_stb,
-        adr_b_i => soc_ram_b_adr,
-        ack_b_o => soc_ram_b_ack,
-        dat_b_o => soc_ram_b_dat
+        dat_a_i => soc_ram0_a_dat_wr,
+        cyc_a_i => soc_ram0_a_cyc,
+        stb_a_i => soc_ram0_a_stb,
+        we_a_i  => soc_ram0_a_we,
+        sel_a_i => soc_ram0_a_sel,
+        adr_a_i => soc_ram0_a_adr,
+        ack_a_o => soc_ram0_a_ack,
+        dat_a_o => soc_ram0_a_dat_rd,
+        cyc_b_i => soc_ram0_b_cyc,
+        stb_b_i => soc_ram0_b_stb,
+        adr_b_i => soc_ram0_b_adr,
+        ack_b_o => soc_ram0_b_ack,
+        dat_b_o => soc_ram0_b_dat
+    );
+
+    soc_ram1: wb_ram_dp generic map (
+        BITS  => RAM1_ADDR_WIDTH
+    ) port map (
+        clk_i   => soc_syscon_clk,
+        rst_i   => soc_syscon_rst,
+        dat_a_i => soc_ram1_a_dat_wr,
+        cyc_a_i => soc_ram1_a_cyc,
+        stb_a_i => soc_ram1_a_stb,
+        we_a_i  => soc_ram1_a_we,
+        sel_a_i => soc_ram1_a_sel,
+        adr_a_i => soc_ram1_a_adr,
+        ack_a_o => soc_ram1_a_ack,
+        dat_a_o => soc_ram1_a_dat_rd,
+        cyc_b_i => soc_ram1_b_cyc,
+        stb_b_i => soc_ram1_b_stb,
+        adr_b_i => soc_ram1_b_adr,
+        ack_b_o => soc_ram1_b_ack,
+        dat_b_o => soc_ram1_b_dat
     );
 
 end architecture rtl;
