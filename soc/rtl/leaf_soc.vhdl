@@ -19,7 +19,10 @@ entity leaf_soc is
         spi_clk  : out std_logic;
         spi_mosi : out std_logic;
         spi_miso : in  std_logic;
-        spi_cs_n : out std_logic
+        spi_cs_n : out std_logic;
+        gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
+        gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
+        gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0)
     );
 end entity leaf_soc;
 
@@ -80,6 +83,12 @@ architecture rtl of leaf_soc is
     signal soc_data_io1_sel : std_logic_vector(3 downto 0);
     signal soc_data_io1_adr : std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
     signal soc_data_io1_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_data_io2_cyc : std_logic;
+    signal soc_data_io2_stb : std_logic;
+    signal soc_data_io2_we  : std_logic;
+    signal soc_data_io2_sel : std_logic_vector(3 downto 0);
+    signal soc_data_io2_adr : std_logic_vector(IO2_ADDR_WIDTH-1 downto 2);
+    signal soc_data_io2_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_a_cyc : std_logic;
     signal soc_ram0_a_stb : std_logic;
     signal soc_ram0_a_we  : std_logic;
@@ -107,6 +116,11 @@ architecture rtl of leaf_soc is
     signal soc_io1_err : std_logic;
     signal soc_io1_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
+    signal soc_io2_ack : std_logic;
+    signal soc_io2_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+
+    signal soc_gpio_irq : std_logic;
+
     signal soc_xip_ack : std_logic;
     signal soc_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
@@ -127,7 +141,7 @@ begin
         ) port map (
             clk_i    => soc_syscon_clk,
             rst_i    => soc_syscon_rst,
-            ex_irq_i => '0',
+            ex_irq_i => soc_gpio_irq,
             sw_irq_i => '0',
             tm_irq_i => '0',
             inst_cyc_o   => soc_cpu_inst_cyc,
@@ -163,7 +177,7 @@ begin
         ) port map (
             clk_i        => soc_syscon_clk,
             rst_i        => soc_syscon_rst,
-            ex_irq_i     => '0',
+            ex_irq_i     => soc_gpio_irq,
             sw_irq_i     => '0',
             tm_irq_i     => '0',
             cop_dat_i    => soc_cop_csr_rdata,
@@ -272,6 +286,14 @@ begin
         io1_ack_i    => soc_io1_ack,
         io1_err_i    => soc_io1_err,
         io1_dat_i    => soc_io1_dat,
+        io2_cyc_o    => soc_data_io2_cyc,
+        io2_stb_o    => soc_data_io2_stb,
+        io2_we_o     => soc_data_io2_we,
+        io2_sel_o    => soc_data_io2_sel,
+        io2_adr_o    => soc_data_io2_adr,
+        io2_dat_o    => soc_data_io2_dat,
+        io2_ack_i    => soc_io2_ack,
+        io2_dat_i    => soc_io2_dat,
         ram0a_cyc_o  => soc_ram0_a_cyc,
         ram0a_stb_o  => soc_ram0_a_stb,
         ram0a_we_o   => soc_ram0_a_we,
@@ -313,6 +335,26 @@ begin
         ack_o => soc_io0_ack,
         dat_o => soc_io0_dat,
         tx    => tx
+    );
+
+    soc_gpio: entity work.wb_gpio generic map (
+        G_WIDTH => GPIO_WIDTH
+    ) port map (
+        wb_clk_i   => soc_syscon_clk,
+        wb_rst_i   => soc_syscon_rst,
+        wb_cyc_i   => soc_data_io2_cyc,
+        wb_stb_i   => soc_data_io2_stb,
+        wb_we_i    => soc_data_io2_we,
+        wb_adr_i   => soc_data_io2_adr,
+        wb_sel_i   => soc_data_io2_sel,
+        wb_dat_i   => soc_data_io2_dat,
+        wb_dat_o   => soc_io2_dat,
+        wb_ack_o   => soc_io2_ack,
+        wb_stall_o => open,
+        irq_o      => soc_gpio_irq,
+        gpio_i     => gpio_i,
+        gpio_o     => gpio_o,
+        gpio_oe_o  => gpio_oe
     );
 
     -- XIP controller
