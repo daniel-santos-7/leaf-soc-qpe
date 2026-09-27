@@ -33,6 +33,12 @@ architecture tb of leaf_soc_tb is
     signal spi_miso : std_logic;
     signal spi_cs_n : std_logic;
 
+    signal gpio_i  : std_logic_vector(GPIO_WIDTH-1 downto 0);
+    signal gpio_o  : std_logic_vector(GPIO_WIDTH-1 downto 0);
+    signal gpio_oe : std_logic_vector(GPIO_WIDTH-1 downto 0);
+
+    constant GPIO_EXT : std_logic_vector(GPIO_WIDTH-1 downto 0) := "10100101";
+
     signal clk_en : std_logic := '0';
 
     constant CLK_PERIOD : time := 10 ns;
@@ -52,8 +58,22 @@ begin
         spi_clk  => spi_clk,
         spi_mosi => spi_mosi,
         spi_miso => spi_miso,
-        spi_cs_n => spi_cs_n
+        spi_cs_n => spi_cs_n,
+        gpio_i   => gpio_i,
+        gpio_o   => gpio_o,
+        gpio_oe  => gpio_oe
     );
+
+    gpio_pad_proc: process(gpio_o, gpio_oe)
+    begin
+        for i in gpio_i'range loop
+            if gpio_oe(i) = '1' then
+                gpio_i(i) <= gpio_o(i);
+            else
+                gpio_i(i) <= GPIO_EXT(i);
+            end if;
+        end loop;
+    end process gpio_pad_proc;
 
     u_spi_flash: entity work.spi_flash_model
         generic map (

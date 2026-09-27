@@ -9,6 +9,7 @@ package leaf_soc_pkg is
     constant ROM_BASE_ADDR : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0) := x"00001000";
     constant IO0_BASE_ADDR : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0) := x"10000000";
     constant IO1_BASE_ADDR : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0) := x"10001000";
+    constant IO2_BASE_ADDR : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0) := x"10002000";
     constant XIP_BASE_ADDR : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0) := x"20000000";
     constant RAM0_BASE_ADDR : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0) := x"80000000";
     constant RAM1_BASE_ADDR : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0) := x"90000000";
@@ -16,6 +17,7 @@ package leaf_soc_pkg is
     constant ROM_ADDR_WIDTH : natural := 9;    -- 512 bytes
     constant IO0_ADDR_WIDTH : natural := 4;    -- 16 bytes (4 registers)
     constant IO1_ADDR_WIDTH : natural := 5;    -- 32 bytes (8 registers)
+    constant IO2_ADDR_WIDTH : natural := 6;    -- 64 bytes (16 registers)
     constant XIP_ADDR_WIDTH : natural := 24;   -- 16 MB
     constant RAM0_ADDR_WIDTH : natural := 15;   -- 32 KB
     constant RAM1_ADDR_WIDTH : natural := 10;  -- 1 KB
@@ -23,6 +25,8 @@ package leaf_soc_pkg is
     -- Output resolution follows the wgen IP's generated sine LUT; do not
     -- hardcode it here, or the SoC ports stop matching sig_gen's.
     constant OUT_RES_BITS : natural := work.sine_lut_pkg.OUT_RES_BITS;
+
+    constant GPIO_WIDTH : natural := 8;
 
     component wb_syscon is
         port (
@@ -81,18 +85,21 @@ package leaf_soc_pkg is
             rom_ack_i   : in   std_logic;
             io0_ack_i   : in   std_logic;
             io1_ack_i   : in   std_logic;
+            io2_ack_i   : in   std_logic;
             xip_ack_i   : in   std_logic;
             ram0_ack_i  : in   std_logic;
             ram1_ack_i  : in   std_logic;
             rom_err_i   : in   std_logic;
             io0_err_i   : in   std_logic;
             io1_err_i   : in   std_logic;
+            io2_err_i   : in   std_logic;
             xip_err_i   : in   std_logic;
             ram0_err_i  : in   std_logic;
             ram1_err_i  : in   std_logic;
             rom_dat_i   : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             io0_dat_i   : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             io1_dat_i   : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            io2_dat_i   : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             xip_dat_i   : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             ram0_dat_i  : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             ram1_dat_i  : in   std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
@@ -102,34 +109,40 @@ package leaf_soc_pkg is
             rom_cyc_o   : out  std_logic;
             io0_cyc_o   : out  std_logic;
             io1_cyc_o   : out  std_logic;
+            io2_cyc_o   : out  std_logic;
             xip_cyc_o   : out  std_logic;
             ram0_cyc_o  : out  std_logic;
             ram1_cyc_o  : out  std_logic;
             rom_stb_o   : out  std_logic;
             io0_stb_o   : out  std_logic;
             io1_stb_o   : out  std_logic;
+            io2_stb_o   : out  std_logic;
             xip_stb_o   : out  std_logic;
             ram0_stb_o  : out  std_logic;
             ram1_stb_o  : out  std_logic;
             io0_we_o    : out  std_logic;
             io1_we_o    : out  std_logic;
+            io2_we_o    : out  std_logic;
             xip_we_o    : out  std_logic;
             ram0_we_o   : out  std_logic;
             ram1_we_o   : out  std_logic;
             io0_sel_o   : out  std_logic_vector(3  downto 0);
             io1_sel_o   : out  std_logic_vector(3  downto 0);
+            io2_sel_o   : out  std_logic_vector(3  downto 0);
             xip_sel_o   : out  std_logic_vector(3  downto 0);
             ram0_sel_o  : out  std_logic_vector(3  downto 0);
             ram1_sel_o  : out  std_logic_vector(3  downto 0);
             rom_adr_o   : out  std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
             io0_adr_o   : out  std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
             io1_adr_o   : out  std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
+            io2_adr_o   : out  std_logic_vector(IO2_ADDR_WIDTH-1 downto 2);
             xip_adr_o   : out  std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
             ram0_adr_o  : out  std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
             ram1_adr_o  : out  std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
             cpu_dat_o   : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             io0_dat_o   : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             io1_dat_o   : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            io2_dat_o   : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             xip_dat_o   : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             ram0_dat_o  : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             ram1_dat_o  : out  std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
@@ -194,6 +207,14 @@ package leaf_soc_pkg is
             io1_ack_i    : in  std_logic;
             io1_err_i    : in  std_logic;
             io1_dat_i    : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            io2_cyc_o    : out std_logic;
+            io2_stb_o    : out std_logic;
+            io2_we_o     : out std_logic;
+            io2_sel_o    : out std_logic_vector(3 downto 0);
+            io2_adr_o    : out std_logic_vector(IO2_ADDR_WIDTH-1 downto 2);
+            io2_dat_o    : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+            io2_ack_i    : in  std_logic;
+            io2_dat_i    : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
             ram0a_cyc_o  : out std_logic;
             ram0a_stb_o  : out std_logic;
             ram0a_we_o   : out std_logic;
@@ -228,7 +249,10 @@ package leaf_soc_pkg is
             spi_clk  : out std_logic;
             spi_mosi : out std_logic;
             spi_miso : in  std_logic;
-            spi_cs_n : out std_logic
+            spi_cs_n : out std_logic;
+            gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
+            gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
+            gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0)
         );
     end component leaf_soc;
 

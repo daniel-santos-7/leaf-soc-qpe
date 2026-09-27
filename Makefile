@@ -14,10 +14,11 @@ UART_RTL = $(wildcard ./ips/uart/rtl/*.vhdl)
 UART_TBS = $(wildcard ./ips/uart/tbs/*.vhdl)
 WGEN_RTL = $(wildcard ./ips/wgen/rtl/*.vhd)
 WGEN_TBS = $(wildcard ./ips/wgen/tbs/*.vhd)
+GPIO_RTL = $(wildcard ./ips/gpio/rtl/*.vhd)
 SOC_RTL  = $(wildcard ./soc/rtl/*.vhdl)
 SOC_TBS  = $(wildcard ./soc/tbs/*.vhdl)
 
-RTL_SRC  = $(CPU_RTL) $(UART_RTL) $(WGEN_RTL) $(SOC_RTL)
+RTL_SRC  = $(CPU_RTL) $(UART_RTL) $(WGEN_RTL) $(GPIO_RTL) $(SOC_RTL)
 TBS_SRC  = $(UART_TBS) $(WGEN_TBS) $(SOC_TBS)
 
 TOP_UNIT = leaf_soc_tb_sim

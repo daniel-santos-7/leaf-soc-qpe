@@ -148,7 +148,7 @@ there.
 ## 6. The reset pin is active low but named `rst`
 
 **Status:** verified in the testbench.
-**Files:** `soc/rtl/wb_syscon.vhdl:23`, `soc/tbs/leaf_soc_tb.vhdl:123`, `:130`
+**Files:** `soc/rtl/wb_syscon.vhdl:23`, `soc/tbs/leaf_soc_tb.vhdl:142`, `:149`
 
 `wb_syscon` synchronises `not rst`, and the testbench holds `rst = '0'` during
 reset and releases it to `'1'`. The polarity is only visible by reading both.
@@ -184,12 +184,13 @@ Alternatively a watchdog that resets the chip.
 ## 8. `time` duplicates `cycle`, and nothing can raise a timer interrupt
 
 **Status:** analysis.
-**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:121-123`
+**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:145-146`, `:181-182`
 
 `counters` keeps `timer_reg` and `cycle_reg` as two identical 64-bit counters,
 both incremented every clock: 64 flip-flops and an adder with no function.
-The SoC ties `ex_irq_i`, `sw_irq_i` and `tm_irq_i` to `'0'` and has no
-`mtimecmp`, so the chip has no interrupt source at all.
+The SoC ties `sw_irq_i` and `tm_irq_i` to `'0'` and has no `mtimecmp`, so
+the chip has no timer interrupt; the GPIO on `ex_irq_i` is its only interrupt
+source.
 
 **Fix:** either drive `time` from a real time base with an `mtimecmp` that
 raises `tm_irq_i`, or read `time` from the cycle counter and drop the

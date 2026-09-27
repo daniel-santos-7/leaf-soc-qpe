@@ -2,6 +2,7 @@
 .equ ROM_BASE,      0x00001000
 .equ UART_BASE,     0x10000000
 .equ IO1_BASE,      0x10001000
+.equ GPIO_BASE,     0x10002000
 .equ XIP_BASE,      0x20000000
 .equ RAM0_BASE,     0x80000000
 .equ RAM1_BASE,     0x90000000

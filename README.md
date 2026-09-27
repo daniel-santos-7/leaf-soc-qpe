@@ -9,7 +9,7 @@ This repository carries the SoC together with a **QPE** (Quantum Pulse Extension
 - **Leaf Processor:** 32-bit RISC-V core (RV32I) with a 2-stage pipeline.
 - **Wishbone B4 Bus:** Crossbar interconnect; instruction fetch and data accesses run in parallel.
 - **Memory System:** Integrated Boot ROM, two internal dual-port RAMs: RAM0 (32 KB) and RAM1 (1 KB).
-- **Standard Peripherals:** Includes a robust UART for serial communication.
+- **Standard Peripherals:** UART for serial communication and an 8-pin GPIO with edge interrupts.
 - **Pulse Generator:** DDS signal generator with Gaussian envelopes and DRAG correction, reachable either as a coprocessor or as a memory-mapped peripheral.
 - **Expandability:** Ready for XIP (Execute-In-Place) and custom hardware via a dedicated coprocessor interface.
 - **FPGA Friendly:** Synthesizable VHDL design optimized for modern FPGA architectures.
@@ -26,14 +26,14 @@ The Leaf core is Harvard: it has two Wishbone B4 masters, one for instruction fe
 
 A single **Intercon** (`wb_intercon`) connects both masters to the slaves as a partial crossbar:
 
-| Master | ROM | XIP | RAM0 B | RAM1 B | UART | IO1 | RAM0 A | RAM1 A |
-|--------|:---:|:---:|:------:|:------:|:----:|:---:|:------:|:------:|
-| Instruction | ✓ | ✓ | ✓ | ✓ | | | | |
-| Data | | | | | ✓ | ✓ | ✓ | ✓ |
+| Master | ROM | XIP | RAM0 B | RAM1 B | UART | IO1 | GPIO | RAM0 A | RAM1 A |
+|--------|:---:|:---:|:------:|:------:|:----:|:---:|:----:|:------:|:------:|
+| Instruction | ✓ | ✓ | ✓ | ✓ | | | | | |
+| Data | | | | | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 The two sets of slaves are disjoint, so there is no arbitration and both channels run in parallel. Each dual-port RAM appears as two slave interfaces, which is what lets a fetch and a load/store complete in the same cycle. Both are instances of the same `wb_ram_dp`: RAM0 with `BITS => 15`, RAM1 with `BITS => 10`.
 
-`wb_intercon` is structural: one **`wb_channel`** per master, i.e. per CPU channel. `wb_channel` has a port group for every slave in the memory map (`rom_*`, `io0_*`, `io1_*`, `xip_*`, `ram0_*`, `ram1_*`) and decodes them against the bases and widths in `leaf_soc_pkg`. The regions are disjoint, which keeps the select one-hot. Each instance connects the slaves routed to its master and ties off the others: their outputs are left `open`, and their inputs are tied to `ACK = '0'`, `ERR = '1'` and zero data.
+`wb_intercon` is structural: one **`wb_channel`** per master, i.e. per CPU channel. `wb_channel` has a port group for every slave in the memory map (`rom_*`, `io0_*`, `io1_*`, `io2_*`, `xip_*`, `ram0_*`, `ram1_*`) and decodes them against the bases and widths in `leaf_soc_pkg`. The regions are disjoint, which keeps the select one-hot. Each instance connects the slaves routed to its master and ties off the others: their outputs are left `open`, and their inputs are tied to `ACK = '0'`, `ERR = '1'` and zero data.
 
 Inside `wb_channel`:
 
@@ -42,7 +42,7 @@ Inside `wb_channel`:
 - **Unrouted accesses:** a tied-off slave answers through its fixed `ERR = '1'`, gated by the registered select like any response, and an address outside the map is answered by the decoder itself. Either way `ERR` arrives one cycle after the request (a load from ROM, a fetch from the UART, an unmapped address), and the CPU takes an access-fault trap instead of waiting for an `ACK` that never comes. A slave with no error signal of its own, when routed, has its `ERR` input tied to `'0'`.
 - **Stall:** each channel drives its master's `STALL`. It is high while an XIP transfer is outstanding: `xip_sel_reg` is set when the XIP request is accepted and held until the XIP `ACK`, and while it is high the channel gates its own `req` and every slave's `STB`, so the master keeps its next request pending and nothing can overtake the slow response. Everywhere else it stays `'0'`: no other slave inserts wait states, and `wb_sig_gen`'s `stall_o`, tied low, is left open.
 
-The response path assumes every slave acknowledges exactly one cycle after its strobe. This holds for the ROM, the ports of both RAMs and the UART. XIP is the exception, and the stall above is what makes it work: its select is held instead of being recaptured every cycle, so there is only ever one XIP request in flight and its `ACK` is matched to it no matter how late it comes.
+The response path assumes every slave acknowledges exactly one cycle after its strobe. This holds for the ROM, the ports of both RAMs, the UART and the GPIO. XIP is the exception, and the stall above is what makes it work: its select is held instead of being recaptured every cycle, so there is only ever one XIP request in flight and its `ACK` is matched to it no matter how late it comes.
 
 ### XIP Controller
 `wb_xip_ctrl` turns each instruction fetch in `0x20000000`–`0x20FFFFFF` into one SPI Read (`0x03`) of four bytes: command, 24-bit address, 32 data bits, 64 SCK periods in all. It uses SPI mode 0 with SCK at half the system clock: `CS#` falls together with the first MOSI bit, MOSI changes on SCK falling edges, and MISO is sampled in the system cycle in which SCK rises, a full cycle after the flash drove it. `spi_clk`, `spi_mosi` and `spi_cs_n` all come straight from flip-flops. A word takes 130 cycles (128 with `CS#` low), and the instruction master is stalled for all of it, so code in XIP runs roughly two orders of magnitude slower than from RAM.
@@ -59,6 +59,7 @@ The default address space allocation is defined as follows:
 | **ROM**    | `0x00001000` | 512 B | Bootloader / Initialization code |
 | **UART**   | `0x10000000` | 16 B | Serial communication (IO0) |
 | **IO1**    | `0x10001000` | 32 B | Pulse generator CSRs (MMIO mode only) |
+| **GPIO**   | `0x10002000` | 64 B | General-purpose I/O, 8 pins (IO2) |
 | **XIP**    | `0x20000000` | 16 MB | External Flash / Execute-In-Place (Optional) |
 | **RAM0**   | `0x80000000` | 32 KB | Main System Memory (dual-port: A = data, B = instruction) |
 | **RAM1**   | `0x90000000` | 1 KB | Secondary memory (dual-port: A = data, B = instruction) |
@@ -66,6 +67,25 @@ The default address space allocation is defined as follows:
 Bases and widths are declared once in [`soc/rtl/leaf_soc_pkg.vhdl`](soc/rtl/leaf_soc_pkg.vhdl), which is the source of truth for the map.
 
 Programs are linked into RAM0 (`sw/*/common/soc.ld`). RAM1 is declared there as a second region with a `.ram1` section, which is `NOLOAD`: a loadable section at `0x90000000` would make `objcopy -O binary` pad the `.bin` across the 256 MB gap from RAM0. So RAM1 is never preloaded and `crt0` does not clear it, and its contents are undefined until the program writes them. Put data there with `__attribute__((section(".ram1")))`. Code must be copied in at run time, and the instruction master can then fetch it. `sw/c/ram1_test` sweeps the whole region with word, half-word and byte accesses, prints a checksum (`d2072fde`) and an error count, then copies two instructions in and calls them (`exec=42`). In simulation `soc_ram1` binds to the synthesis `wb_ram_dp`, not a preloading model.
+
+### GPIO
+The GPIO is the [`wb-gpio`](https://github.com/daniel-santos-7/wb-gpio) IP (submodule `ips/gpio`), instantiated with `G_WIDTH => GPIO_WIDTH` (8, in `leaf_soc_pkg`) on IO2, which only the data master reaches. It is a pipelined slave with a one-cycle `ACK` and no `ERR`, like the UART, and its `stall_o`, constant `'0'`, is left open.
+
+| Offset | Register | Access | Description |
+|--------|----------|--------|-------------|
+| `0x00` | DATA_IN    | RO    | Synchronised pin values (2 flip-flops) |
+| `0x04` | DATA_OUT   | RW    | Value driven on output pins |
+| `0x08` | DIR        | RW    | 1 = output, 0 = input |
+| `0x0C` | SET        | WO    | `DATA_OUT \|= wdata` |
+| `0x10` | CLR        | WO    | `DATA_OUT &= ~wdata` |
+| `0x14` | TGL        | WO    | `DATA_OUT ^= wdata` |
+| `0x18` | IRQ_RISE   | RW    | Rising-edge interrupt enable |
+| `0x1C` | IRQ_FALL   | RW    | Falling-edge interrupt enable |
+| `0x20` | IRQ_STATUS | R/W1C | Pending events; writing 1 clears |
+
+`leaf_soc` brings the pins out as three vectors, `gpio_i`, `gpio_o` and `gpio_oe` (1 = drive), and leaves the tri-state buffer to the padframe or the board. The GPIO's `irq_o` drives the CPU's external interrupt input (`ex_irq_i`, `mip.MEIP`), the only interrupt source in the SoC; it stays high while any `IRQ_STATUS` bit is set, so a handler must clear the status before returning. Software must also set `mtvec` itself: nothing in `sw/` does by default (see [`ISSUES.md`](ISSUES.md)).
+
+In the testbench each pin reads back its own output when `gpio_oe` is set and the constant `0xA5` otherwise. `sw/c/gpio_test` exercises the pins and the SET/CLR/TGL registers, then enables a rising-edge interrupt on pin 1 and takes it through `mtvec`. It prints `in=aa`, `af`, `ac`, `a5` and `irq count=1 status=02 mcause=8000000b pending=00`, and needs about 1.2M cycles to finish printing.
 
 ### System Controller
 The **Syscon** module handles global clock buffering and synchronized reset generation for the entire SoC.
@@ -111,6 +131,7 @@ The repository is organized into the following main directories:
   - [`cpu/`](ips/cpu/): The Leaf RISC-V processor core.
   - [`uart/`](ips/uart/): UART controller with Wishbone interface.
   - [`wgen/`](ips/wgen/): DDS-based signal generator.
+  - [`gpio/`](ips/gpio/): GPIO with Wishbone interface.
 - [`soc/`](soc/): SoC-level RTL implementation and top-level testbenches.
 - [`sw/`](sw/): RISC-V software, including bootloaders, libraries, and C/Assembly examples.
 - [`waves/`](waves/): Output directory for simulation waveforms (generated at runtime).
