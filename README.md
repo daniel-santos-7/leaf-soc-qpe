@@ -87,6 +87,31 @@ The GPIO is the [`wb-gpio`](https://github.com/daniel-santos-7/wb-gpio) IP (subm
 
 In the testbench each pin reads back its own output when `gpio_oe` is set and the constant `0xA5` otherwise. `sw/c/gpio_test` exercises the pins and the SET/CLR/TGL registers, then enables a rising-edge interrupt on pin 1 and takes it through `mtvec`. It prints `in=aa`, `af`, `ac`, `a5` and `irq count=1 status=02 mcause=8000000b pending=00`, and needs about 1.2M cycles to finish printing.
 
+### Macro-based RAM
+`wb_ram_dp_macro` is a drop-in alternative to `wb_ram_dp` for RAM0 that builds the 32 KB out of hard SRAM macros instead of an inferred array: eight 2048 x 16 dual-port macros, four banks in depth by two halves in width. It has the same ports and the same pipelined contract as `wb_ram_dp` (one-cycle `ACK`, a write accepted on every request cycle). The low `MACRO_ADDR_BITS` (11) bits of the word address index inside a macro and the bits above select the bank; only the addressed bank is enabled. `sel_a_i` becomes an active-high per-bit write mask, one byte lane at a time, `sel_a_i(0..1)` into the low half and `sel_a_i(2..3)` into the high one. Port B is tied read-only because it serves the instruction master.
+
+The macros are reached through `sram_dp`, a technology-neutral interface declared once in `soc/rtl/sram_dp.vhdl`: per port a clock, `en`, `we`, `wmask`, `addr`, `d` and `q`, all active high. Its contract is that of a synchronous SRAM: one cycle of read latency, and `q` changes only on a read cycle, so a write or an idle port holds the last value read. That is why the wrapper registers the bank of each read to steer the output mux on the `ACK` cycle. A read that meets a write to the same word on the other port returns unknowns, and two writes to one word corrupt the bits both of them enable. The entity also carries `INIT_FILE`, `INIT_BANK` and `INIT_HALF`, which only a simulation architecture uses. `wb_ram_dp_macro` instantiates `sram_dp` as a component so that a configuration can pick the architecture:
+
+- `soc/tbs/sram_dp_sim.vhdl` holds architecture `sim`, a behavioural model of that contract. With `INIT_FILE` set it zero-fills the array and loads the half-words of its bank from a raw little-endian image; with `INIT_FILE = ""` the array powers up unknown.
+- A technology architecture maps `sram_dp` onto a real macro's pins. It is not part of this repository: it lives in the directory named by `TECH_DIR` (default `tech/`, which is gitignored), because the macro, its model and its documentation come from a memory compiler under NDA.
+
+`RAM` selects what the testbench binds to `soc_ram0`, as a different top-level configuration rather than a source edit:
+
+| `RAM` | Top | RAM0 |
+|-------|-----|------|
+| `BEHAV` | `leaf_soc_tb_sim` | `wb_ram_dp_sim`, the inferred array |
+| `MACRO` | `leaf_soc_tb_macro` | `wb_ram_dp_macro` over `sram_dp(sim)` |
+| `TECH` | `leaf_soc_tb_tech` | `wb_ram_dp_macro` over the technology architecture |
+
+`MACRO` goes through `wb_ram_dp_macro_sim`, which instantiates the configuration `wb_ram_dp_macro_preloaded`: it binds each macro to `sram_dp(sim)` with its bank and half preloaded from `work/program.bin`, so the `RAM_JUMP_CMD` shortcut still applies. A configuration has no loop, so the four banks are spelled out, and `wb_ram_dp_macro_sim` asserts `BITS = 15` rather than silently preloading part of the RAM. Every configuration lives in its own file, one top per file, so that each top's dependency closure stays separate. For `TECH`, the directory must supply the technology architecture of `sram_dp` and a configuration `leaf_soc_tb_tech`; the Makefile adds its `*.vhdl` files to the build when it exists and refuses `RAM=TECH` when it does not. RAM1 always uses `wb_ram_dp`: at 256 words it is smaller than one macro.
+
+`sw/c/ram_test` checks the array end to end. It sweeps the free part of RAM0, which crosses all four banks, with word stores, then byte and half-word stores on every fourth word, then a store followed at once by a load of the same word. It reads everything back and prints an order-dependent checksum and an error count, so a bank-decode or write-mask fault moves the checksum. It must not call `uart_init`, since rewriting the baud divisor corrupts the ACK the boot ROM still has in flight when it jumps to RAM, and the checksum avoids `*` because a software multiply on rv32i would dominate the run. It needs about 6M cycles and prints `checksum 9A1081FB`, `errors 00000000` under every `RAM`:
+
+```bash
+make -C sw/c/ram_test
+make run PROGRAM=sw/c/ram_test/ram_test.bin RAM=MACRO RUN_CYCLES=6000000
+```
+
 ### System Controller
 The **Syscon** module handles global clock buffering and synchronized reset generation for the entire SoC.
 
@@ -138,7 +163,7 @@ The repository is organized into the following main directories:
 
 Changes under `ips/` belong to the submodule repositories, not to this one.
 
-Instances are written as `entity work.<name>`, so each interface is declared only once, in its entity. `leaf_soc_pkg` keeps component declarations only where a binding has to stay open: `wb_ram_dp`, which the testbench configuration rebinds to the preloading `wb_ram_dp_sim` for `soc_ram0`, and `leaf_soc`, the instance that configuration descends through. A hard macro or a Verilog cell instantiated from VHDL also needs a component, since it has no VHDL entity to name.
+Instances are written as `entity work.<name>`, so each interface is declared only once, in its entity. `leaf_soc_pkg` keeps component declarations only where a binding has to stay open: `wb_ram_dp`, which the testbench configurations rebind for `soc_ram0`, `leaf_soc`, the instance they descend through, and `sram_dp`, whose architecture a configuration picks per macro (see Macro-based RAM). A hard macro or a Verilog cell instantiated from VHDL also needs a component, since it has no VHDL entity to name.
 
 ## :test_tube: Simulation
 
@@ -185,6 +210,8 @@ To build and simulate the project, ensure the following tools are installed:
 | `PROGRAM` | `sw/asm/hello-world/hello-world.bin` | `.bin` to run; also names the waveform and CSV outputs |
 | `RUN_CYCLES` | `500000` | Simulated cycles after load; CoreMark needs tens of millions |
 | `WGEN_IF` | `COP` | `COP` or `MMIO` — see the Pulse Generator section |
+| `RAM` | `BEHAV` | `BEHAV`, `MACRO` or `TECH` — see Macro-based RAM |
+| `TECH_DIR` | `tech` | Directory with the technology sources for `RAM=TECH` |
 | `WAVEFORM` | *(none)* | `ghw` or `fst`; written to `waves/<program>.<ext>` |
 | `SAMPLES` | *(none)* | `1` dumps every active I/Q sample to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
 

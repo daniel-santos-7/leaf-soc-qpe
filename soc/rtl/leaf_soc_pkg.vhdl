@@ -51,6 +51,29 @@ package leaf_soc_pkg is
         );
     end component wb_ram_dp;
 
+    component sram_dp is
+        generic (
+            ADDR_BITS : natural;
+            DATA_BITS : natural
+        );
+        port (
+            clk_a   : in  std_logic;
+            en_a    : in  std_logic;
+            we_a    : in  std_logic;
+            wmask_a : in  std_logic_vector(DATA_BITS-1 downto 0);
+            addr_a  : in  std_logic_vector(ADDR_BITS-1 downto 0);
+            d_a     : in  std_logic_vector(DATA_BITS-1 downto 0);
+            q_a     : out std_logic_vector(DATA_BITS-1 downto 0);
+            clk_b   : in  std_logic;
+            en_b    : in  std_logic;
+            we_b    : in  std_logic;
+            wmask_b : in  std_logic_vector(DATA_BITS-1 downto 0);
+            addr_b  : in  std_logic_vector(ADDR_BITS-1 downto 0);
+            d_b     : in  std_logic_vector(DATA_BITS-1 downto 0);
+            q_b     : out std_logic_vector(DATA_BITS-1 downto 0)
+        );
+    end component sram_dp;
+
     component leaf_soc is
         generic (
             WGEN_IF_COP : boolean := true
