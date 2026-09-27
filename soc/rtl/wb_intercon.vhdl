@@ -98,7 +98,7 @@ architecture rtl of wb_intercon is
 
 begin
 
-    inst_channel: wb_channel port map (
+    inst_channel: entity work.wb_channel port map (
         clk_i       => clk_i,
         rst_i       => rst_i,
         cpu_cyc_i   => inst_cyc_i,
@@ -173,7 +173,7 @@ begin
         ram1_dat_o  => open
     );
 
-    data_channel: wb_channel port map (
+    data_channel: entity work.wb_channel port map (
         clk_i       => clk_i,
         rst_i       => rst_i,
         cpu_cyc_i   => data_cyc_i,

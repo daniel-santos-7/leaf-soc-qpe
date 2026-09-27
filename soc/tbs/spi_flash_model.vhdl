@@ -45,14 +45,14 @@ begin
         type bin_file_t is file of character;
         file f : bin_file_t;
         variable byte : character;
-        variable addr : natural := 0;
+        variable idx  : natural := 0;
     begin
         if INIT_FILE /= "" then
             file_open(f, INIT_FILE, read_mode);
             while not endfile(f) loop
                 read(f, byte);
-                memory(addr) <= std_logic_vector(to_unsigned(character'pos(byte), 8));
-                addr := addr + 1;
+                memory(idx) <= std_logic_vector(to_unsigned(character'pos(byte), 8));
+                idx := idx + 1;
             end loop;
             file_close(f);
         end if;
