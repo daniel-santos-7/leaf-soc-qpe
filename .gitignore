@@ -14,3 +14,11 @@ sw/**/*.vhdl
 
 leaf_soc_tb_sim
 e~leaf_soc_tb_sim.o
+leaf_soc_tb_macro
+e~leaf_soc_tb_macro.o
+leaf_soc_tb_tech
+e~leaf_soc_tb_tech.o
+
+tech/
+ram.v
+CLAUDE.md

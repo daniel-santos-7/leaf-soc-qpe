@@ -17,16 +17,30 @@ WGEN_TBS = $(wildcard ./ips/wgen/tbs/*.vhd)
 GPIO_RTL = $(wildcard ./ips/gpio/rtl/*.vhd)
 SOC_RTL  = $(wildcard ./soc/rtl/*.vhdl)
 SOC_TBS  = $(wildcard ./soc/tbs/*.vhdl)
+TECH_DIR ?= ./tech
+TECH_SRC = $(wildcard $(TECH_DIR)/*.vhdl)
 
 RTL_SRC  = $(CPU_RTL) $(UART_RTL) $(WGEN_RTL) $(GPIO_RTL) $(SOC_RTL)
-TBS_SRC  = $(UART_TBS) $(WGEN_TBS) $(SOC_TBS)
-
-TOP_UNIT = leaf_soc_tb_sim
+TBS_SRC  = $(UART_TBS) $(WGEN_TBS) $(SOC_TBS) $(TECH_SRC)
 
 PROGRAM       ?= sw/asm/hello-world/hello-world.bin
 RAM_INIT_FILE = $(PROGRAM)
 RUN_CYCLES    ?= 500000
 WGEN_IF       ?= COP
+RAM           ?= BEHAV
+
+ifeq ($(RAM),BEHAV)
+TOP_UNIT = leaf_soc_tb_sim
+else ifeq ($(RAM),MACRO)
+TOP_UNIT = leaf_soc_tb_macro
+else ifeq ($(RAM),TECH)
+TOP_UNIT = leaf_soc_tb_tech
+ifeq ($(TECH_SRC),)
+$(error RAM=TECH needs the technology sources in $(TECH_DIR))
+endif
+else
+$(error RAM must be BEHAV, MACRO or TECH, got '$(RAM)')
+endif
 
 PROGRAM_NAME ?= $(shell basename $(PROGRAM) .bin)
 GHW_WAVEFORM ?= $(PROGRAM_NAME).ghw
