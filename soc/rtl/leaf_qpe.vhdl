@@ -67,7 +67,7 @@ architecture rtl of leaf_qpe is
 
 begin
 
-    u_cpu: leaf generic map (
+    u_cpu: entity work.leaf generic map (
         RESET_ADDR => RESET_ADDR
     ) port map (
         clk_i     => clk_i,

@@ -1,8 +1,6 @@
 library IEEE;
 use IEEE.std_logic_1164.all;
-use work.leaf_pkg.all;
 use work.leaf_soc_pkg.all;
-use work.uart_pkg.all;
 
 entity leaf_soc is
     generic (
@@ -128,7 +126,7 @@ architecture rtl of leaf_soc is
 
 begin
 
-    soc_syscon: wb_syscon port map (
+    soc_syscon: entity work.wb_syscon port map (
         clk   => clk,
         rst   => rst,
         clk_o => soc_syscon_clk,
@@ -136,7 +134,7 @@ begin
     );
 
     cop_qpe_gen: if WGEN_IF_COP generate
-        soc_cpu: leaf_qpe generic map (
+        soc_cpu: entity work.leaf_qpe generic map (
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (
             clk_i    => soc_syscon_clk,
@@ -172,7 +170,7 @@ begin
     end generate;
 
     mmio_qpe_gen: if not WGEN_IF_COP generate
-        soc_cpu: leaf generic map (
+        soc_cpu: entity work.leaf generic map (
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (
             clk_i        => soc_syscon_clk,
@@ -229,7 +227,7 @@ begin
         );
     end generate;
 
-    soc_intercon: wb_intercon port map (
+    soc_intercon: entity work.wb_intercon port map (
         clk_i        => soc_syscon_clk,
         rst_i        => soc_syscon_rst,
         inst_cyc_i   => soc_cpu_inst_cyc,
@@ -312,7 +310,7 @@ begin
         ram1a_dat_i  => soc_ram1_a_dat_rd
     );
 
-    soc_rom: wb_rom port map (
+    soc_rom: entity work.wb_rom port map (
         clk_i => soc_syscon_clk,
         rst_i => soc_syscon_rst,
         cyc_i => soc_inst_rom_cyc,
@@ -322,7 +320,7 @@ begin
         dat_o => soc_rom_dat
     );
 
-    soc_uart: uart_wbsl port map (
+    soc_uart: entity work.uart_wbsl port map (
         clk_i => soc_syscon_clk,
         rst_i => soc_syscon_rst,
         dat_i => soc_data_io0_dat,
@@ -358,7 +356,7 @@ begin
     );
 
     -- XIP controller
-    soc_xip: wb_xip_ctrl port map (
+    soc_xip: entity work.wb_xip_ctrl port map (
         clk_i     => soc_syscon_clk,
         rst_i     => soc_syscon_rst,
         cyc_i     => soc_inst_xip_cyc,

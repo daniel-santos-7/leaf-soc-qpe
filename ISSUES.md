@@ -184,7 +184,7 @@ Alternatively a watchdog that resets the chip.
 ## 8. `time` duplicates `cycle`, and nothing can raise a timer interrupt
 
 **Status:** analysis.
-**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:145-146`, `:181-182`
+**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:143-144`, `:179-180`
 
 `counters` keeps `timer_reg` and `cycle_reg` as two identical 64-bit counters,
 both incremented every clock: 64 flip-flops and an adder with no function.
@@ -201,7 +201,7 @@ duplicate. The first is a change in the CPU submodule.
 ## 9. No sample clock goes out with `sig_i` / `sig_q`
 
 **Status:** analysis.
-**File:** `soc/rtl/leaf_soc.vhdl:16-18`
+**File:** `soc/rtl/leaf_soc.vhdl:14-16`
 
 The I/Q samples leave the chip registered on the internal clock, one new
 sample per cycle, but no pin carries a clock to latch them with. The external

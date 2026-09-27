@@ -138,6 +138,8 @@ The repository is organized into the following main directories:
 
 Changes under `ips/` belong to the submodule repositories, not to this one.
 
+Instances are written as `entity work.<name>`, so each interface is declared only once, in its entity. `leaf_soc_pkg` keeps component declarations only where a binding has to stay open: `wb_ram_dp`, which the testbench configuration rebinds to the preloading `wb_ram_dp_sim` for `soc_ram0`, and `leaf_soc`, the instance that configuration descends through. A hard macro or a Verilog cell instantiated from VHDL also needs a component, since it has no VHDL entity to name.
+
 ## :test_tube: Simulation
 
 The SoC can be fully simulated using the provided Makefiles and open-source VHDL tools. The whole design analyses as **VHDL-93**.
