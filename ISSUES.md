@@ -4,7 +4,8 @@ Open issues only; fixed ones are removed, and their history is in git. Issues
 1–4 come from a read of every file under `soc/rtl/` (`develop` @ `1c06fa7`).
 Issues 5–8 come from a second pass aimed at the ASIC tapeout (`develop` @
 `d832821`), which also covered the RTL of the three IPs and a generic Yosys
-synthesis of `leaf_soc` in both `WGEN_IF` modes.
+synthesis of `leaf_soc` in both `WGEN_IF` modes. Issue 9 comes from a third
+read of `soc/rtl/` (`develop` @ `dc90fa9`), issue 10 from the same read.
 
 Each entry says whether it was **verified** (reproduced in simulation or
 synthesis) or is **analysis** (read from the RTL, not yet observed). Issue 4
@@ -191,6 +192,120 @@ usual answer.
 
 ---
 
+## 9. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
+
+**Status:** part A verified in simulation; part B analysis.
+**Files:** `soc/rtl/qpe_csrs.vhdl:83-118`, `:148-150`, `sw/c/common/wgen.c`,
+`sw/asm/common/qp.inc`, `ips/wgen/rtl/sig_gen_ctrl.vhd:101-117`
+
+In COP mode `qpe_csrs` holds no pulse values. Writing a parameter CSR stores
+`wdata(4 downto 0)` as a GPR index, and the block copies into a mirror every
+value the CPU's register-file write port writes to that GPR. The mirrors drive
+`sig_gen` directly, and `sig_gen_ctrl` samples them only when a pulse starts
+(`valid_i and ready`).
+
+### A. The software writes values where the hardware expects GPR indices
+
+`wgen_write_ftw()` and the other COP setters in `wgen.c` do
+`csrw WG_xxx, value`, and so do the `qp.*` macros used by the assembly
+examples. The hardware reads the low five bits of each value as a register
+number, binds the parameter to an arbitrary GPR, and the pulse gets whatever
+that GPR happens to hold.
+
+Verified: `sw/c/ramsey` in COP mode writes 507,855 active samples to the CSV,
+every one of them `0,0`. The same flow in MMIO (`wgen_demo_mmio`) gives 10,583
+non-zero samples out of 15,219. The assembly case (`xwg-test`) was already
+seen to produce all-zero samples. As things stand, no program under `sw/`
+emits a pulse in COP mode, which is the default.
+
+### B. A trigger queued while busy picks up the values at launch
+
+A write to `TRIG` while `sig_gen` is idle launches in the same cycle, with the
+values the mirrors hold then. While `sig_gen` is busy, the request is kept in
+`valid_reg` and launches when `ready` rises, possibly thousands of cycles
+later, with whatever the mirrors hold at that point. Anything that writes a
+bound GPR in between changes a pulse that was already requested:
+
+1. the program preparing the next pulse in the same registers;
+2. the compiler reusing the register as a temporary;
+3. an interrupt handler (`ex_irq_i` is live since the GPIO) that uses the
+   register, even if it saves and restores it;
+4. a load: while it waits for `ack`, the core keeps the register-file write
+   enabled every cycle with data not yet valid (`trap_ctrl.vhdl:163` gates it
+   only with faults). The register file ends up right, but the mirror follows
+   the transient values, and a launch in one of those cycles latches a value
+   the program never produced.
+
+MMIO has the same queue (`sig_gen_csrs` holds `valid_reg` until `ready`), but
+there only an explicit store changes the values, so only case 1 applies.
+
+### Fix
+
+Hardware, in `qpe_csrs`: freeze the parameters at the trigger. On a `TRIG`
+write while busy, copy the six mirrors into pending registers and feed
+`sig_gen` from them while `valid_reg` is set. The trigger write happens with
+the CSR instruction in EX, where no load can be pending, so all four cases go
+away, and the semantics become "a pulse uses the values current at its
+trigger". Cost: 152 flip-flops (FTW 32, POW 32, AMP 16, DRAG 16, ENV 32,
+DELAY 24) and a 2:1 mux.
+
+Software, once the hardware snapshots at the trigger:
+
+- bind once: a `wgen_init()` that writes fixed GPR indices into the six
+  parameter CSRs (`csrwi WG_FTW, 22`, …);
+- load and fire in a single inline-`asm` block: move the six values into the
+  bound GPRs and `csrwi WG_TRIG, 1`, with those GPRs in the clobber list so the
+  compiler saves anything it kept there. Nothing can run between the moves and
+  the trigger except an interrupt, whose handler restores the registers before
+  returning;
+- rewrite `qp.inc` and the assembly examples in the same bind-then-fill style.
+
+Then check `ramsey`, `rabi`, `t1` and `wgen_demo` in COP with `SAMPLES=1`
+against their MMIO output. Add a test for case 1: fire a long pulse, queue a
+second one with `AMP1`, change the bound GPR to `AMP2`, and check the second
+pulse's amplitude in the CSV.
+
+---
+
+## 10. `qpe_csrs`: the trigger reaches `sig_gen` through a long combinational path
+
+**Status:** analysis. A timing risk, not a functional fault.
+**Files:** `soc/rtl/qpe_csrs.vhdl:148-150`, `ips/cpu/rtl/csrs.vhdl:321`,
+`ips/cpu/rtl/trap_ctrl.vhdl:77`, `:164`, `ips/cpu/rtl/dmls_block.vhdl:305-306`,
+`ips/wgen/rtl/sig_gen_ctrl.vhd:101-117`
+
+`valid_o` is combinational: `valid_int` is high in the same cycle as a `TRIG`
+write, through `we_i`. Traced back into the core:
+
+- `cop_we_o <= wr_en_i and cop_sel_wr` (`csrs.vhdl:321`);
+- `wr_en_i` is `csrwr_en_o <= csrwr_en_i and not exc_fault` (`trap_ctrl.vhdl:164`);
+- `exc_fault` ORs the misalignment checks on the EX address adder and on the
+  branch target, and `dmld_fault`/`dmst_fault`, which are `data_err_i` from
+  the bus gated with the access type (`dmls_block.vhdl:305-306`).
+
+Forward, `valid_o` becomes `sync <= valid_i and ready` in `sig_gen_ctrl`,
+which enables over a hundred parameter flip-flops and moves the state machine. The
+likely worst path in one cycle is therefore: register file → operand
+forwarding → EX adder → alignment check → `exc_fault` → `csrwr_en` →
+`cop_we` → `valid_int` → `sync` → a high-fanout enable.
+
+Functionally it is fine: with a CSR instruction in EX, `dmem_rd/wr` are `0`
+and the address is irrelevant, but static timing analysis does not know that.
+The core already has the same path into its own CSRs; the QPE extends it
+across a block boundary and ends it on a wide enable. How much it costs
+depends on the target clock and the PDK library, so it is not measurable
+before that synthesis.
+
+**Fix:** register the trigger in `qpe_csrs`, so that `valid_o` comes from a
+flip-flop only. Every `TRIG` write is latched, and the pulse starts one cycle
+later; reading `TRIG` (`ready and not valid`) still works, since `valid` is
+visible from the next cycle on. It fits the hardware fix of issue 9: the
+snapshot registers can load in the same cycle, and `sig_gen` then sees only
+registers from `qpe_csrs`. The alternative is to wait for static timing
+analysis with the PDK and only act if the path shows up as critical.
+
+---
+
 ## Suggested order
 
 Before tapeout:
@@ -201,6 +316,9 @@ Before tapeout:
   the SCK rate (half the system clock) and the MISO sampling margin against
   the real flash's datasheet and the pad delays.
 - **Issues 5 and 8**, because they fix the pinout.
+- **Issue 9**, because COP is the default interface and emits no pulse today;
+  the snapshot in `qpe_csrs` is hardware and cannot follow in software.
+  Do issue 10 in the same change: it touches the same lines.
 
 Then, in any order: issue 6 (timeout), issue 1, issue 7, issues 2 and 3.
 
