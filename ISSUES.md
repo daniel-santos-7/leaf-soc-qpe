@@ -5,7 +5,7 @@ Open issues only; fixed ones are removed, and their history is in git. Issues
 Issues 5–8 come from a second pass aimed at the ASIC tapeout (`develop` @
 `d832821`), which also covered the RTL of the three IPs and a generic Yosys
 synthesis of `leaf_soc` in both `WGEN_IF` modes. Issue 9 comes from a third
-read of `soc/rtl/` (`develop` @ `dc90fa9`), issue 10 from the same read.
+read of `soc/rtl/` (`develop` @ `dc90fa9`), issues 10–12 from the same read.
 
 Each entry says whether it was **verified** (reproduced in simulation or
 synthesis) or is **analysis** (read from the RTL, not yet observed). Issue 4
@@ -162,7 +162,7 @@ Alternatively a watchdog that resets the chip.
 ## 7. `time` duplicates `cycle`, and nothing can raise a timer interrupt
 
 **Status:** analysis.
-**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:143-144`, `:179-180`
+**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:149-150`, `:185-186`
 
 `counters` keeps `timer_reg` and `cycle_reg` as two identical 64-bit counters,
 both incremented every clock: 64 flip-flops and an adder with no function.
@@ -179,7 +179,7 @@ duplicate. The first is a change in the CPU submodule.
 ## 8. No sample clock goes out with `sig_i` / `sig_q`
 
 **Status:** analysis.
-**File:** `soc/rtl/leaf_soc.vhdl:14-16`
+**File:** `soc/rtl/leaf_soc.vhdl:21-23`
 
 The I/Q samples leave the chip registered on the internal clock, one new
 sample per cycle, but no pin carries a clock to latch them with. The external
@@ -306,21 +306,113 @@ analysis with the PDK and only act if the path shows up as critical.
 
 ---
 
+## 11. RAM0 macros: a store and a fetch of the same word in one cycle
+
+**Status:** analysis. Not seen in any test.
+**Files:** `soc/rtl/wb_ram_dp_macro.vhdl`, `soc/tbs/sram_dp_sim.vhdl`,
+`ips/cpu/rtl/main_ctrl.vhdl:311`
+
+RAM0 is dual-port on one clock: port A for data, port B for instruction
+fetch. When port A writes a word and port B reads the same word in the same
+cycle:
+
+| Model | Port B returns |
+|-------|----------------|
+| `wb_ram_dp` (`RAM=BEHAV`) | the old word, cleanly |
+| `sram_dp(sim)` and the technology model (`RAM=MACRO`/`TECH`) | the whole word unknown |
+| silicon | undefined: both ports drive the same cell |
+
+The write itself lands. The macro also specifies a minimum clock separation
+between its two ports for same-address accesses, which a single clock only
+meets if the collision never happens.
+
+It needs a store into a word the fetch unit is reading at that moment:
+
+1. Code that writes instructions just ahead of the PC. `FENCE.I` does not help:
+   the core decodes the `FENCE` opcode as a no-op (`main_ctrl.vhdl:311`), so it
+   discards nothing already fetched. On silicon the fetched word can be garbage,
+   an illegal instruction, and then the loop of issue 4.
+2. Prefetch running past the end of `.text` into writable `.rodata`/`.data`
+   while a store hits that word. The fetched word is flushed and never
+   executed, but the collision still happens on the macro.
+
+`ram1_test` copies code and jumps to it in RAM1, which is flip-flops and has no
+such problem. The `RAM=MACRO`/`TECH` regressions matched `RAM=BEHAV` everywhere
+except the read-data bus on write acks, so no current program collides. Nothing
+would show it if one did: `BEHAV` returns the old word silently, and `MACRO`/
+`TECH` put an unknown on a bus that only a waveform shows.
+
+**Fix:**
+
+- make it visible: a `report ... severity warning` on contention in
+  `sram_dp(sim)` (and in the technology model), so a colliding program shows
+  up in the `RAM=MACRO`/`TECH` log;
+- document the rule for software in `README.md`: never store into
+  instruction words inside the prefetch window; after writing code, jump to it,
+  since the jump discards what was prefetched; do not rely on `FENCE.I`;
+- in the CPU submodule, make `FENCE.I` flush the fetch buffers, as the
+  RISC-V spec requires for the core to see its own instruction stores;
+- only if self-modifying code in RAM0 is ever needed: detect the collision in
+  `wb_ram_dp_macro` and delay port B one cycle. That needs a stall from RAM0 on
+  the instruction channel, which `wb_intercon` only generates for XIP today.
+  Forwarding the write data does not work: on a byte or half-word store the
+  bytes not written also come out unknown.
+
+---
+
+## 12. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
+
+**Status:** verified in simulation (the timing below); the datasheet check is
+open until a flash is chosen.
+**File:** `soc/rtl/wb_xip_ctrl.vhdl`
+
+`wb_xip_ctrl` issues a plain `03h` READ per word and derives every SPI timing
+from the system clock, with no parameter. Measured on `xip_test` with the
+testbench's 100 MHz clock:
+
+| Parameter | Where it comes from | Measured |
+|-----------|---------------------|----------|
+| SCK period | `sck` toggles every cycle: clock / 2 | 20 ns (50 MHz) |
+| CS# high between reads (tSHSL) | `DONE` for one cycle, then `IDLE` takes the next request at once | 20 ns, every one of 117 gaps |
+| CS# low to first SCK rise (tSLCH) | `IDLE` drops CS#, `SHIFT` raises SCK on the next cycle | 10 ns |
+| last SCK rise to CS# high (tCHSH) | CS# rises with the last SCK fall | 10 ns |
+| MISO sampling | sampled on the cycle SCK rises, half an SCK period after the fall that launched it | 10 ns for tCLQV plus pad and board delays |
+
+During code execution from flash the fetches are back to back, so the CS# gap
+is always the minimum; nothing in the RTL enforces a longer one. Every one of
+these scales with the clock: a faster chip clock shortens them all.
+
+**Fix:** when the flash is chosen, check against its datasheet:
+
+- tSHSL, the minimum CS# deselect time, for the read command;
+- fR, the maximum SCK frequency for `03h` (lower than for the fast-read
+  commands on many parts);
+- tCLQV, with the pad and board delays, against the half SCK period;
+- tSLCH and tCHSH.
+
+Before tapeout, parameterise `wb_xip_ctrl` with generics set from `leaf_soc`,
+`CS_HIGH_CYCLES` (a counter that holds `IDLE`) and `SCK_DIV` (a divider for
+SCK), so that the datasheet values do not force an RTL change late. Recheck
+`xip_test`, whose cycle budget and the 130-cycle word latency in `README.md`
+depend on both.
+
+---
+
 ## Suggested order
 
 Before tapeout:
 
 - **Issue 4**, the boot ROM trap handler, because the ROM cannot change after
   tapeout. Test the whole bootloader with it, not just the handler.
-- **XIP**: the RTL is fixed and verified against `spi_flash_model`; check
-  the SCK rate (half the system clock) and the MISO sampling margin against
-  the real flash's datasheet and the pad delays.
+- **Issue 12**, the XIP timing: add the generics, then set them from the
+  chosen flash's datasheet.
 - **Issues 5 and 8**, because they fix the pinout.
 - **Issue 9**, because COP is the default interface and emits no pulse today;
   the snapshot in `qpe_csrs` is hardware and cannot follow in software.
   Do issue 10 in the same change: it touches the same lines.
 
-Then, in any order: issue 6 (timeout), issue 1, issue 7, issues 2 and 3.
+Then, in any order: issue 6 (timeout), issue 1, issue 7, issue 11, issues 2
+and 3.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,
