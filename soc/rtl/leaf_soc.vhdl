@@ -1,3 +1,10 @@
+----------------------------------------------------------------------
+-- Leaf project
+-- developed by: Daniel Santos
+-- module: leaf system (SOC)
+-- 2026
+----------------------------------------------------------------------
+
 library IEEE;
 use IEEE.std_logic_1164.all;
 use work.leaf_soc_pkg.all;
@@ -48,7 +55,6 @@ architecture rtl of leaf_soc is
     signal soc_cpu_data_ack : std_logic;
     signal soc_cpu_data_err : std_logic;
 
-    -- Stall signals (backpressure: cyc without ack)
     signal soc_cpu_inst_stall : std_logic;
     signal soc_cpu_data_stall : std_logic;
 
