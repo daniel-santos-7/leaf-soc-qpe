@@ -2,7 +2,7 @@
 
 Open issues only; fixed ones are removed, and their history is in git. Issues
 1–4 come from a read of every file under `soc/rtl/` (`develop` @ `1c06fa7`).
-Issues 5–9 come from a second pass aimed at the ASIC tapeout (`develop` @
+Issues 5–8 come from a second pass aimed at the ASIC tapeout (`develop` @
 `d832821`), which also covered the RTL of the three IPs and a generic Yosys
 synthesis of `leaf_soc` in both `WGEN_IF` modes.
 
@@ -122,32 +122,7 @@ the life of the chip.
 
 ---
 
-## 5. The synthesised SoC still builds its RAMs out of flip-flops
-
-**Status:** verified in synthesis.
-**Files:** `soc/rtl/wb_ram_dp.vhdl:36-41`, `soc/rtl/leaf_soc.vhdl:374`, `:394`
-
-RAM0 (32 KB) is written as four `mem_array`s of 8192 × 8 bits with two read
-ports and one write port. Yosys keeps them as `$mem_v2` cells of exactly that
-shape. A generic ASIC flow has no RAM to map them to and builds 262,144
-flip-flops plus the read muxes, which dwarfs the rest of the chip. RAM1
-(`soc_ram1`, 1 KB, the same entity with `BITS => 10`) adds another 8,192.
-
-`wb_ram_dp_macro` (see "Macro-based RAM" in `README.md`) builds RAM0 out of
-`sram_dp` macros with the same ports and contract, but only the testbench
-configurations select it. `leaf_soc` instantiates the `wb_ram_dp` component,
-whose default binding is `wb_ram_dp(rtl)`, so a synthesis of `leaf_soc` still
-gets the flip-flop RAM.
-
-**Fix:** a synthesis configuration that binds `soc_ram0` to `wb_ram_dp_macro`
-and `sram_dp` to the target technology's architecture. It belongs with the
-technology files, outside this repository. RAM1 needs a macro of its own, or
-stays as flip-flops if 8 Kbit is acceptable. Rerun `sw/c/ram_test` with the
-result.
-
----
-
-## 6. The reset pin is active low but named `rst`
+## 5. The reset pin is active low but named `rst`
 
 **Status:** verified in the testbench.
 **Files:** `soc/rtl/wb_syscon.vhdl:23`, `soc/tbs/leaf_soc_tb.vhdl:142`, `:149`
@@ -167,7 +142,7 @@ with the pinout.
 
 ---
 
-## 7. No bus timeout
+## 6. No bus timeout
 
 **Status:** analysis.
 **Files:** `soc/rtl/wb_channel.vhdl`, `ips/cpu/rtl/dmls_block.vhdl`, `ips/cpu/rtl/if_stage.vhdl`
@@ -183,7 +158,7 @@ Alternatively a watchdog that resets the chip.
 
 ---
 
-## 8. `time` duplicates `cycle`, and nothing can raise a timer interrupt
+## 7. `time` duplicates `cycle`, and nothing can raise a timer interrupt
 
 **Status:** analysis.
 **Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:143-144`, `:179-180`
@@ -200,7 +175,7 @@ duplicate. The first is a change in the CPU submodule.
 
 ---
 
-## 9. No sample clock goes out with `sig_i` / `sig_q`
+## 8. No sample clock goes out with `sig_i` / `sig_q`
 
 **Status:** analysis.
 **File:** `soc/rtl/leaf_soc.vhdl:14-16`
@@ -220,16 +195,14 @@ usual answer.
 
 Before tapeout:
 
-- **Issue 5**, the RAM. The macro wrapper exists; what is missing is the
-  synthesis binding. Nothing else matters until the RAM is a macro.
 - **Issue 4**, the boot ROM trap handler, because the ROM cannot change after
   tapeout. Test the whole bootloader with it, not just the handler.
 - **XIP**: the RTL is fixed and verified against `spi_flash_model`; check
   the SCK rate (half the system clock) and the MISO sampling margin against
   the real flash's datasheet and the pad delays.
-- **Issues 6 and 9**, because they fix the pinout.
+- **Issues 5 and 8**, because they fix the pinout.
 
-Then, in any order: issue 7 (timeout), issue 1, issue 8, issues 2 and 3.
+Then, in any order: issue 6 (timeout), issue 1, issue 7, issues 2 and 3.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,
