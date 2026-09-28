@@ -43,6 +43,9 @@ architecture tb of leaf_soc_tb is
 
     constant CLK_PERIOD : time := 10 ns;
 
+    constant RAM_JUMP_CMD : std_logic_vector(7 downto 0) := x"4A";
+    constant ACK          : std_logic_vector(7 downto 0) := x"06";
+
 begin
 
     uut: leaf_soc generic map (
@@ -156,9 +159,9 @@ begin
 
         if SKIP_UART_LOAD then
             report "RAM preloaded, sending RAM_JUMP_CMD...";
-            uart_transmit(rx, x"4A");
-            wait until uart_data = x"06" for 100 us;
-            if uart_data = x"06" then
+            uart_transmit(rx, RAM_JUMP_CMD);
+            wait until uart_data = ACK for 100 us;
+            if uart_data = ACK then
                 report "ACK received after RAM_JUMP_CMD, program started!";
             else
                 report "ERROR: No ACK after RAM_JUMP_CMD" severity failure;

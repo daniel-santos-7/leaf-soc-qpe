@@ -327,18 +327,19 @@ begin
     );
 
     soc_uart: entity work.uart_wbsl port map (
-        clk_i => soc_syscon_clk,
-        rst_i => soc_syscon_rst,
-        dat_i => soc_data_io0_dat,
-        cyc_i => soc_data_io0_cyc,
-        stb_i => soc_data_io0_stb,
-        we_i  => soc_data_io0_we,
-        sel_i => soc_data_io0_sel,
-        adr_i => soc_data_io0_adr,
-        rx    => rx,
-        ack_o => soc_io0_ack,
-        dat_o => soc_io0_dat,
-        tx    => tx
+        clk_i   => soc_syscon_clk,
+        rst_i   => soc_syscon_rst,
+        dat_i   => soc_data_io0_dat,
+        cyc_i   => soc_data_io0_cyc,
+        stb_i   => soc_data_io0_stb,
+        we_i    => soc_data_io0_we,
+        sel_i   => soc_data_io0_sel,
+        adr_i   => soc_data_io0_adr,
+        rx_i    => rx,
+        ack_o   => soc_io0_ack,
+        stall_o => open,
+        dat_o   => soc_io0_dat,
+        tx_o    => tx
     );
 
     soc_gpio: entity work.wb_gpio generic map (
