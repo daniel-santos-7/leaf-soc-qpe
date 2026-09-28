@@ -5,7 +5,7 @@ Open issues only; fixed ones are removed, and their history is in git. Issues
 Issues 5–8 come from a second pass aimed at the ASIC tapeout (`develop` @
 `d832821`), which also covered the RTL of the three IPs and a generic Yosys
 synthesis of `leaf_soc` in both `WGEN_IF` modes. Issue 9 comes from a third
-read of `soc/rtl/` (`develop` @ `dc90fa9`), issues 10–12 from the same read.
+read of `soc/rtl/` (`develop` @ `8d0689d`), issues 10–12 from the same read.
 Issue 13 was reported on GitHub (issue #1 of the original repository) and is
 kept here so it survives the repository's recreation.
 
@@ -446,7 +446,7 @@ Impact on `main`:
 `err_i` per slave, and each `wb_channel` instance in `wb_intercon` ties the
 slaves not routed to it to `ack => '0'`, `err => '1'`. An unrouted access
 now gets `err` one cycle later and traps like an unmapped one. Checked on
-`develop` @ `d021438` with a trap handler that prints `mcause`: a `lw` from
+`develop` @ `510f64e` with a trap handler that prints `mcause`: a `lw` from
 `0x00001000` and from `0x20000000` prints `AT5` (load access fault) in both
 `WGEN_IF` modes, and from `0x80000000` prints `AB`. The instruction-channel
 case is the reproduction of issue 4. With no `mtvec` set, the fault still
