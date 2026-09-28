@@ -6,6 +6,8 @@ Issues 5–8 come from a second pass aimed at the ASIC tapeout (`develop` @
 `d832821`), which also covered the RTL of the three IPs and a generic Yosys
 synthesis of `leaf_soc` in both `WGEN_IF` modes. Issue 9 comes from a third
 read of `soc/rtl/` (`develop` @ `dc90fa9`), issues 10–12 from the same read.
+Issue 13 was reported on GitHub (issue #1 of the original repository) and is
+kept here so it survives the repository's recreation.
 
 Each entry says whether it was **verified** (reproduced in simulation or
 synthesis) or is **analysis** (read from the RTL, not yet observed). Issue 4
@@ -398,10 +400,68 @@ depend on both.
 
 ---
 
+## 13. Tied-off windows answer neither `ack` nor `err`, so an access to them hangs the core (`main` only)
+
+**Status:** verified in simulation. Fixed on `develop` by `fa9cfa3`; still
+present on `main` until `develop` is merged. Remove this entry after that
+merge.
+**Files (on `main`):** `soc/rtl/leaf_soc.vhdl:217-221`, `:269-274`,
+`soc/rtl/wb_intercon.vhdl`
+
+Reported on GitHub on 2026-09-22 against `develop` @ `d286584`, which is the
+state `main` still has.
+
+`leaf_soc` instantiated the same interconnect entity on the instruction and
+the data channel, so both channels decoded all five address regions, but
+each had slaves behind only three of them. The rest were tied off with
+`ack => '0'` and no `err`:
+
+| Window | Base | I-channel | D-channel |
+|---|---|---|---|
+| ROM | `0x00001000` | `wb_rom` | **tied off** |
+| IO0 (UART) | `0x10000000` | **tied off** | `uart_wbsl` |
+| IO1 (WGEN) | `0x10001000` | **tied off** | `wb_sig_gen` |
+| XIP | `0x20000000` | `wb_xip_ctrl` | **tied off** (`xip_err_i => '0'`) |
+| RAM | `0x80000000` | port B | port A |
+
+A truly unmapped address raised a decode error, because no `*_sel` matched.
+For these windows the matching `*_sel` was `'1'`, so `sel_err` stayed `'0'`,
+while the slave's ack term was a constant `'0'`. They were the only addresses
+in the map for which the interconnect gave neither `ack` nor `err`.
+`dmls_block` leaves its wait state only on one of the two, and there is no bus
+timeout (issue 6), so the CPU waits forever and nothing reaches `trap_ctrl`.
+
+Reproduced as reported: a program that prints `A`, does `lw` from
+`0x00001000` and prints `B` printed only `A` for 1.2M cycles, while the same
+program loading from `0x80000000` printed `AB` and the word it read.
+
+Impact on `main`:
+
+- a load from the boot ROM window (`.rodata` in ROM, the bootloader's tables)
+  locks the core instead of faulting;
+- a load from XIP (constants in flash) does the same;
+- a fetch from the UART or WGEN window hangs the instruction channel.
+
+**Fix on `develop`:** `wb_channel` (formerly the whole interconnect) gained an
+`err_i` per slave, and each `wb_channel` instance in `wb_intercon` ties the
+slaves not routed to it to `ack => '0'`, `err => '1'`. An unrouted access
+now gets `err` one cycle later and traps like an unmapped one. Checked on
+`develop` @ `d021438` with a trap handler that prints `mcause`: a `lw` from
+`0x00001000` and from `0x20000000` prints `AT5` (load access fault) in both
+`WGEN_IF` modes, and from `0x80000000` prints `AB`. The instruction-channel
+case is the reproduction of issue 4. With no `mtvec` set, the fault still
+loops (issue 4), but it is visible and recoverable in software.
+
+The report's second direction, a data-side port for ROM and XIP so that loads
+from them work, was not taken: both remain fetch-only.
+
+---
+
 ## Suggested order
 
 Before tapeout:
 
+- **Issue 13**, by merging `develop` into `main`; nothing else to change.
 - **Issue 4**, the boot ROM trap handler, because the ROM cannot change after
   tapeout. Test the whole bootloader with it, not just the handler.
 - **Issue 12**, the XIP timing: add the generics, then set them from the
