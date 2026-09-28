@@ -122,10 +122,10 @@ the life of the chip.
 
 ---
 
-## 5. `wb_ram_dp` is inferred as flip-flops on `develop`
+## 5. The synthesised SoC still builds its RAMs out of flip-flops
 
 **Status:** verified in synthesis.
-**File:** `soc/rtl/wb_ram_dp.vhdl:36-41`
+**Files:** `soc/rtl/wb_ram_dp.vhdl:36-41`, `soc/rtl/leaf_soc.vhdl:374`, `:394`
 
 RAM0 (32 KB) is written as four `mem_array`s of 8192 × 8 bits with two read
 ports and one write port. Yosys keeps them as `$mem_v2` cells of exactly that
@@ -133,15 +133,17 @@ shape. A generic ASIC flow has no RAM to map them to and builds 262,144
 flip-flops plus the read muxes, which dwarfs the rest of the chip. RAM1
 (`soc_ram1`, 1 KB, the same entity with `BITS => 10`) adds another 8,192.
 
-The macro-based version (eight 2048x16 SRAM macros) only
-exists on a private branch, which is one commit on top of `1619e06` and well
-behind `develop`. It predates the port A write fix for back-to-back writes, the
-interconnect rework, RAM1, XIP and the renames.
+`wb_ram_dp_macro` (see "Macro-based RAM" in `README.md`) builds RAM0 out of
+`sram_dp` macros with the same ports and contract, but only the testbench
+configurations select it. `leaf_soc` instantiates the `wb_ram_dp` component,
+whose default binding is `wb_ram_dp(rtl)`, so a synthesis of `leaf_soc` still
+gets the flip-flop RAM.
 
-**Fix:** bring the macro-based RAM onto `develop`, make it what `leaf_soc`
-instantiates for synthesis (RAM1 needs a macro of its own, or stays as
-flip-flops if 8 Kbit is acceptable), and rerun `sw/c/ram_test` and `soc/tbs/xcheck`
-there.
+**Fix:** a synthesis configuration that binds `soc_ram0` to `wb_ram_dp_macro`
+and `sram_dp` to the target technology's architecture. It belongs with the
+technology files, outside this repository. RAM1 needs a macro of its own, or
+stays as flip-flops if 8 Kbit is acceptable. Rerun `sw/c/ram_test` with the
+result.
 
 ---
 
@@ -218,7 +220,8 @@ usual answer.
 
 Before tapeout:
 
-- **Issue 5**, the RAM. Nothing else matters until the RAM is a macro.
+- **Issue 5**, the RAM. The macro wrapper exists; what is missing is the
+  synthesis binding. Nothing else matters until the RAM is a macro.
 - **Issue 4**, the boot ROM trap handler, because the ROM cannot change after
   tapeout. Test the whole bootloader with it, not just the handler.
 - **XIP**: the RTL is fixed and verified against `spi_flash_model`; check
