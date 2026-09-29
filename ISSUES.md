@@ -4,50 +4,26 @@ Open issues only; fixed ones are removed, and their history is in git.
 Entries are ordered by the effort their fix takes, simplest first; the
 section at the end orders them by priority for the tapeout.
 
-Issues 1, 2, 4 and 8 come from a read of every file under `soc/rtl/`
-(`develop` @ `1c06fa7`). Issues 3, 6, 9 and 11 come from a second pass aimed
+Issues 1, 3 and 7 come from a read of every file under `soc/rtl/`
+(`develop` @ `1c06fa7`). Issues 2, 5, 8 and 10 come from a second pass aimed
 at the ASIC tapeout (`develop` @ `d832821`), which also covered the RTL of the
 three IPs and a generic Yosys synthesis of `leaf_soc` in both `WGEN_IF` modes.
-Issues 7, 12, 14 and 15 come from a third read of `soc/rtl/` (`develop` @
-`8d0689d`), issues 5, 10 and 13 from a fourth (`develop` @ `3aa5783`).
+Issues 6, 11, 13 and 14 come from a third read of `soc/rtl/` (`develop` @
+`8d0689d`), issues 4, 9 and 12 from a fourth (`develop` @ `3aa5783`).
 
 Each entry says whether it was **verified** (reproduced in simulation or
-synthesis) or is **analysis** (read from the RTL, not yet observed). Issue 8
+synthesis) or is **analysis** (read from the RTL, not yet observed). Issue 7
 is a software issue.
 
 ---
 
-## 1. `wb_syscon`: reset synchroniser has no initial value
-
-**Status:** analysis.
-**File:** `soc/rtl/wb_syscon.vhdl:16`
-
-```vhdl
-signal rst_sync : std_logic_vector(1 downto 0);
-```
-
-Never initialised and never reset. In simulation it starts as `'U'` and
-propagates for two cycles. On an FPGA it powers up at `'0'` — reset
-**deasserted**, which is the unsafe state: the design leaves reset before the
-synchroniser has filled.
-
-A reset synchroniser should power up with reset asserted.
-
-**Fix:** `signal rst_sync : std_logic_vector(1 downto 0) := (others => '1');`
-
-Separately, `README.md` describes this module as handling "global clock
-buffering", but it only does `clk_o <= clk`. Either add the buffer or correct
-the description.
-
----
-
-## 2. Style inconsistencies
+## 1. Style inconsistencies
 
 **Status:** analysis. Cosmetic, but they are the kind of thing that drifts.
 
-- **Missing file headers.** `wb_syscon`, `wb_ram_dp`, `qpe_csrs`, `leaf_qpe`
-  and `leaf_soc_pkg` lack the `-- Leaf project / module: / year` block that
-  `wb_rom`, `wb_xip_ctrl` and `leaf_soc` carry.
+- **Missing file headers.** `wb_ram_dp`, `qpe_csrs`, `leaf_qpe` and
+  `leaf_soc_pkg` lack the `-- Leaf project / module: / year` block that
+  `wb_rom`, `wb_xip_ctrl`, `wb_syscon` and `leaf_soc` carry.
 - **Portuguese comments in an otherwise English codebase.**
   `wb_ram_dp.vhdl` has "Leitura contínua de ambas as portas"; every other
   comment under `soc/rtl/` is in English.
@@ -57,27 +33,34 @@ the description.
 
 ---
 
-## 3. The reset pin is active low but named `rst`
+## 2. The reset pin is active low but named `rst`
 
 **Status:** verified in the testbench.
-**Files:** `soc/rtl/wb_syscon.vhdl:23`, `soc/tbs/leaf_soc_tb.vhdl:142`, `:149`
+**Files:** `soc/rtl/wb_syscon.vhdl:28`, `soc/tbs/leaf_soc_tb.vhdl:145`, `:152`
 
-`wb_syscon` synchronises `not rst`, and the testbench holds `rst = '0'` during
-reset and releases it to `'1'`. The polarity is only visible by reading both.
-For the chip the pin's polarity goes into the padframe, the timing constraints
-and the board design.
+`wb_syscon` asserts reset while `rst = '0'`, and the testbench holds
+`rst = '0'` during reset and releases it to `'1'`. The polarity is only visible
+by reading both. For the chip the pin's polarity goes into the padframe, the
+timing constraints and the board design.
 
-The reset is also synchronous everywhere, including its assertion: until the
-clock runs for a couple of cycles, nothing is reset. Outputs such as `tx` and
-`spi_cs_n` are undefined at power-up until then, so the board must supply the
-clock while reset is held.
+`wb_syscon` asserts `rst_o` asynchronously, so the SoC reset is active from
+power-up and from the moment the pin goes low, clock or no clock. Every other
+register, in `soc/rtl/` and in the IPs, still resets synchronously: nothing
+else is reset until the clock has run a cycle with `rst_o` high. Outputs such
+as `tx` and `spi_cs_n` are undefined at power-up until then, so the board must
+supply the clock while reset is held.
 
-**Fix:** rename the port `rst_n`. Record the clock-during-reset requirement
-with the pinout.
+The asynchronous assertion also makes any pulse on the pin, however short,
+reset the whole chip, where a glitch between two clock edges used to be
+ignored. The filtering belongs outside the RTL: a Schmitt-trigger input pad,
+and a reset supervisor or an RC network on the board.
+
+**Fix:** rename the port `rst_n`. Record with the pinout the clock-during-reset
+requirement and the filtering the pin needs.
 
 ---
 
-## 4. `qpe_csrs`: writes outside `0x7C0–0x7C6` are silently discarded
+## 3. `qpe_csrs`: writes outside `0x7C0–0x7C6` are silently discarded
 
 **Status:** analysis.
 **File:** `soc/rtl/qpe_csrs.vhdl:103`
@@ -94,7 +77,7 @@ or made to fail loudly. See `README.md` for the current flat register map.
 
 ---
 
-## 5. `qpe_csrs`: a trigger written while one is queued is lost
+## 4. `qpe_csrs`: a trigger written while one is queued is lost
 
 **Status:** analysis.
 **Files:** `soc/rtl/qpe_csrs.vhdl:94-102`, `:148-149`, `sw/c/common/wgen.c:176-180`
@@ -116,14 +99,14 @@ clear, so the trigger stays queued.
 
 **Fix:** document in `README.md`, next to the pulse register map, that a
 trigger must wait for bit 1 of `TRIG`, and make `wgen_pulse()` wait before it
-triggers. When the hardware of issue 15 is done, decide there whether a second
+triggers. When the hardware of issue 14 is done, decide there whether a second
 trigger while one is queued is refused visibly (a sticky overflow bit in
 `TRIG`) or queued deeper; with the snapshot registers each extra entry costs
 152 flip-flops.
 
 ---
 
-## 6. No sample clock goes out with `sig_i` / `sig_q`
+## 5. No sample clock goes out with `sig_i` / `sig_q`
 
 **Status:** analysis.
 **File:** `soc/rtl/leaf_soc.vhdl:21-23`
@@ -139,7 +122,7 @@ usual answer.
 
 ---
 
-## 7. `qpe_csrs`: the trigger reaches `sig_gen` through a long combinational path
+## 6. `qpe_csrs`: the trigger reaches `sig_gen` through a long combinational path
 
 **Status:** analysis. A timing risk, not a functional fault.
 **Files:** `soc/rtl/qpe_csrs.vhdl:148-150`, `ips/cpu/rtl/csrs.vhdl:321`,
@@ -171,14 +154,14 @@ before that synthesis.
 **Fix:** register the trigger in `qpe_csrs`, so that `valid_o` comes from a
 flip-flop only. Every `TRIG` write is latched, and the pulse starts one cycle
 later; reading `TRIG` (`ready and not valid`) still works, since `valid` is
-visible from the next cycle on. It fits the hardware fix of issue 15: the
+visible from the next cycle on. It fits the hardware fix of issue 14: the
 snapshot registers can load in the same cycle, and `sig_gen` then sees only
 registers from `qpe_csrs`. The alternative is to wait for static timing
 analysis with the PDK and only act if the path shows up as critical.
 
 ---
 
-## 8. No trap vector is set, so any trap loops at address 0 (software)
+## 7. No trap vector is set, so any trap loops at address 0 (software)
 
 **Status:** verified in simulation.
 **Files:** `sw/asm/boot/start.S`, `sw/c/common/crt0.S`
@@ -231,7 +214,7 @@ the life of the chip.
 
 ---
 
-## 9. No bus timeout
+## 8. No bus timeout
 
 **Status:** analysis.
 **Files:** `soc/rtl/wb_channel.vhdl`, `ips/cpu/rtl/dmls_block.vhdl`, `ips/cpu/rtl/if_stage.vhdl`
@@ -247,7 +230,7 @@ Alternatively a watchdog that resets the chip.
 
 ---
 
-## 10. MMIO mode: the COP CSR window is accepted silently
+## 9. MMIO mode: the COP CSR window is accepted silently
 
 **Status:** analysis.
 **Files:** `soc/rtl/leaf_soc.vhdl:187-190`, `:213`, `ips/cpu/rtl/csrs.vhdl:124-125`, `:149-150`
@@ -261,7 +244,7 @@ fault: its parameter writes vanish and no pulse comes out. One that waits on
 `TRIG` reads `0` forever and hangs in the poll.
 
 The opposite mismatch is visible: an MMIO program on a COP SoC gets `err` on
-IO1 and traps (issue 8).
+IO1 and traps (issue 7).
 
 **Fix:** in the CPU submodule, a generic that disables the window, so that an
 access to it without a coprocessor is an illegal instruction; `leaf_soc` sets
@@ -270,7 +253,7 @@ it in `mmio_qpe_gen`. Until then, document the behaviour in `README.md` under
 
 ---
 
-## 11. `time` duplicates `cycle`, and nothing can raise a timer interrupt
+## 10. `time` duplicates `cycle`, and nothing can raise a timer interrupt
 
 **Status:** analysis.
 **Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:149-150`, `:185-186`
@@ -287,7 +270,7 @@ duplicate. The first is a change in the CPU submodule.
 
 ---
 
-## 12. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
+## 11. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
 
 **Status:** verified in simulation (the timing below); the datasheet check is
 open until a flash is chosen.
@@ -325,7 +308,7 @@ depend on both.
 
 ---
 
-## 13. XIP: a fetch in flight cannot be abandoned
+## 12. XIP: a fetch in flight cannot be abandoned
 
 **Status:** analysis. Performance only.
 **Files:** `soc/rtl/wb_xip_ctrl.vhdl`, `soc/rtl/wb_channel.vhdl:144-148`, `:158`
@@ -346,7 +329,7 @@ starts in the CPU submodule. Recheck `xip_test` after it.
 
 ---
 
-## 14. RAM0 macros: a store and a fetch of the same word in one cycle
+## 13. RAM0 macros: a store and a fetch of the same word in one cycle
 
 **Status:** analysis. Not seen in any test.
 **Files:** `soc/rtl/wb_ram_dp_macro.vhdl`, `soc/tbs/sram_dp_sim.vhdl`,
@@ -371,7 +354,7 @@ It needs a store into a word the fetch unit is reading at that moment:
 1. Code that writes instructions just ahead of the PC. `FENCE.I` does not help:
    the core decodes the `FENCE` opcode as a no-op (`main_ctrl.vhdl:311`), so it
    discards nothing already fetched. On silicon the fetched word can be garbage,
-   an illegal instruction, and then the loop of issue 8.
+   an illegal instruction, and then the loop of issue 7.
 2. Prefetch running past the end of `.text` into writable `.rodata`/`.data`
    while a store hits that word. The fetched word is flushed and never
    executed, but the collision still happens on the macro.
@@ -400,7 +383,7 @@ would show it if one did: `BEHAV` returns the old word silently, and `MACRO`/
 
 ---
 
-## 15. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
+## 14. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
 
 **Status:** part A verified in simulation; part B analysis.
 **Files:** `soc/rtl/qpe_csrs.vhdl:83-118`, `:148-150`, `sw/c/common/wgen.c`,
@@ -479,21 +462,21 @@ pulse's amplitude in the CSV.
 
 Before tapeout:
 
-- **Issue 8**, the boot ROM trap handler, because the ROM cannot change after
+- **Issue 7**, the boot ROM trap handler, because the ROM cannot change after
   tapeout. Test the whole bootloader with it, not just the handler.
-- **Issue 12**, the XIP timing: add the generics, then set them from the
+- **Issue 11**, the XIP timing: add the generics, then set them from the
   chosen flash's datasheet.
-- **Issues 3 and 6**, because they fix the pinout.
-- **Issue 15**, because COP is the default interface and emits no pulse today;
+- **Issues 2 and 5**, because they fix the pinout.
+- **Issue 14**, because COP is the default interface and emits no pulse today;
   the snapshot in `qpe_csrs` is hardware and cannot follow in software.
-  Do issue 7 in the same change: it touches the same lines.
+  Do issue 6 in the same change: it touches the same lines.
 
-Then, in any order: issue 9 (timeout), issue 1, issue 5, issue 10,
-issue 11, issue 13, issue 14, issues 4 and 2.
+Then, in any order: issue 8 (timeout), issue 4, issue 9, issue 10, issue 12,
+issue 13, issues 3 and 1.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,
 gate-level simulation and DFT insertion are all still to be done. The generic
 synthesis found no latches, no combinational loops and no multiple drivers,
-one clock domain and a synchronous reset throughout, which is a good starting
-point for all of them.
+one clock domain and a synchronous reset everywhere except the two flip-flops
+of the reset synchroniser, which is a good starting point for all of them.
