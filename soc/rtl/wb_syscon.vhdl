@@ -11,7 +11,7 @@ use IEEE.std_logic_1164.all;
 entity wb_syscon is
     port (
         clk   : in  std_logic;
-        rst   : in  std_logic;
+        rst_n : in  std_logic;
         clk_o : out std_logic;
         rst_o : out std_logic
     );
@@ -23,9 +23,9 @@ architecture rtl of wb_syscon is
 
 begin
 
-    rst_sync_proc: process(clk, rst)
+    rst_sync_proc: process(clk, rst_n)
     begin
-        if rst = '0' then
+        if rst_n = '0' then
             rst_sync <= (others => '1');
         elsif rising_edge(clk) then
             rst_sync <= rst_sync(0) & '0';

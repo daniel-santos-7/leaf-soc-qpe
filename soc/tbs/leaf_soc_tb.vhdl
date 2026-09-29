@@ -19,7 +19,7 @@ end entity leaf_soc_tb;
 architecture tb of leaf_soc_tb is
 
     signal clk : std_logic;
-    signal rst : std_logic;
+    signal rst_n : std_logic;
     signal rx  : std_logic;
     signal tx  : std_logic;
     signal sig_i  : std_logic_vector(OUT_RES_BITS-1 downto 0);
@@ -52,7 +52,7 @@ begin
         WGEN_IF_COP => WGEN_IF_COP
     ) port map (
         clk      => clk,
-        rst      => rst,
+        rst_n    => rst_n,
         rx       => rx,
         tx       => tx,
         sig_i    => sig_i,
@@ -97,7 +97,7 @@ begin
         variable rx_data : std_logic_vector(7 downto 0);
         variable char : character;
     begin
-        wait until rst = '1';
+        wait until rst_n = '1';
         wait until rising_edge(clk);
         wait until rising_edge(clk);
         file_open(out_file, "STD_OUTPUT", write_mode);
@@ -142,14 +142,14 @@ begin
 
     test: process
     begin
-        rst  <= '0';
+        rst_n <= '0';
         rx   <= '1';
         clk_en <= '1';
         wait until rising_edge(clk);
         wait until rising_edge(clk);
         wait until rising_edge(clk);
 
-        rst <= '1';
+        rst_n <= '1';
         wait until rising_edge(clk);
         wait until rising_edge(clk);
 
