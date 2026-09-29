@@ -2,7 +2,7 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 
-entity wgx_csrs is
+entity qpe_csrs is
     port (
         clk_i   : in  std_logic;
         rst_i   : in  std_logic;
@@ -29,9 +29,9 @@ entity wgx_csrs is
         valid_o : out std_logic;
         ready_i : in  std_logic
     );
-end entity wgx_csrs;
+end entity qpe_csrs;
 
-architecture rtl of wgx_csrs is
+architecture rtl of qpe_csrs is
 
     constant REG_FTW   : std_logic_vector(5 downto 0) := "000000";
     constant REG_POW   : std_logic_vector(5 downto 0) := "000001";

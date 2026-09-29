@@ -3,7 +3,7 @@ use IEEE.std_logic_1164.all;
 use work.leaf_pkg.all;
 use work.leaf_soc_pkg.all;
 
-entity leaf_wgx is
+entity leaf_qpe is
     generic (
         RESET_ADDR : std_logic_vector(XLEN-1 downto 0) := (others => '0')
     );
@@ -37,9 +37,9 @@ entity leaf_wgx is
         sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         active_o  : out std_logic
     );
-end entity leaf_wgx;
+end entity leaf_qpe;
 
-architecture rtl of leaf_wgx is
+architecture rtl of leaf_qpe is
 
     signal csr_rdata : std_logic_vector(XLEN-1 downto 0);
     signal csr_addr  : std_logic_vector(5 downto 0);
@@ -59,7 +59,7 @@ architecture rtl of leaf_wgx is
     signal wgen_active : std_logic;
 
     -- Register-file write snoop bus: broadcasts the CPU's own GPR write
-    -- port (we/addr/data) so wgx_csrs can mirror whichever GPR each
+    -- port (we/addr/data) so qpe_csrs can mirror whichever GPR each
     -- pulse parameter is pointed at.
     signal rf_wr_en   : std_logic;
     signal rf_wr_addr : std_logic_vector(4 downto 0);
@@ -67,7 +67,7 @@ architecture rtl of leaf_wgx is
 
 begin
 
-    u_cpu: leaf generic map (
+    u_cpu: entity work.leaf generic map (
         RESET_ADDR => RESET_ADDR
     ) port map (
         clk_i     => clk_i,
@@ -101,7 +101,7 @@ begin
         data_stall_i => data_stall_i
     );
 
-    u_csrs: entity work.wgx_csrs port map (
+    u_csrs: entity work.qpe_csrs port map (
         clk_i   => clk_i,
         rst_i   => rst_i,
         addr_i  => csr_addr,

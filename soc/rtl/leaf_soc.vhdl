@@ -1,11 +1,18 @@
+----------------------------------------------------------------------
+-- Leaf project
+-- developed by: Daniel Santos
+-- module: leaf system (SOC)
+-- 2026
+----------------------------------------------------------------------
+
 library IEEE;
 use IEEE.std_logic_1164.all;
-use work.leaf_pkg.all;
 use work.leaf_soc_pkg.all;
-use work.uart_pkg.all;
-use work.wgen_cfg.all;
 
 entity leaf_soc is
+    generic (
+        WGEN_IF_COP : boolean := true
+    );
     port (
         clk      : in  std_logic;
         rst      : in  std_logic;
@@ -17,7 +24,10 @@ entity leaf_soc is
         spi_clk  : out std_logic;
         spi_mosi : out std_logic;
         spi_miso : in  std_logic;
-        spi_cs_n : out std_logic
+        spi_cs_n : out std_logic;
+        gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
+        gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
+        gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0)
     );
 end entity leaf_soc;
 
@@ -45,27 +55,26 @@ architecture rtl of leaf_soc is
     signal soc_cpu_data_ack : std_logic;
     signal soc_cpu_data_err : std_logic;
 
-    -- Stall signals (backpressure: cyc without ack)
     signal soc_cpu_inst_stall : std_logic;
     signal soc_cpu_data_stall : std_logic;
 
-    -- intercon_inst (I-channel): ROM, XIP, wb_ram_dp port B (read-only)
     signal soc_inst_rom_cyc : std_logic;
     signal soc_inst_rom_stb : std_logic;
     signal soc_inst_rom_adr : std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
     signal soc_inst_xip_cyc : std_logic;
     signal soc_inst_xip_stb : std_logic;
-    signal soc_inst_xip_we  : std_logic;
-    signal soc_inst_xip_sel : std_logic_vector(3 downto 0);
     signal soc_inst_xip_adr : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-    signal soc_inst_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_b_cyc : std_logic;
-    signal soc_ram_b_stb : std_logic;
-    signal soc_ram_b_adr : std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
-    signal soc_ram_b_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_b_ack : std_logic;
+    signal soc_ram0_b_cyc : std_logic;
+    signal soc_ram0_b_stb : std_logic;
+    signal soc_ram0_b_adr : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
+    signal soc_ram0_b_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram0_b_ack : std_logic;
+    signal soc_ram1_b_cyc : std_logic;
+    signal soc_ram1_b_stb : std_logic;
+    signal soc_ram1_b_adr : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
+    signal soc_ram1_b_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram1_b_ack : std_logic;
 
-    -- intercon_data (D-channel): UART, IO1, wb_ram_dp port A (read-write)
     signal soc_data_io0_cyc : std_logic;
     signal soc_data_io0_stb : std_logic;
     signal soc_data_io0_we  : std_logic;
@@ -78,14 +87,28 @@ architecture rtl of leaf_soc is
     signal soc_data_io1_sel : std_logic_vector(3 downto 0);
     signal soc_data_io1_adr : std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
     signal soc_data_io1_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_a_cyc : std_logic;
-    signal soc_ram_a_stb : std_logic;
-    signal soc_ram_a_we  : std_logic;
-    signal soc_ram_a_sel : std_logic_vector(3 downto 0);
-    signal soc_ram_a_adr : std_logic_vector(RAM_ADDR_WIDTH-1 downto 2);
-    signal soc_ram_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram_a_ack : std_logic;
+    signal soc_data_io2_cyc : std_logic;
+    signal soc_data_io2_stb : std_logic;
+    signal soc_data_io2_we  : std_logic;
+    signal soc_data_io2_sel : std_logic_vector(3 downto 0);
+    signal soc_data_io2_adr : std_logic_vector(IO2_ADDR_WIDTH-1 downto 2);
+    signal soc_data_io2_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram0_a_cyc : std_logic;
+    signal soc_ram0_a_stb : std_logic;
+    signal soc_ram0_a_we  : std_logic;
+    signal soc_ram0_a_sel : std_logic_vector(3 downto 0);
+    signal soc_ram0_a_adr : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
+    signal soc_ram0_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram0_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram0_a_ack : std_logic;
+    signal soc_ram1_a_cyc : std_logic;
+    signal soc_ram1_a_stb : std_logic;
+    signal soc_ram1_a_we  : std_logic;
+    signal soc_ram1_a_sel : std_logic_vector(3 downto 0);
+    signal soc_ram1_a_adr : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
+    signal soc_ram1_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram1_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram1_a_ack : std_logic;
 
     signal soc_rom_ack : std_logic;
     signal soc_rom_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
@@ -94,30 +117,35 @@ architecture rtl of leaf_soc is
     signal soc_io0_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_io1_ack : std_logic;
+    signal soc_io1_err : std_logic;
     signal soc_io1_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
+    signal soc_io2_ack : std_logic;
+    signal soc_io2_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+
+    signal soc_gpio_irq : std_logic;
+
     signal soc_xip_ack : std_logic;
-    signal soc_xip_err : std_logic;
     signal soc_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_cop_csr_rdata : std_logic_vector(31 downto 0);
 
 begin
 
-    soc_syscon: wb_syscon port map (
+    soc_syscon: entity work.wb_syscon port map (
         clk   => clk,
         rst   => rst,
         clk_o => soc_syscon_clk,
         rst_o => soc_syscon_rst
     );
 
-    cop_wgx_gen: if WGEN_IF_COP generate
-        soc_cpu: leaf_wgx generic map (
+    cop_qpe_gen: if WGEN_IF_COP generate
+        soc_cpu: entity work.leaf_qpe generic map (
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (
             clk_i    => soc_syscon_clk,
             rst_i    => soc_syscon_rst,
-            ex_irq_i => '0',
+            ex_irq_i => soc_gpio_irq,
             sw_irq_i => '0',
             tm_irq_i => '0',
             inst_cyc_o   => soc_cpu_inst_cyc,
@@ -143,16 +171,17 @@ begin
         );
 
         soc_io1_ack <= '0';
+        soc_io1_err <= '1';
         soc_io1_dat <= (others => '0');
     end generate;
 
-    mmio_wgx_gen: if not WGEN_IF_COP generate
-        soc_cpu: leaf generic map (
+    mmio_qpe_gen: if not WGEN_IF_COP generate
+        soc_cpu: entity work.leaf generic map (
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (
             clk_i        => soc_syscon_clk,
             rst_i        => soc_syscon_rst,
-            ex_irq_i     => '0',
+            ex_irq_i     => soc_gpio_irq,
             sw_irq_i     => '0',
             tm_irq_i     => '0',
             cop_dat_i    => soc_cop_csr_rdata,
@@ -182,6 +211,7 @@ begin
         );
 
         soc_cop_csr_rdata <= (others => '0');
+        soc_io1_err <= '0';
 
         soc_wb_sig_gen: entity work.wb_sig_gen port map (
             rst_i    => soc_syscon_rst,
@@ -193,6 +223,9 @@ begin
             sel_i    => soc_data_io1_sel,
             dat_i    => soc_data_io1_dat,
             ack_o    => soc_io1_ack,
+            -- Pipelined-mode port: the CSR file never inserts wait states
+            -- (stall_o is tied low) and wb_intercon takes no stall from slaves.
+            stall_o  => open,
             dat_o    => soc_io1_dat,
             sig_i_o  => sig_i,
             sig_q_o  => sig_q,
@@ -200,116 +233,90 @@ begin
         );
     end generate;
 
-    soc_cpu_inst_stall <= '0';
-    soc_cpu_data_stall <= '0';
-
-    -- Instruction channel interconnect: ROM, XIP, wb_ram_dp port B
-    intercon_inst: wb_intercon port map (
-        clk_i     => soc_syscon_clk,
-        rst_i     => soc_syscon_rst,
-        cpu_cyc_i => soc_cpu_inst_cyc,
-        cpu_stb_i => soc_cpu_inst_stb,
-        cpu_we_i  => '0',
-        cpu_sel_i => (others => '1'),
-        cpu_adr_i => soc_cpu_inst_adr,
-        cpu_dat_i => (others => '0'),
-        rom_ack_i => soc_rom_ack,
-        io0_ack_i => '0',
-        io1_ack_i => '0',
-        xip_ack_i => soc_xip_ack,
-        ram_ack_i => soc_ram_b_ack,
-        xip_err_i => soc_xip_err,
-        rom_dat_i => soc_rom_dat,
-        io0_dat_i => (others => '0'),
-        io1_dat_i => (others => '0'),
-        xip_dat_i => soc_xip_dat,
-        ram_dat_i => soc_ram_b_dat,
-        cpu_ack_o => soc_cpu_inst_ack,
-        cpu_err_o => soc_cpu_inst_err,
-        rom_cyc_o => soc_inst_rom_cyc,
-        io0_cyc_o => open,
-        io1_cyc_o => open,
-        xip_cyc_o => soc_inst_xip_cyc,
-        ram_cyc_o => soc_ram_b_cyc,
-        rom_stb_o => soc_inst_rom_stb,
-        io0_stb_o => open,
-        io1_stb_o => open,
-        xip_stb_o => soc_inst_xip_stb,
-        ram_stb_o => soc_ram_b_stb,
-        io0_we_o  => open,
-        io1_we_o  => open,
-        xip_we_o  => soc_inst_xip_we,
-        ram_we_o  => open,
-        io0_sel_o => open,
-        io1_sel_o => open,
-        xip_sel_o => soc_inst_xip_sel,
-        ram_sel_o => open,
-        rom_adr_o => soc_inst_rom_adr,
-        io0_adr_o => open,
-        io1_adr_o => open,
-        xip_adr_o => soc_inst_xip_adr,
-        ram_adr_o => soc_ram_b_adr,
-        cpu_dat_o => soc_cpu_inst_dat,
-        io0_dat_o => open,
-        io1_dat_o => open,
-        xip_dat_o => soc_inst_xip_dat,
-        ram_dat_o => open
+    soc_intercon: entity work.wb_intercon port map (
+        clk_i        => soc_syscon_clk,
+        rst_i        => soc_syscon_rst,
+        inst_cyc_i   => soc_cpu_inst_cyc,
+        inst_stb_i   => soc_cpu_inst_stb,
+        inst_adr_i   => soc_cpu_inst_adr,
+        inst_dat_o   => soc_cpu_inst_dat,
+        inst_ack_o   => soc_cpu_inst_ack,
+        inst_err_o   => soc_cpu_inst_err,
+        inst_stall_o => soc_cpu_inst_stall,
+        data_cyc_i   => soc_cpu_data_cyc,
+        data_stb_i   => soc_cpu_data_stb,
+        data_we_i    => soc_cpu_data_we,
+        data_sel_i   => soc_cpu_data_sel,
+        data_adr_i   => soc_cpu_data_adr,
+        data_dat_i   => soc_cpu_data_dat,
+        data_dat_o   => soc_cpu_data_dat_rd,
+        data_ack_o   => soc_cpu_data_ack,
+        data_err_o   => soc_cpu_data_err,
+        data_stall_o => soc_cpu_data_stall,
+        rom_cyc_o    => soc_inst_rom_cyc,
+        rom_stb_o    => soc_inst_rom_stb,
+        rom_adr_o    => soc_inst_rom_adr,
+        rom_ack_i    => soc_rom_ack,
+        rom_dat_i    => soc_rom_dat,
+        xip_cyc_o    => soc_inst_xip_cyc,
+        xip_stb_o    => soc_inst_xip_stb,
+        xip_adr_o    => soc_inst_xip_adr,
+        xip_ack_i    => soc_xip_ack,
+        xip_dat_i    => soc_xip_dat,
+        ram0b_cyc_o  => soc_ram0_b_cyc,
+        ram0b_stb_o  => soc_ram0_b_stb,
+        ram0b_adr_o  => soc_ram0_b_adr,
+        ram0b_ack_i  => soc_ram0_b_ack,
+        ram0b_dat_i  => soc_ram0_b_dat,
+        ram1b_cyc_o  => soc_ram1_b_cyc,
+        ram1b_stb_o  => soc_ram1_b_stb,
+        ram1b_adr_o  => soc_ram1_b_adr,
+        ram1b_ack_i  => soc_ram1_b_ack,
+        ram1b_dat_i  => soc_ram1_b_dat,
+        io0_cyc_o    => soc_data_io0_cyc,
+        io0_stb_o    => soc_data_io0_stb,
+        io0_we_o     => soc_data_io0_we,
+        io0_sel_o    => soc_data_io0_sel,
+        io0_adr_o    => soc_data_io0_adr,
+        io0_dat_o    => soc_data_io0_dat,
+        io0_ack_i    => soc_io0_ack,
+        io0_dat_i    => soc_io0_dat,
+        io1_cyc_o    => soc_data_io1_cyc,
+        io1_stb_o    => soc_data_io1_stb,
+        io1_we_o     => soc_data_io1_we,
+        io1_sel_o    => soc_data_io1_sel,
+        io1_adr_o    => soc_data_io1_adr,
+        io1_dat_o    => soc_data_io1_dat,
+        io1_ack_i    => soc_io1_ack,
+        io1_err_i    => soc_io1_err,
+        io1_dat_i    => soc_io1_dat,
+        io2_cyc_o    => soc_data_io2_cyc,
+        io2_stb_o    => soc_data_io2_stb,
+        io2_we_o     => soc_data_io2_we,
+        io2_sel_o    => soc_data_io2_sel,
+        io2_adr_o    => soc_data_io2_adr,
+        io2_dat_o    => soc_data_io2_dat,
+        io2_ack_i    => soc_io2_ack,
+        io2_dat_i    => soc_io2_dat,
+        ram0a_cyc_o  => soc_ram0_a_cyc,
+        ram0a_stb_o  => soc_ram0_a_stb,
+        ram0a_we_o   => soc_ram0_a_we,
+        ram0a_sel_o  => soc_ram0_a_sel,
+        ram0a_adr_o  => soc_ram0_a_adr,
+        ram0a_dat_o  => soc_ram0_a_dat_wr,
+        ram0a_ack_i  => soc_ram0_a_ack,
+        ram0a_dat_i  => soc_ram0_a_dat_rd,
+        ram1a_cyc_o  => soc_ram1_a_cyc,
+        ram1a_stb_o  => soc_ram1_a_stb,
+        ram1a_we_o   => soc_ram1_a_we,
+        ram1a_sel_o  => soc_ram1_a_sel,
+        ram1a_adr_o  => soc_ram1_a_adr,
+        ram1a_dat_o  => soc_ram1_a_dat_wr,
+        ram1a_ack_i  => soc_ram1_a_ack,
+        ram1a_dat_i  => soc_ram1_a_dat_rd
     );
 
-    -- Data channel interconnect: UART, IO1, wb_ram_dp port A
-    intercon_data: wb_intercon port map (
-        clk_i     => soc_syscon_clk,
-        rst_i     => soc_syscon_rst,
-        cpu_cyc_i => soc_cpu_data_cyc,
-        cpu_stb_i => soc_cpu_data_stb,
-        cpu_we_i  => soc_cpu_data_we,
-        cpu_sel_i => soc_cpu_data_sel,
-        cpu_adr_i => soc_cpu_data_adr,
-        cpu_dat_i => soc_cpu_data_dat,
-        rom_ack_i => '0',
-        io0_ack_i => soc_io0_ack,
-        io1_ack_i => soc_io1_ack,
-        xip_ack_i => '0',
-        ram_ack_i => soc_ram_a_ack,
-        xip_err_i => '0',
-        rom_dat_i => (others => '0'),
-        io0_dat_i => soc_io0_dat,
-        io1_dat_i => soc_io1_dat,
-        xip_dat_i => (others => '0'),
-        ram_dat_i => soc_ram_a_dat_rd,
-        cpu_ack_o => soc_cpu_data_ack,
-        cpu_err_o => soc_cpu_data_err,
-        rom_cyc_o => open,
-        io0_cyc_o => soc_data_io0_cyc,
-        io1_cyc_o => soc_data_io1_cyc,
-        xip_cyc_o => open,
-        ram_cyc_o => soc_ram_a_cyc,
-        rom_stb_o => open,
-        io0_stb_o => soc_data_io0_stb,
-        io1_stb_o => soc_data_io1_stb,
-        xip_stb_o => open,
-        ram_stb_o => soc_ram_a_stb,
-        io0_we_o  => soc_data_io0_we,
-        io1_we_o  => soc_data_io1_we,
-        xip_we_o  => open,
-        ram_we_o  => soc_ram_a_we,
-        io0_sel_o => soc_data_io0_sel,
-        io1_sel_o => soc_data_io1_sel,
-        xip_sel_o => open,
-        ram_sel_o => soc_ram_a_sel,
-        rom_adr_o => open,
-        io0_adr_o => soc_data_io0_adr,
-        io1_adr_o => soc_data_io1_adr,
-        xip_adr_o => open,
-        ram_adr_o => soc_ram_a_adr,
-        cpu_dat_o => soc_cpu_data_dat_rd,
-        io0_dat_o => soc_data_io0_dat,
-        io1_dat_o => soc_data_io1_dat,
-        xip_dat_o => open,
-        ram_dat_o => soc_ram_a_dat_wr
-    );
-
-    soc_rom: wb_rom port map (
+    soc_rom: entity work.wb_rom port map (
         clk_i => soc_syscon_clk,
         rst_i => soc_syscon_rst,
         cyc_i => soc_inst_rom_cyc,
@@ -319,33 +326,50 @@ begin
         dat_o => soc_rom_dat
     );
 
-    soc_uart: uart_wbsl port map (
-        clk_i => soc_syscon_clk,
-        rst_i => soc_syscon_rst,
-        dat_i => soc_data_io0_dat,
-        cyc_i => soc_data_io0_cyc,
-        stb_i => soc_data_io0_stb,
-        we_i  => soc_data_io0_we,
-        sel_i => soc_data_io0_sel,
-        adr_i => soc_data_io0_adr,
-        rx    => rx,
-        ack_o => soc_io0_ack,
-        dat_o => soc_io0_dat,
-        tx    => tx
+    soc_uart: entity work.uart_wbsl port map (
+        clk_i   => soc_syscon_clk,
+        rst_i   => soc_syscon_rst,
+        dat_i   => soc_data_io0_dat,
+        cyc_i   => soc_data_io0_cyc,
+        stb_i   => soc_data_io0_stb,
+        we_i    => soc_data_io0_we,
+        sel_i   => soc_data_io0_sel,
+        adr_i   => soc_data_io0_adr,
+        rx_i    => rx,
+        ack_o   => soc_io0_ack,
+        stall_o => open,
+        dat_o   => soc_io0_dat,
+        tx_o    => tx
+    );
+
+    soc_gpio: entity work.wb_gpio generic map (
+        G_WIDTH => GPIO_WIDTH
+    ) port map (
+        wb_clk_i   => soc_syscon_clk,
+        wb_rst_i   => soc_syscon_rst,
+        wb_cyc_i   => soc_data_io2_cyc,
+        wb_stb_i   => soc_data_io2_stb,
+        wb_we_i    => soc_data_io2_we,
+        wb_adr_i   => soc_data_io2_adr,
+        wb_sel_i   => soc_data_io2_sel,
+        wb_dat_i   => soc_data_io2_dat,
+        wb_dat_o   => soc_io2_dat,
+        wb_ack_o   => soc_io2_ack,
+        wb_stall_o => open,
+        irq_o      => soc_gpio_irq,
+        gpio_i     => gpio_i,
+        gpio_o     => gpio_o,
+        gpio_oe_o  => gpio_oe
     );
 
     -- XIP controller
-    soc_xip: wb_xip_ctrl port map (
+    soc_xip: entity work.wb_xip_ctrl port map (
         clk_i     => soc_syscon_clk,
         rst_i     => soc_syscon_rst,
         cyc_i     => soc_inst_xip_cyc,
         stb_i     => soc_inst_xip_stb,
-        we_i      => soc_inst_xip_we,
-        sel_i     => soc_inst_xip_sel,
         adr_i     => soc_inst_xip_adr,
-        dat_i     => soc_inst_xip_dat,
         ack_o     => soc_xip_ack,
-        err_o     => soc_xip_err,
         dat_o     => soc_xip_dat,
         spi_clk   => spi_clk,
         spi_mosi  => spi_mosi,
@@ -354,24 +378,44 @@ begin
     );
 
     -- memory 32 kB (dual-port: A = data R/W, B = instruction R/O)
-    soc_ram: wb_ram_dp generic map (
-        BITS  => RAM_ADDR_WIDTH
+    soc_ram0: wb_ram_dp generic map (
+        BITS  => RAM0_ADDR_WIDTH
     ) port map (
         clk_i   => soc_syscon_clk,
         rst_i   => soc_syscon_rst,
-        dat_i   => soc_ram_a_dat_wr,
-        cyc_i   => soc_ram_a_cyc,
-        stb_i   => soc_ram_a_stb,
-        we_i    => soc_ram_a_we,
-        sel_i   => soc_ram_a_sel,
-        adr_i   => soc_ram_a_adr,
-        ack_o   => soc_ram_a_ack,
-        dat_o   => soc_ram_a_dat_rd,
-        cyc_b_i => soc_ram_b_cyc,
-        stb_b_i => soc_ram_b_stb,
-        adr_b_i => soc_ram_b_adr,
-        ack_b_o => soc_ram_b_ack,
-        dat_b_o => soc_ram_b_dat
+        dat_a_i => soc_ram0_a_dat_wr,
+        cyc_a_i => soc_ram0_a_cyc,
+        stb_a_i => soc_ram0_a_stb,
+        we_a_i  => soc_ram0_a_we,
+        sel_a_i => soc_ram0_a_sel,
+        adr_a_i => soc_ram0_a_adr,
+        ack_a_o => soc_ram0_a_ack,
+        dat_a_o => soc_ram0_a_dat_rd,
+        cyc_b_i => soc_ram0_b_cyc,
+        stb_b_i => soc_ram0_b_stb,
+        adr_b_i => soc_ram0_b_adr,
+        ack_b_o => soc_ram0_b_ack,
+        dat_b_o => soc_ram0_b_dat
+    );
+
+    soc_ram1: wb_ram_dp generic map (
+        BITS  => RAM1_ADDR_WIDTH
+    ) port map (
+        clk_i   => soc_syscon_clk,
+        rst_i   => soc_syscon_rst,
+        dat_a_i => soc_ram1_a_dat_wr,
+        cyc_a_i => soc_ram1_a_cyc,
+        stb_a_i => soc_ram1_a_stb,
+        we_a_i  => soc_ram1_a_we,
+        sel_a_i => soc_ram1_a_sel,
+        adr_a_i => soc_ram1_a_adr,
+        ack_a_o => soc_ram1_a_ack,
+        dat_a_o => soc_ram1_a_dat_rd,
+        cyc_b_i => soc_ram1_b_cyc,
+        stb_b_i => soc_ram1_b_stb,
+        adr_b_i => soc_ram1_b_adr,
+        ack_b_o => soc_ram1_b_ack,
+        dat_b_o => soc_ram1_b_dat
     );
 
 end architecture rtl;
