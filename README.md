@@ -115,7 +115,12 @@ make run PROGRAM=sw/c/ram_test/ram_test.bin RAM=MACRO RUN_CYCLES=6000000
 ```
 
 ### System Controller
-The **Syscon** module handles global clock buffering and synchronized reset generation for the entire SoC.
+`wb_syscon` generates the SoC reset from the `rst` pin, which is active low. It passes the clock through unchanged; the clock tree is left to the physical design flow. The reset goes through a two-flip-flop synchroniser that asserts asynchronously and deasserts synchronously:
+
+- **Assertion:** while `rst = '0'` both flip-flops are set, so `rst_o` is high from power-up and from the moment the pin goes low, with or without a clock. Asserting out of step with the clock is safe: a register that misses the first edge sees `rst_o` at the next one, and the state being lost would be discarded anyway.
+- **Deassertion:** once the pin is released, a `'0'` shifts through the two stages, so `rst_o` falls two edges later and always right after a clock edge, and every register leaves reset on the same cycle. If the release violates the first stage's recovery time, that stage may go metastable, but the second still holds `'1'` and the first has a whole cycle to settle before it is sampled.
+
+Every other register in the SoC and in the IPs resets synchronously, so it only takes its reset value once the clock runs with `rst_o` high; the board must supply the clock while reset is held. Since the assertion is asynchronous, any pulse on the pin resets the chip, so the pin must be filtered in the pad or on the board.
 
 ## :zap: Pulse Generator (QPE)
 
