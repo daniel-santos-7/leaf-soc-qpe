@@ -4,13 +4,12 @@ Open issues only; fixed ones are removed, and their history is in git.
 Entries are ordered by the effort their fix takes, simplest first; the
 section at the end orders them by priority for the tapeout.
 
-Issues 2, 3, 5 and 8 come from a read of every file under `soc/rtl/`
-(`develop` @ `1c06fa7`). Issues 4, 6, 9 and 10 come from a second pass aimed
+Issues 1, 2, 4 and 8 come from a read of every file under `soc/rtl/`
+(`develop` @ `1c06fa7`). Issues 3, 6, 9 and 11 come from a second pass aimed
 at the ASIC tapeout (`develop` @ `d832821`), which also covered the RTL of the
 three IPs and a generic Yosys synthesis of `leaf_soc` in both `WGEN_IF` modes.
-Issues 7, 11, 12 and 13 come from a third read of `soc/rtl/` (`develop` @
-`8d0689d`). Issue 1 was reported on GitHub (issue #1 of the original
-repository) and is kept here so it survives the repository's recreation.
+Issues 7, 12, 14 and 15 come from a third read of `soc/rtl/` (`develop` @
+`8d0689d`), issues 5, 10 and 13 from a fourth (`develop` @ `3aa5783`).
 
 Each entry says whether it was **verified** (reproduced in simulation or
 synthesis) or is **analysis** (read from the RTL, not yet observed). Issue 8
@@ -18,64 +17,7 @@ is a software issue.
 
 ---
 
-## 1. Tied-off windows answer neither `ack` nor `err`, so an access to them hangs the core (`main` only)
-
-**Status:** verified in simulation. Fixed on `develop` by `fa9cfa3`; still
-present on `main` until `develop` is merged. Remove this entry after that
-merge.
-**Files (on `main`):** `soc/rtl/leaf_soc.vhdl:217-221`, `:269-274`,
-`soc/rtl/wb_intercon.vhdl`
-
-Reported on GitHub on 2026-09-22 against `develop` @ `d286584`, which is the
-state `main` still has.
-
-`leaf_soc` instantiated the same interconnect entity on the instruction and
-the data channel, so both channels decoded all five address regions, but
-each had slaves behind only three of them. The rest were tied off with
-`ack => '0'` and no `err`:
-
-| Window | Base | I-channel | D-channel |
-|---|---|---|---|
-| ROM | `0x00001000` | `wb_rom` | **tied off** |
-| IO0 (UART) | `0x10000000` | **tied off** | `uart_wbsl` |
-| IO1 (WGEN) | `0x10001000` | **tied off** | `wb_sig_gen` |
-| XIP | `0x20000000` | `wb_xip_ctrl` | **tied off** (`xip_err_i => '0'`) |
-| RAM | `0x80000000` | port B | port A |
-
-A truly unmapped address raised a decode error, because no `*_sel` matched.
-For these windows the matching `*_sel` was `'1'`, so `sel_err` stayed `'0'`,
-while the slave's ack term was a constant `'0'`. They were the only addresses
-in the map for which the interconnect gave neither `ack` nor `err`.
-`dmls_block` leaves its wait state only on one of the two, and there is no bus
-timeout (issue 9), so the CPU waits forever and nothing reaches `trap_ctrl`.
-
-Reproduced as reported: a program that prints `A`, does `lw` from
-`0x00001000` and prints `B` printed only `A` for 1.2M cycles, while the same
-program loading from `0x80000000` printed `AB` and the word it read.
-
-Impact on `main`:
-
-- a load from the boot ROM window (`.rodata` in ROM, the bootloader's tables)
-  locks the core instead of faulting;
-- a load from XIP (constants in flash) does the same;
-- a fetch from the UART or WGEN window hangs the instruction channel.
-
-**Fix on `develop`:** `wb_channel` (formerly the whole interconnect) gained an
-`err_i` per slave, and each `wb_channel` instance in `wb_intercon` ties the
-slaves not routed to it to `ack => '0'`, `err => '1'`. An unrouted access
-now gets `err` one cycle later and traps like an unmapped one. Checked on
-`develop` @ `510f64e` with a trap handler that prints `mcause`: a `lw` from
-`0x00001000` and from `0x20000000` prints `AT5` (load access fault) in both
-`WGEN_IF` modes, and from `0x80000000` prints `AB`. The instruction-channel
-case is the reproduction of issue 8. With no `mtvec` set, the fault still
-loops (issue 8), but it is visible and recoverable in software.
-
-The report's second direction, a data-side port for ROM and XIP so that loads
-from them work, was not taken: both remain fetch-only.
-
----
-
-## 2. `wb_syscon`: reset synchroniser has no initial value
+## 1. `wb_syscon`: reset synchroniser has no initial value
 
 **Status:** analysis.
 **File:** `soc/rtl/wb_syscon.vhdl:16`
@@ -99,7 +41,7 @@ the description.
 
 ---
 
-## 3. Style inconsistencies
+## 2. Style inconsistencies
 
 **Status:** analysis. Cosmetic, but they are the kind of thing that drifts.
 
@@ -115,7 +57,7 @@ the description.
 
 ---
 
-## 4. The reset pin is active low but named `rst`
+## 3. The reset pin is active low but named `rst`
 
 **Status:** verified in the testbench.
 **Files:** `soc/rtl/wb_syscon.vhdl:23`, `soc/tbs/leaf_soc_tb.vhdl:142`, `:149`
@@ -135,7 +77,7 @@ with the pinout.
 
 ---
 
-## 5. `qpe_csrs`: writes outside `0x7C0–0x7C6` are silently discarded
+## 4. `qpe_csrs`: writes outside `0x7C0–0x7C6` are silently discarded
 
 **Status:** analysis.
 **File:** `soc/rtl/qpe_csrs.vhdl:103`
@@ -149,6 +91,35 @@ calls corrupt the single-pulse configuration instead of failing.
 
 **Fix:** until the banked CSR file exists, the software API should be removed
 or made to fail loudly. See `README.md` for the current flat register map.
+
+---
+
+## 5. `qpe_csrs`: a trigger written while one is queued is lost
+
+**Status:** analysis.
+**Files:** `soc/rtl/qpe_csrs.vhdl:94-102`, `:148-149`, `sw/c/common/wgen.c:176-180`
+
+The trigger queue holds one request. A `TRIG` write while `sig_gen` is busy
+sets `valid_reg`; a second one before `ready` rises sets it again, so two
+triggers give one pulse. A `TRIG` written in the cycle `ready` rises with
+`valid_reg` set is lost as well: the write sees `ready = '1'`, leaves
+`valid_reg` alone, and its `valid_int` merges with the queued request into the
+single `sync` that `sig_gen_ctrl` takes. Nothing reports it: no error, no
+counter, and `TRIG` reads back the same status as after one trigger.
+
+Software that waits for bit 1 of `TRIG` (`ready and not valid`) before every
+trigger, as `wgen_wait_ready()` and `qp.wait` do, never hits it. `wgen_pulse()`
+does not wait, so two calls in a row without `wgen_wait_ready()` in between
+emit one pulse. MMIO shares the first case (`sig_gen_csrs` also keeps a single
+`valid_reg`) but not the second: there the write sets `valid_reg` after the
+clear, so the trigger stays queued.
+
+**Fix:** document in `README.md`, next to the pulse register map, that a
+trigger must wait for bit 1 of `TRIG`, and make `wgen_pulse()` wait before it
+triggers. When the hardware of issue 15 is done, decide there whether a second
+trigger while one is queued is refused visibly (a sticky overflow bit in
+`TRIG`) or queued deeper; with the snapshot registers each extra entry costs
+152 flip-flops.
 
 ---
 
@@ -200,7 +171,7 @@ before that synthesis.
 **Fix:** register the trigger in `qpe_csrs`, so that `valid_o` comes from a
 flip-flop only. Every `TRIG` write is latched, and the pulse starts one cycle
 later; reading `TRIG` (`ready and not valid`) still works, since `valid` is
-visible from the next cycle on. It fits the hardware fix of issue 13: the
+visible from the next cycle on. It fits the hardware fix of issue 15: the
 snapshot registers can load in the same cycle, and `sig_gen` then sees only
 registers from `qpe_csrs`. The alternative is to wait for static timing
 analysis with the PDK and only act if the path shows up as critical.
@@ -276,7 +247,30 @@ Alternatively a watchdog that resets the chip.
 
 ---
 
-## 10. `time` duplicates `cycle`, and nothing can raise a timer interrupt
+## 10. MMIO mode: the COP CSR window is accepted silently
+
+**Status:** analysis.
+**Files:** `soc/rtl/leaf_soc.vhdl:187-190`, `:213`, `ips/cpu/rtl/csrs.vhdl:124-125`, `:149-150`
+
+The core decodes `0x7C0–0x7FF` as the coprocessor window whether or not a
+coprocessor is attached, and raises no exception for any CSR address. In MMIO
+mode the plain `leaf` has its `cop_*` port tied off: `cop_dat_i` is `0` and
+the write outputs are open. A program built for COP (every C build today,
+since nothing defines `WGEN_IF_MMIO`) therefore runs on an MMIO SoC without a
+fault: its parameter writes vanish and no pulse comes out. One that waits on
+`TRIG` reads `0` forever and hangs in the poll.
+
+The opposite mismatch is visible: an MMIO program on a COP SoC gets `err` on
+IO1 and traps (issue 8).
+
+**Fix:** in the CPU submodule, a generic that disables the window, so that an
+access to it without a coprocessor is an illegal instruction; `leaf_soc` sets
+it in `mmio_qpe_gen`. Until then, document the behaviour in `README.md` under
+"Two ways to reach the pulse generator".
+
+---
+
+## 11. `time` duplicates `cycle`, and nothing can raise a timer interrupt
 
 **Status:** analysis.
 **Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:149-150`, `:185-186`
@@ -293,7 +287,7 @@ duplicate. The first is a change in the CPU submodule.
 
 ---
 
-## 11. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
+## 12. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
 
 **Status:** verified in simulation (the timing below); the datasheet check is
 open until a flash is chosen.
@@ -331,7 +325,28 @@ depend on both.
 
 ---
 
-## 12. RAM0 macros: a store and a fetch of the same word in one cycle
+## 13. XIP: a fetch in flight cannot be abandoned
+
+**Status:** analysis. Performance only.
+**Files:** `soc/rtl/wb_xip_ctrl.vhdl`, `soc/rtl/wb_channel.vhdl:144-148`, `:158`
+
+Once `wb_xip_ctrl` leaves `IDLE` it runs the whole 64-bit transfer, and
+`wb_channel` holds `xip_sel_reg`, and with it `STALL`, until the `ACK`. When
+the core redirects (a taken branch or a trap) while a sequential prefetch from
+XIP is in flight, the fetch at the new target waits for the stale word: up to
+a full word latency, 130 cycles, for an instruction that is thrown away. Code
+running from flash pays it on every taken branch whose fall-through word was
+already requested, including a jump from XIP into RAM0.
+
+**Fix:** only if XIP performance matters. Let the core abandon the cycle by
+dropping `CYC`, which Wishbone allows, and have `wb_xip_ctrl` return to `IDLE`
+and `wb_channel` clear `xip_sel_reg` when it does. The core drops `CYC` today
+only when its instruction buffer is full, not on a redirect, so the change
+starts in the CPU submodule. Recheck `xip_test` after it.
+
+---
+
+## 14. RAM0 macros: a store and a fetch of the same word in one cycle
 
 **Status:** analysis. Not seen in any test.
 **Files:** `soc/rtl/wb_ram_dp_macro.vhdl`, `soc/tbs/sram_dp_sim.vhdl`,
@@ -385,7 +400,7 @@ would show it if one did: `BEHAV` returns the old word silently, and `MACRO`/
 
 ---
 
-## 13. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
+## 15. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
 
 **Status:** part A verified in simulation; part B analysis.
 **Files:** `soc/rtl/qpe_csrs.vhdl:83-118`, `:148-150`, `sw/c/common/wgen.c`,
@@ -464,18 +479,17 @@ pulse's amplitude in the CSV.
 
 Before tapeout:
 
-- **Issue 1**, by merging `develop` into `main`; nothing else to change.
 - **Issue 8**, the boot ROM trap handler, because the ROM cannot change after
   tapeout. Test the whole bootloader with it, not just the handler.
-- **Issue 11**, the XIP timing: add the generics, then set them from the
+- **Issue 12**, the XIP timing: add the generics, then set them from the
   chosen flash's datasheet.
-- **Issues 4 and 6**, because they fix the pinout.
-- **Issue 13**, because COP is the default interface and emits no pulse today;
+- **Issues 3 and 6**, because they fix the pinout.
+- **Issue 15**, because COP is the default interface and emits no pulse today;
   the snapshot in `qpe_csrs` is hardware and cannot follow in software.
   Do issue 7 in the same change: it touches the same lines.
 
-Then, in any order: issue 9 (timeout), issue 2, issue 10, issue 12, issues 5
-and 3.
+Then, in any order: issue 9 (timeout), issue 1, issue 5, issue 10,
+issue 11, issue 13, issue 14, issues 4 and 2.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,
