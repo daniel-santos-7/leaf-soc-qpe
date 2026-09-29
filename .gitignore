@@ -1,5 +1,6 @@
 waves
 work
+dist
 
 e~leaf_soc_tb.o
 e~leaf_soc_tb_sim.o

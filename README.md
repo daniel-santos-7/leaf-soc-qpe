@@ -228,6 +228,16 @@ make -C sw run-quick                                      # build CoreMark + sim
 make -C sw upload BIN=./c/hello_world/hello_world.bin PORT=/dev/ttyUSB0
 ```
 
+`make rtl-tar` packs the synthesisable sources of the SoC into `dist/leaf_soc_rtl.tar`: every file under `soc/rtl` and the IPs' `rtl` directories, with no testbenches and nothing from `TECH_DIR`. The archive is flat: it holds only the files, with no directories, and the build fails if two sources share a file name. Next to them it writes `files.f`, the files in analysis order. GHDL derives that order from the `RTL_TOP` elaboration (default `leaf_soc`), and appends the files that are outside that closure, `sram_dp` and `wb_ram_dp_macro`. The target analyses the list once in a scratch library before packing, so an order that does not analyse fails the build instead of producing the tar. The sources are VHDL-93 and need no `--ieee=synopsys`:
+
+```bash
+make rtl-tar
+mkdir rtl && tar -xf dist/leaf_soc_rtl.tar -C rtl && cd rtl
+ghdl -a $(cat files.f) && ghdl --synth --out=none leaf_soc
+```
+
+That archive synthesises RAM0 as the inferred array. `make rtl-tar RAM=TECH` builds `dist/leaf_soc_tech_rtl.tar` for the macro RAM instead: it adds the technology's synthesis sources, which `TECH_DIR` lists in a file `syn.f` (names relative to `TECH_DIR`, no simulation models), and takes its order from the configuration `leaf_soc_tech`, which that directory must provide and which is the unit to synthesise. The macro cell itself stays unbound, a black box whose views come from the memory compiler, so GHDL's "not bound" warning on it is expected. This archive carries the technology files and follows their licence terms, not this repository's. `RAM=MACRO` is refused, since `sram_dp(sim)` is not synthesisable.
+
 ## :balance_scale: License
 
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for the full text.

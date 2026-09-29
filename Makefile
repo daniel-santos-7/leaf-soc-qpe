@@ -1,5 +1,6 @@
 WORKDIR  = work
 WAVESDIR = waves
+DISTDIR  = dist
 
 PLOT_VENV   = sw/utils/.venv
 PLOT_SCRIPT = sw/utils/plot_samples.py
@@ -22,6 +23,21 @@ TECH_SRC = $(wildcard $(TECH_DIR)/*.vhdl)
 
 RTL_SRC  = $(CPU_RTL) $(UART_RTL) $(WGEN_RTL) $(GPIO_RTL) $(SOC_RTL)
 TBS_SRC  = $(UART_TBS) $(WGEN_TBS) $(SOC_TBS) $(TECH_SRC)
+
+RTL_TECH  = $(if $(filter TECH,$(RAM)),$(addprefix $(TECH_DIR)/,$(shell cat $(TECH_DIR)/syn.f 2>/dev/null)))
+RTL_TOP  ?= $(if $(filter TECH,$(RAM)),leaf_soc_tech,leaf_soc)
+RTL_TAR   = $(DISTDIR)/$(RTL_TOP)_rtl.tar
+RTL_WORK  = $(DISTDIR)/work
+RTL_FILES = $(patsubst ./%,%,$(RTL_SRC) $(RTL_TECH))
+
+ifneq ($(filter rtl-tar,$(MAKECMDGOALS)),)
+ifeq ($(RAM),MACRO)
+$(error rtl-tar: RAM=MACRO has no synthesisable macro, use BEHAV or TECH)
+endif
+ifeq ($(RAM)$(RTL_TECH),TECH)
+$(error rtl-tar: RAM=TECH needs $(TECH_DIR)/syn.f)
+endif
+endif
 
 PROGRAM       ?= sw/asm/hello-world/hello-world.bin
 RAM_INIT_FILE = $(PROGRAM)
@@ -81,7 +97,7 @@ $(WORKDIR)/.make: $(WORKDIR)/.import $(WORKDIR)/program.bin
 	@$(GHDL) -m $(GHDLFLAGS) $(TOP_UNIT)
 	@touch $@
 
-.PHONY: run plot clean
+.PHONY: run plot rtl-tar clean
 run: $(WORKDIR)/.make $(PROGRAM) | $(WAVESDIR)
 ifneq ($(RAM_INIT_FILE),)
 	@$(GHDL) -r $(GHDLFLAGS) $(TOP_UNIT) $(GHDLXOPTS) -gPROGRAM=$(PROGRAM) -gSKIP_UART_LOAD=true -gRUN_CYCLES=$(RUN_CYCLES)
@@ -99,6 +115,27 @@ plot: SAMPLES := 1
 plot: run $(PLOT_VENV)/bin/python3
 	$(PLOT_VENV)/bin/python3 $(PLOT_SCRIPT) $(WAVESDIR)/$(SAMPLES_CSV)
 
+rtl-tar: $(RTL_TAR)
+
+$(RTL_TAR): $(RTL_SRC) $(RTL_TECH)
+	@rm -rf $(RTL_WORK)
+	@mkdir -p $(RTL_WORK)/order $(RTL_WORK)/check $(RTL_WORK)/flat
+	@$(GHDL) -i --workdir=$(RTL_WORK)/order $(RTL_FILES)
+	@$(GHDL) --elab-order -Wno-binding --workdir=$(RTL_WORK)/order $(RTL_TOP) > $(RTL_WORK)/order.txt
+	@for f in $(RTL_FILES); do \
+	    grep -qxF "$$f" $(RTL_WORK)/order.txt || echo "$$f" >> $(RTL_WORK)/order.txt; \
+	done
+	@for f in $$(cat $(RTL_WORK)/order.txt); do \
+	    b=$$(basename "$$f"); \
+	    if [ -e "$(RTL_WORK)/flat/$$b" ]; then echo "rtl-tar: duplicate file name $$b" >&2; exit 1; fi; \
+	    cp "$$f" "$(RTL_WORK)/flat/$$b"; \
+	    echo "$$b" >> $(RTL_WORK)/flat/files.f; \
+	done
+	@cd $(RTL_WORK)/flat && $(GHDL) -a --workdir=../check $$(cat files.f)
+	@tar -cf $@ -C $(RTL_WORK)/flat $$(cat $(RTL_WORK)/flat/files.f) files.f
+	@rm -rf $(RTL_WORK)
+	@echo "$@: $$(tar -tf $@ | wc -l) files"
+
 clean:
 	$(GHDL) clean --workdir=$(WORKDIR)
-	rm -rf .import .make $(WORKDIR) $(WAVESDIR) $(PLOT_VENV)
+	rm -rf .import .make $(WORKDIR) $(WAVESDIR) $(DISTDIR) $(PLOT_VENV)
