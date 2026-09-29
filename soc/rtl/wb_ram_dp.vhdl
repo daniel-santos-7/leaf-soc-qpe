@@ -1,3 +1,10 @@
+----------------------------------------------------------------------
+-- Leaf project
+-- developed by: Daniel Santos
+-- module: dual-port Wishbone RAM
+-- 2026
+----------------------------------------------------------------------
+
 library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
@@ -10,7 +17,6 @@ entity wb_ram_dp is
         clk_i : in  std_logic;
         rst_i : in  std_logic;
 
-        -- Port A: data channel (read-write, byte selects)
         dat_a_i : in  std_logic_vector(31 downto 0);
         cyc_a_i : in  std_logic;
         stb_a_i : in  std_logic;
@@ -20,7 +26,6 @@ entity wb_ram_dp is
         ack_a_o : out std_logic;
         dat_a_o : out std_logic_vector(31 downto 0);
 
-        -- Port B: instruction channel (read-only, full word)
         cyc_b_i : in  std_logic;
         stb_b_i : in  std_logic;
         adr_b_i : in  std_logic_vector(BITS-3 downto 0);
@@ -61,10 +66,6 @@ begin
             addr_a := to_integer(unsigned(adr_a_i));
             addr_b := to_integer(unsigned(adr_b_i));
 
-            -- Port A: write. One request is accepted per cycle, matching the
-            -- unconditional ack below. Gating this on ack_reg_a = '0' -- as a
-            -- classic slave would -- silently drops the second of two requests
-            -- presented on consecutive cycles, while still acknowledging it.
             if ram_req_a = '1' then
                 if we_a_i = '1' then
                     if sel_a_i(0) = '1' then
@@ -82,7 +83,6 @@ begin
                 end if;
             end if;
 
-            -- Leitura contínua de ambas as portas
             dat_reg_a <= mem3(addr_a) & mem2(addr_a) & mem1(addr_a) & mem0(addr_a);
             dat_reg_b <= mem3(addr_b) & mem2(addr_b) & mem1(addr_b) & mem0(addr_b);
         end if;

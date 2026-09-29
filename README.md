@@ -44,6 +44,8 @@ Inside `wb_channel`:
 
 The response path assumes every slave acknowledges exactly one cycle after its strobe. This holds for the ROM, the ports of both RAMs, the UART and the GPIO. XIP is the exception, and the stall above is what makes it work: its select is held instead of being recaptured every cycle, so there is only ever one XIP request in flight and its `ACK` is matched to it no matter how late it comes.
 
+Every slave also accepts a new request on every cycle, with no gating on its own pending `ACK`. A classic slave that writes only while its `ACK` is low would, behind a pipelined master, drop the second of two requests on consecutive cycles and still acknowledge it; `wb_ram_dp` therefore guards its port-A write with the request alone.
+
 ### XIP Controller
 `wb_xip_ctrl` turns each instruction fetch in `0x20000000`–`0x20FFFFFF` into one SPI Read (`0x03`) of four bytes: command, 24-bit address, 32 data bits, 64 SCK periods in all. It uses SPI mode 0 with SCK at half the system clock: `CS#` falls together with the first MOSI bit, MOSI changes on SCK falling edges, and MISO is sampled in the system cycle in which SCK rises, a full cycle after the flash drove it. `spi_clk`, `spi_mosi` and `spi_cs_n` all come straight from flip-flops. A word takes 130 cycles (128 with `CS#` low), and the instruction master is stalled for all of it, so code in XIP runs roughly two orders of magnitude slower than from RAM.
 
@@ -143,7 +145,7 @@ Seven parameters, in the same order in both modes — CSR `0x7C0 + n` in COP, wo
 
 `sw/c/common/wgen.c` abstracts over both interfaces and compiles to CSR or MMIO accesses under `WGEN_IF_MMIO`. No Makefile defines that macro, so C builds target the COP path unless you add `-DWGEN_IF_MMIO`.
 
-The I/Q output width is **not** fixed by the SoC: it follows `OUT_RES_BITS` in the generated `ips/wgen/rtl/sine_lut_pkg.vhd` (currently 10 bits), which `leaf_soc_pkg.vhdl` derives its own constant from.
+The I/Q output width is **not** fixed by the SoC: it follows `OUT_RES_BITS` in the generated `ips/wgen/rtl/sine_lut_pkg.vhd` (currently 10 bits), which `leaf_soc_pkg.vhdl` derives its own constant from. Do not hardcode it in the package, or the SoC ports stop matching `sig_gen`'s.
 
 > **Note — the COP registers hold pointers, not values.** Writing a parameter CSR stores `wdata[4:0]` as a *GPR index*; `qpe_csrs` then snoops the register-file write port and mirrors whatever lands in that GPR. Bind first, then load the register:
 >
@@ -152,6 +154,10 @@ The I/Q output width is **not** fixed by the SoC: it follows `OUT_RES_BITS` in t
 > qp.amp t0            # AMP now tracks x22
 > li  x22, 0x0000FFFF  # picked up through the register-file snoop
 > ```
+>
+> The pointer scheme avoids giving the register file extra read ports for the pulse parameters: each one costs a full 32-way read mux, and they synthesised poorly. `x0` is never mirrored, since the register file discards writes to it, so a parameter bound to `x0` keeps its reset value, 0.
+>
+> A `TRIG` write reaches `sig_gen` combinationally: when the generator is idle (`ready` high) the pulse starts in the same cycle and nothing is stored. When it is busy, `qpe_csrs` latches the request in `valid_reg` until `ready` rises.
 >
 > The assembly examples under `sw/asm/` predate this convention and load literal values into the pointed registers, so they bind to arbitrary GPRs and emit an all-zero pulse. The MMIO path stores values directly and is unaffected.
 
