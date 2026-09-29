@@ -4,36 +4,20 @@ Open issues only; fixed ones are removed, and their history is in git.
 Entries are ordered by the effort their fix takes, simplest first; the
 section at the end orders them by priority for the tapeout.
 
-Issues 1, 3 and 7 come from a read of every file under `soc/rtl/`
-(`develop` @ `1c06fa7`). Issues 2, 5, 8 and 10 come from a second pass aimed
-at the ASIC tapeout (`develop` @ `d832821`), which also covered the RTL of the
-three IPs and a generic Yosys synthesis of `leaf_soc` in both `WGEN_IF` modes.
-Issues 6, 11, 13 and 14 come from a third read of `soc/rtl/` (`develop` @
-`8d0689d`), issues 4, 9 and 12 from a fourth (`develop` @ `3aa5783`).
+Issues 2 and 6 come from a read of every file under `soc/rtl/` (`develop` @
+`1c06fa7`). Issues 1, 4, 7 and 9 come from a second pass aimed at the ASIC
+tapeout (`develop` @ `d832821`), which also covered the RTL of the three IPs
+and a generic Yosys synthesis of `leaf_soc` in both `WGEN_IF` modes. Issues 5,
+10, 12 and 13 come from a third read of `soc/rtl/` (`develop` @ `8d0689d`),
+issues 3, 8 and 11 from a fourth (`develop` @ `3aa5783`).
 
 Each entry says whether it was **verified** (reproduced in simulation or
-synthesis) or is **analysis** (read from the RTL, not yet observed). Issue 7
+synthesis) or is **analysis** (read from the RTL, not yet observed). Issue 6
 is a software issue.
 
 ---
 
-## 1. Style inconsistencies
-
-**Status:** analysis. Cosmetic, but they are the kind of thing that drifts.
-
-- **Missing file headers.** `wb_ram_dp`, `qpe_csrs`, `leaf_qpe` and
-  `leaf_soc_pkg` lack the `-- Leaf project / module: / year` block that
-  `wb_rom`, `wb_xip_ctrl`, `wb_syscon` and `leaf_soc` carry.
-- **Portuguese comments in an otherwise English codebase.**
-  `wb_ram_dp.vhdl` has "Leitura contínua de ambas as portas"; every other
-  comment under `soc/rtl/` is in English.
-- **Pointless intermediate signals.** `leaf_qpe.vhdl:140-141` routes `sig_i_o`
-  through `wgen_sig_i` and `active_o` through `wgen_active`, while `sig_q_o` is
-  driven straight from the instance. All three can connect directly.
-
----
-
-## 2. The reset pin is active low but named `rst`
+## 1. The reset pin is active low but named `rst`
 
 **Status:** verified in the testbench.
 **Files:** `soc/rtl/wb_syscon.vhdl:28`, `soc/tbs/leaf_soc_tb.vhdl:145`, `:152`
@@ -60,10 +44,10 @@ requirement and the filtering the pin needs.
 
 ---
 
-## 3. `qpe_csrs`: writes outside `0x7C0–0x7C6` are silently discarded
+## 2. `qpe_csrs`: writes outside `0x7C0–0x7C6` are silently discarded
 
 **Status:** analysis.
-**File:** `soc/rtl/qpe_csrs.vhdl:103`
+**File:** `soc/rtl/qpe_csrs.vhdl:98`
 
 `when others => null;` — everything above `REG_TRIG` is dropped and reads
 return zero. This is the hardware half of the mismatch with the banked
@@ -77,10 +61,10 @@ or made to fail loudly. See `README.md` for the current flat register map.
 
 ---
 
-## 4. `qpe_csrs`: a trigger written while one is queued is lost
+## 3. `qpe_csrs`: a trigger written while one is queued is lost
 
 **Status:** analysis.
-**Files:** `soc/rtl/qpe_csrs.vhdl:94-102`, `:148-149`, `sw/c/common/wgen.c:176-180`
+**Files:** `soc/rtl/qpe_csrs.vhdl:94-97`, `:135-136`, `sw/c/common/wgen.c:176-180`
 
 The trigger queue holds one request. A `TRIG` write while `sig_gen` is busy
 sets `valid_reg`; a second one before `ready` rises sets it again, so two
@@ -99,14 +83,14 @@ clear, so the trigger stays queued.
 
 **Fix:** document in `README.md`, next to the pulse register map, that a
 trigger must wait for bit 1 of `TRIG`, and make `wgen_pulse()` wait before it
-triggers. When the hardware of issue 14 is done, decide there whether a second
+triggers. When the hardware of issue 13 is done, decide there whether a second
 trigger while one is queued is refused visibly (a sticky overflow bit in
 `TRIG`) or queued deeper; with the snapshot registers each extra entry costs
 152 flip-flops.
 
 ---
 
-## 5. No sample clock goes out with `sig_i` / `sig_q`
+## 4. No sample clock goes out with `sig_i` / `sig_q`
 
 **Status:** analysis.
 **File:** `soc/rtl/leaf_soc.vhdl:21-23`
@@ -122,10 +106,10 @@ usual answer.
 
 ---
 
-## 6. `qpe_csrs`: the trigger reaches `sig_gen` through a long combinational path
+## 5. `qpe_csrs`: the trigger reaches `sig_gen` through a long combinational path
 
 **Status:** analysis. A timing risk, not a functional fault.
-**Files:** `soc/rtl/qpe_csrs.vhdl:148-150`, `ips/cpu/rtl/csrs.vhdl:321`,
+**Files:** `soc/rtl/qpe_csrs.vhdl:135-137`, `ips/cpu/rtl/csrs.vhdl:321`,
 `ips/cpu/rtl/trap_ctrl.vhdl:77`, `:164`, `ips/cpu/rtl/dmls_block.vhdl:305-306`,
 `ips/wgen/rtl/sig_gen_ctrl.vhd:101-117`
 
@@ -154,14 +138,14 @@ before that synthesis.
 **Fix:** register the trigger in `qpe_csrs`, so that `valid_o` comes from a
 flip-flop only. Every `TRIG` write is latched, and the pulse starts one cycle
 later; reading `TRIG` (`ready and not valid`) still works, since `valid` is
-visible from the next cycle on. It fits the hardware fix of issue 14: the
+visible from the next cycle on. It fits the hardware fix of issue 13: the
 snapshot registers can load in the same cycle, and `sig_gen` then sees only
 registers from `qpe_csrs`. The alternative is to wait for static timing
 analysis with the PDK and only act if the path shows up as critical.
 
 ---
 
-## 7. No trap vector is set, so any trap loops at address 0 (software)
+## 6. No trap vector is set, so any trap loops at address 0 (software)
 
 **Status:** verified in simulation.
 **Files:** `sw/asm/boot/start.S`, `sw/c/common/crt0.S`
@@ -214,7 +198,7 @@ the life of the chip.
 
 ---
 
-## 8. No bus timeout
+## 7. No bus timeout
 
 **Status:** analysis.
 **Files:** `soc/rtl/wb_channel.vhdl`, `ips/cpu/rtl/dmls_block.vhdl`, `ips/cpu/rtl/if_stage.vhdl`
@@ -230,10 +214,10 @@ Alternatively a watchdog that resets the chip.
 
 ---
 
-## 9. MMIO mode: the COP CSR window is accepted silently
+## 8. MMIO mode: the COP CSR window is accepted silently
 
 **Status:** analysis.
-**Files:** `soc/rtl/leaf_soc.vhdl:187-190`, `:213`, `ips/cpu/rtl/csrs.vhdl:124-125`, `:149-150`
+**Files:** `soc/rtl/leaf_soc.vhdl:185-188`, `:211`, `ips/cpu/rtl/csrs.vhdl:124-125`, `:149-150`
 
 The core decodes `0x7C0–0x7FF` as the coprocessor window whether or not a
 coprocessor is attached, and raises no exception for any CSR address. In MMIO
@@ -244,7 +228,7 @@ fault: its parameter writes vanish and no pulse comes out. One that waits on
 `TRIG` reads `0` forever and hangs in the poll.
 
 The opposite mismatch is visible: an MMIO program on a COP SoC gets `err` on
-IO1 and traps (issue 7).
+IO1 and traps (issue 6).
 
 **Fix:** in the CPU submodule, a generic that disables the window, so that an
 access to it without a coprocessor is an illegal instruction; `leaf_soc` sets
@@ -253,10 +237,10 @@ it in `mmio_qpe_gen`. Until then, document the behaviour in `README.md` under
 
 ---
 
-## 10. `time` duplicates `cycle`, and nothing can raise a timer interrupt
+## 9. `time` duplicates `cycle`, and nothing can raise a timer interrupt
 
 **Status:** analysis.
-**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:149-150`, `:185-186`
+**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:147-148`, `:183-184`
 
 `counters` keeps `timer_reg` and `cycle_reg` as two identical 64-bit counters,
 both incremented every clock: 64 flip-flops and an adder with no function.
@@ -270,7 +254,7 @@ duplicate. The first is a change in the CPU submodule.
 
 ---
 
-## 11. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
+## 10. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
 
 **Status:** verified in simulation (the timing below); the datasheet check is
 open until a flash is chosen.
@@ -308,7 +292,7 @@ depend on both.
 
 ---
 
-## 12. XIP: a fetch in flight cannot be abandoned
+## 11. XIP: a fetch in flight cannot be abandoned
 
 **Status:** analysis. Performance only.
 **Files:** `soc/rtl/wb_xip_ctrl.vhdl`, `soc/rtl/wb_channel.vhdl:144-148`, `:158`
@@ -329,7 +313,7 @@ starts in the CPU submodule. Recheck `xip_test` after it.
 
 ---
 
-## 13. RAM0 macros: a store and a fetch of the same word in one cycle
+## 12. RAM0 macros: a store and a fetch of the same word in one cycle
 
 **Status:** analysis. Not seen in any test.
 **Files:** `soc/rtl/wb_ram_dp_macro.vhdl`, `soc/tbs/sram_dp_sim.vhdl`,
@@ -354,7 +338,7 @@ It needs a store into a word the fetch unit is reading at that moment:
 1. Code that writes instructions just ahead of the PC. `FENCE.I` does not help:
    the core decodes the `FENCE` opcode as a no-op (`main_ctrl.vhdl:311`), so it
    discards nothing already fetched. On silicon the fetched word can be garbage,
-   an illegal instruction, and then the loop of issue 7.
+   an illegal instruction, and then the loop of issue 6.
 2. Prefetch running past the end of `.text` into writable `.rodata`/`.data`
    while a store hits that word. The fetched word is flushed and never
    executed, but the collision still happens on the macro.
@@ -383,10 +367,10 @@ would show it if one did: `BEHAV` returns the old word silently, and `MACRO`/
 
 ---
 
-## 14. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
+## 13. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
 
 **Status:** part A verified in simulation; part B analysis.
-**Files:** `soc/rtl/qpe_csrs.vhdl:83-118`, `:148-150`, `sw/c/common/wgen.c`,
+**Files:** `soc/rtl/qpe_csrs.vhdl:83-109`, `:135-137`, `sw/c/common/wgen.c`,
 `sw/asm/common/qp.inc`, `ips/wgen/rtl/sig_gen_ctrl.vhd:101-117`
 
 In COP mode `qpe_csrs` holds no pulse values. Writing a parameter CSR stores
@@ -462,17 +446,17 @@ pulse's amplitude in the CSV.
 
 Before tapeout:
 
-- **Issue 7**, the boot ROM trap handler, because the ROM cannot change after
+- **Issue 6**, the boot ROM trap handler, because the ROM cannot change after
   tapeout. Test the whole bootloader with it, not just the handler.
-- **Issue 11**, the XIP timing: add the generics, then set them from the
+- **Issue 10**, the XIP timing: add the generics, then set them from the
   chosen flash's datasheet.
-- **Issues 2 and 5**, because they fix the pinout.
-- **Issue 14**, because COP is the default interface and emits no pulse today;
+- **Issues 1 and 4**, because they fix the pinout.
+- **Issue 13**, because COP is the default interface and emits no pulse today;
   the snapshot in `qpe_csrs` is hardware and cannot follow in software.
-  Do issue 6 in the same change: it touches the same lines.
+  Do issue 5 in the same change: it touches the same lines.
 
-Then, in any order: issue 8 (timeout), issue 4, issue 9, issue 10, issue 12,
-issue 13, issues 3 and 1.
+Then, in any order: issue 7 (timeout), issue 3, issue 8, issue 9, issue 11,
+issue 12 and issue 2.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,

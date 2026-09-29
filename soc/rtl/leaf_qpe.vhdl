@@ -1,3 +1,10 @@
+----------------------------------------------------------------------
+-- Leaf project
+-- developed by: Daniel Santos
+-- module: Leaf core with the QPE coprocessor
+-- 2026
+----------------------------------------------------------------------
+
 library IEEE;
 use IEEE.std_logic_1164.all;
 use work.leaf_pkg.all;
@@ -55,12 +62,6 @@ architecture rtl of leaf_qpe is
     signal wgen_delay : std_logic_vector(23 downto 0);
     signal wgen_ready : std_logic;
 
-    signal wgen_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
-    signal wgen_active : std_logic;
-
-    -- Register-file write snoop bus: broadcasts the CPU's own GPR write
-    -- port (we/addr/data) so qpe_csrs can mirror whichever GPR each
-    -- pulse parameter is pointed at.
     signal rf_wr_en   : std_logic;
     signal rf_wr_addr : std_logic_vector(4 downto 0);
     signal rf_wr_data : std_logic_vector(XLEN-1 downto 0);
@@ -132,12 +133,9 @@ begin
         valid_i      => wgen_valid,
         delay_i      => wgen_delay,
         ready_o      => wgen_ready,
-        sig_i_o      => wgen_sig_i,
+        sig_i_o      => sig_i_o,
         sig_q_o      => sig_q_o,
-        active_o     => wgen_active
+        active_o     => active_o
     );
-
-    sig_i_o <= wgen_sig_i;
-    active_o <= wgen_active;
 
 end architecture rtl;

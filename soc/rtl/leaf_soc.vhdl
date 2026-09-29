@@ -36,7 +36,6 @@ architecture rtl of leaf_soc is
     signal soc_syscon_clk : std_logic;
     signal soc_syscon_rst : std_logic;
 
-    -- CPU instruction channel
     signal soc_cpu_inst_cyc : std_logic;
     signal soc_cpu_inst_stb : std_logic;
     signal soc_cpu_inst_adr : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
@@ -44,7 +43,6 @@ architecture rtl of leaf_soc is
     signal soc_cpu_inst_ack : std_logic;
     signal soc_cpu_inst_err : std_logic;
 
-    -- CPU data channel
     signal soc_cpu_data_cyc : std_logic;
     signal soc_cpu_data_stb : std_logic;
     signal soc_cpu_data_we  : std_logic;
@@ -223,8 +221,6 @@ begin
             sel_i    => soc_data_io1_sel,
             dat_i    => soc_data_io1_dat,
             ack_o    => soc_io1_ack,
-            -- Pipelined-mode port: the CSR file never inserts wait states
-            -- (stall_o is tied low) and wb_intercon takes no stall from slaves.
             stall_o  => open,
             dat_o    => soc_io1_dat,
             sig_i_o  => sig_i,
@@ -362,7 +358,6 @@ begin
         gpio_oe_o  => gpio_oe
     );
 
-    -- XIP controller
     soc_xip: entity work.wb_xip_ctrl port map (
         clk_i     => soc_syscon_clk,
         rst_i     => soc_syscon_rst,
@@ -377,7 +372,6 @@ begin
         spi_cs_n  => spi_cs_n
     );
 
-    -- memory 32 kB (dual-port: A = data R/W, B = instruction R/O)
     soc_ram0: wb_ram_dp generic map (
         BITS  => RAM0_ADDR_WIDTH
     ) port map (

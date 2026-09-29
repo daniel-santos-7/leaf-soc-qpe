@@ -1,3 +1,10 @@
+----------------------------------------------------------------------
+-- Leaf project
+-- developed by: Daniel Santos
+-- module: SoC package (memory map and components)
+-- 2026
+----------------------------------------------------------------------
+
 library IEEE;
 use IEEE.std_logic_1164.all;
 
@@ -14,16 +21,14 @@ package leaf_soc_pkg is
     constant RAM0_BASE_ADDR : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0) := x"80000000";
     constant RAM1_BASE_ADDR : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0) := x"90000000";
 
-    constant ROM_ADDR_WIDTH : natural := 9;    -- 512 bytes
-    constant IO0_ADDR_WIDTH : natural := 4;    -- 16 bytes (4 registers)
-    constant IO1_ADDR_WIDTH : natural := 5;    -- 32 bytes (8 registers)
-    constant IO2_ADDR_WIDTH : natural := 6;    -- 64 bytes (16 registers)
-    constant XIP_ADDR_WIDTH : natural := 24;   -- 16 MB
-    constant RAM0_ADDR_WIDTH : natural := 15;   -- 32 KB
-    constant RAM1_ADDR_WIDTH : natural := 10;  -- 1 KB
+    constant ROM_ADDR_WIDTH : natural := 9;
+    constant IO0_ADDR_WIDTH : natural := 4;
+    constant IO1_ADDR_WIDTH : natural := 5;
+    constant IO2_ADDR_WIDTH : natural := 6;
+    constant XIP_ADDR_WIDTH : natural := 24;
+    constant RAM0_ADDR_WIDTH : natural := 15;
+    constant RAM1_ADDR_WIDTH : natural := 10;
 
-    -- Output resolution follows the wgen IP's generated sine LUT; do not
-    -- hardcode it here, or the SoC ports stop matching sig_gen's.
     constant OUT_RES_BITS : natural := work.sine_lut_pkg.OUT_RES_BITS;
 
     constant GPIO_WIDTH : natural := 8;
