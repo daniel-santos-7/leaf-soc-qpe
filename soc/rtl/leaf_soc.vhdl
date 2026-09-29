@@ -15,7 +15,7 @@ entity leaf_soc is
     );
     port (
         clk      : in  std_logic;
-        rst      : in  std_logic;
+        rst_n    : in  std_logic;
         rx       : in  std_logic;
         tx       : out std_logic;
         sig_i    : out std_logic_vector(OUT_RES_BITS-1 downto 0);
@@ -132,7 +132,7 @@ begin
 
     soc_syscon: entity work.wb_syscon port map (
         clk   => clk,
-        rst   => rst,
+        rst_n => rst_n,
         clk_o => soc_syscon_clk,
         rst_o => soc_syscon_rst
     );

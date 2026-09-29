@@ -85,7 +85,7 @@ package leaf_soc_pkg is
         );
         port (
             clk      : in  std_logic;
-            rst      : in  std_logic;
+            rst_n    : in  std_logic;
             rx       : in  std_logic;
             tx       : out std_logic;
             sig_i    : out std_logic_vector(OUT_RES_BITS-1 downto 0);
