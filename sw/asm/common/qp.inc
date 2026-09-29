@@ -1,6 +1,6 @@
 # WGEN global register layout (non-banked)
 # Each register has a fixed CSR address.
-# wgx_csrs: FTW(0), POW(1), AMP(2), DRAG(3), ENV(4), DELAY(5), TRIG(6)
+# qpe_csrs: FTW(0), POW(1), AMP(2), DRAG(3), ENV(4), DELAY(5), TRIG(6)
 # CSR base = 0x7C0
 
 .equ WG_FTW,   0x7C0

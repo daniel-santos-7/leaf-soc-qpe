@@ -11,7 +11,8 @@ entity leaf_soc_tb is
         PROGRAM : string;
         SKIP_UART_LOAD : boolean := false;
         RUN_CYCLES : natural := 500000;
-        SAMPLES_FILE : string := ""
+        SAMPLES_FILE : string := "";
+        WGEN_IF_COP : boolean := true
     );
 end entity leaf_soc_tb;
 
@@ -32,13 +33,24 @@ architecture tb of leaf_soc_tb is
     signal spi_miso : std_logic;
     signal spi_cs_n : std_logic;
 
+    signal gpio_i  : std_logic_vector(GPIO_WIDTH-1 downto 0);
+    signal gpio_o  : std_logic_vector(GPIO_WIDTH-1 downto 0);
+    signal gpio_oe : std_logic_vector(GPIO_WIDTH-1 downto 0);
+
+    constant GPIO_EXT : std_logic_vector(GPIO_WIDTH-1 downto 0) := "10100101";
+
     signal clk_en : std_logic := '0';
 
     constant CLK_PERIOD : time := 10 ns;
 
+    constant RAM_JUMP_CMD : std_logic_vector(7 downto 0) := x"4A";
+    constant ACK          : std_logic_vector(7 downto 0) := x"06";
+
 begin
 
-    uut: leaf_soc port map (
+    uut: leaf_soc generic map (
+        WGEN_IF_COP => WGEN_IF_COP
+    ) port map (
         clk      => clk,
         rst      => rst,
         rx       => rx,
@@ -49,15 +61,28 @@ begin
         spi_clk  => spi_clk,
         spi_mosi => spi_mosi,
         spi_miso => spi_miso,
-        spi_cs_n => spi_cs_n
+        spi_cs_n => spi_cs_n,
+        gpio_i   => gpio_i,
+        gpio_o   => gpio_o,
+        gpio_oe  => gpio_oe
     );
+
+    gpio_pad_proc: process(gpio_o, gpio_oe)
+    begin
+        for i in gpio_i'range loop
+            if gpio_oe(i) = '1' then
+                gpio_i(i) <= gpio_o(i);
+            else
+                gpio_i(i) <= GPIO_EXT(i);
+            end if;
+        end loop;
+    end process gpio_pad_proc;
 
     u_spi_flash: entity work.spi_flash_model
         generic map (
             INIT_FILE => PROGRAM
         )
         port map (
-            clk_i    => clk,
             spi_clk  => spi_clk,
             spi_mosi => spi_mosi,
             spi_miso => spi_miso,
@@ -134,9 +159,9 @@ begin
 
         if SKIP_UART_LOAD then
             report "RAM preloaded, sending RAM_JUMP_CMD...";
-            uart_transmit(rx, x"4A");
-            wait until uart_data = x"06" for 100 us;
-            if uart_data = x"06" then
+            uart_transmit(rx, RAM_JUMP_CMD);
+            wait until uart_data = ACK for 100 us;
+            if uart_data = ACK then
                 report "ACK received after RAM_JUMP_CMD, program started!";
             else
                 report "ERROR: No ACK after RAM_JUMP_CMD" severity failure;

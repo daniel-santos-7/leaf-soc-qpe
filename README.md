@@ -2,24 +2,54 @@
 
 Leaf SoC is a compact and efficient 32-bit *System-on-Chip* based on the RISC-V architecture. It is designed for embedded applications, IoT (Internet of Things), and academic research, providing a balanced platform between resource economy and functional completeness.
 
+This repository carries the SoC together with a **QPE** (Quantum Pulse Extension): the CPU drives a DDS waveform generator that emits Gaussian, DRAG-corrected I/Q pulses for qubit control.
+
 ## :star: Features
 
 - **Leaf Processor:** 32-bit RISC-V core (RV32I) with a 2-stage pipeline.
-- **Wishbone B4 Bus:** Shared-bus interconnection for seamless peripheral integration.
-- **Memory System:** Integrated Boot ROM and 32 KB of internal RAM.
-- **Standard Peripherals:** Includes a robust UART for serial communication.
+- **Wishbone B4 Bus:** Crossbar interconnect; instruction fetch and data accesses run in parallel.
+- **Memory System:** Integrated Boot ROM, two internal dual-port RAMs: RAM0 (32 KB) and RAM1 (1 KB).
+- **Standard Peripherals:** UART for serial communication and an 8-pin GPIO with edge interrupts.
+- **Pulse Generator:** DDS signal generator with Gaussian envelopes and DRAG correction, reachable either as a coprocessor or as a memory-mapped peripheral.
 - **Expandability:** Ready for XIP (Execute-In-Place) and custom hardware via a dedicated coprocessor interface.
 - **FPGA Friendly:** Synthesizable VHDL design optimized for modern FPGA architectures.
 
 ## :gears: Microarchitecture
 
-The SoC architecture is centered around the **Wishbone B4** interconnect, which manages the communication between the Leaf master and several slave peripherals.
+The SoC architecture is centered around the **Wishbone B4** interconnect, which manages the communication between the Leaf core's two masters and the slave peripherals.
 
 ### Processor
 The **Leaf** core implements the RV32I base integer instruction set. It features a 2-stage pipeline (Fetch and Execute) and supports Machine-mode CSRs, hardware counters, and interrupts.
 
 ### Bus & Interconnect
-A central **Intercon** module performs address decoding and bus steering. It uses the Wishbone B4 protocol, supporting byte-selects (`SEL`) and error reporting (`ERR`).
+The Leaf core is Harvard: it has two Wishbone B4 masters, one for instruction fetch and one for data. Both drive the bus as **pipelined** masters: `STB` is asserted for a single cycle and `ACK` is awaited with `CYC` held. Byte selects (`SEL`) and error reporting (`ERR`) are supported.
+
+A single **Intercon** (`wb_intercon`) connects both masters to the slaves as a partial crossbar:
+
+| Master | ROM | XIP | RAM0 B | RAM1 B | UART | IO1 | GPIO | RAM0 A | RAM1 A |
+|--------|:---:|:---:|:------:|:------:|:----:|:---:|:----:|:------:|:------:|
+| Instruction | ✓ | ✓ | ✓ | ✓ | | | | | |
+| Data | | | | | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+The two sets of slaves are disjoint, so there is no arbitration and both channels run in parallel. Each dual-port RAM appears as two slave interfaces, which is what lets a fetch and a load/store complete in the same cycle. Both are instances of the same `wb_ram_dp`: RAM0 with `BITS => 15`, RAM1 with `BITS => 10`.
+
+`wb_intercon` is structural: one **`wb_channel`** per master, i.e. per CPU channel. `wb_channel` has a port group for every slave in the memory map (`rom_*`, `io0_*`, `io1_*`, `io2_*`, `xip_*`, `ram0_*`, `ram1_*`) and decodes them against the bases and widths in `leaf_soc_pkg`. The regions are disjoint, which keeps the select one-hot. Each instance connects the slaves routed to its master and ties off the others: their outputs are left `open`, and their inputs are tied to `ACK = '0'`, `ERR = '1'` and zero data.
+
+Inside `wb_channel`:
+
+- **Forward path:** combinational. A slave's `STB` is the master's `STB` gated by the decode of the current address.
+- **Response path:** `ACK`, `ERR` and read data are steered by a *registered* select, captured in the request cycle. That way a pipelined master that moves to a new address every cycle still gets each response matched to the request that produced it. The select is only captured while `CYC and STB` is high; otherwise a stale select would survive into idle cycles and could let a phantom `ACK` through.
+- **Unrouted accesses:** a tied-off slave answers through its fixed `ERR = '1'`, gated by the registered select like any response, and an address outside the map is answered by the decoder itself. Either way `ERR` arrives one cycle after the request (a load from ROM, a fetch from the UART, an unmapped address), and the CPU takes an access-fault trap instead of waiting for an `ACK` that never comes. A slave with no error signal of its own, when routed, has its `ERR` input tied to `'0'`.
+- **Stall:** each channel drives its master's `STALL`. It is high while an XIP transfer is outstanding: `xip_sel_reg` is set when the XIP request is accepted and held until the XIP `ACK`, and while it is high the channel gates its own `req` and every slave's `STB`, so the master keeps its next request pending and nothing can overtake the slow response. Everywhere else it stays `'0'`: no other slave inserts wait states, and `wb_sig_gen`'s `stall_o`, tied low, is left open.
+
+The response path assumes every slave acknowledges exactly one cycle after its strobe. This holds for the ROM, the ports of both RAMs, the UART and the GPIO. XIP is the exception, and the stall above is what makes it work: its select is held instead of being recaptured every cycle, so there is only ever one XIP request in flight and its `ACK` is matched to it no matter how late it comes.
+
+### XIP Controller
+`wb_xip_ctrl` turns each instruction fetch in `0x20000000`–`0x20FFFFFF` into one SPI Read (`0x03`) of four bytes: command, 24-bit address, 32 data bits, 64 SCK periods in all. It uses SPI mode 0 with SCK at half the system clock: `CS#` falls together with the first MOSI bit, MOSI changes on SCK falling edges, and MISO is sampled in the system cycle in which SCK rises, a full cycle after the flash drove it. `spi_clk`, `spi_mosi` and `spi_cs_n` all come straight from flip-flops. A word takes 130 cycles (128 with `CS#` low), and the instruction master is stalled for all of it, so code in XIP runs roughly two orders of magnitude slower than from RAM.
+
+XIP is fetch-only. The controller has no write path and no `ERR`, and the data channel keeps XIP tied off, so a load or store there takes an access fault. In simulation the testbench's `spi_flash_model` holds a copy of the program binary (512 KB, addresses wrap), so a function at `0x80000000 + n` can also be called at `0x20000000 + n` if its code is position-independent. `sw/c/xip_test` does exactly that and compares the result with the RAM0 call (`XIP ram=0efff9dc xip=0efff9dc ok`).
+
+Routing a slave to a master means connecting its port group on that master's `wb_channel` instead of tying it off. A new slave in the memory map needs a port group in `wb_channel`. A slave reachable from both masters also needs an arbiter in front of it.
 
 ### Memory Map
 The default address space allocation is defined as follows:
@@ -27,29 +57,119 @@ The default address space allocation is defined as follows:
 | Peripheral | Base Address | Size | Description |
 |------------|--------------|------|-------------|
 | **ROM**    | `0x00001000` | 512 B | Bootloader / Initialization code |
-| **UART**   | `10000000` | 16 B | Serial communication (IO0) |
-| **IO1**    | `0x10001000` | 16 B | Reserved for secondary IO |
+| **UART**   | `0x10000000` | 16 B | Serial communication (IO0) |
+| **IO1**    | `0x10001000` | 32 B | Pulse generator CSRs (MMIO mode only) |
+| **GPIO**   | `0x10002000` | 64 B | General-purpose I/O, 8 pins (IO2) |
 | **XIP**    | `0x20000000` | 16 MB | External Flash / Execute-In-Place (Optional) |
-| **RAM**    | `0x80000000` | 32 KB | Main System Memory |
+| **RAM0**   | `0x80000000` | 32 KB | Main System Memory (dual-port: A = data, B = instruction) |
+| **RAM1**   | `0x90000000` | 1 KB | Secondary memory (dual-port: A = data, B = instruction) |
+
+Bases and widths are declared once in [`soc/rtl/leaf_soc_pkg.vhdl`](soc/rtl/leaf_soc_pkg.vhdl), which is the source of truth for the map.
+
+Programs are linked into RAM0 (`sw/*/common/soc.ld`). RAM1 is declared there as a second region with a `.ram1` section, which is `NOLOAD`: a loadable section at `0x90000000` would make `objcopy -O binary` pad the `.bin` across the 256 MB gap from RAM0. So RAM1 is never preloaded and `crt0` does not clear it, and its contents are undefined until the program writes them. Put data there with `__attribute__((section(".ram1")))`. Code must be copied in at run time, and the instruction master can then fetch it. `sw/c/ram1_test` sweeps the whole region with word, half-word and byte accesses, prints a checksum (`d2072fde`) and an error count, then copies two instructions in and calls them (`exec=42`). In simulation `soc_ram1` binds to the synthesis `wb_ram_dp`, not a preloading model.
+
+### GPIO
+The GPIO is the [`wb-gpio`](https://github.com/daniel-santos-7/wb-gpio) IP (submodule `ips/gpio`), instantiated with `G_WIDTH => GPIO_WIDTH` (8, in `leaf_soc_pkg`) on IO2, which only the data master reaches. It is a pipelined slave with a one-cycle `ACK` and no `ERR`, like the UART, and its `stall_o`, constant `'0'`, is left open.
+
+| Offset | Register | Access | Description |
+|--------|----------|--------|-------------|
+| `0x00` | DATA_IN    | RO    | Synchronised pin values (2 flip-flops) |
+| `0x04` | DATA_OUT   | RW    | Value driven on output pins |
+| `0x08` | DIR        | RW    | 1 = output, 0 = input |
+| `0x0C` | SET        | WO    | `DATA_OUT \|= wdata` |
+| `0x10` | CLR        | WO    | `DATA_OUT &= ~wdata` |
+| `0x14` | TGL        | WO    | `DATA_OUT ^= wdata` |
+| `0x18` | IRQ_RISE   | RW    | Rising-edge interrupt enable |
+| `0x1C` | IRQ_FALL   | RW    | Falling-edge interrupt enable |
+| `0x20` | IRQ_STATUS | R/W1C | Pending events; writing 1 clears |
+
+`leaf_soc` brings the pins out as three vectors, `gpio_i`, `gpio_o` and `gpio_oe` (1 = drive), and leaves the tri-state buffer to the padframe or the board. The GPIO's `irq_o` drives the CPU's external interrupt input (`ex_irq_i`, `mip.MEIP`), the only interrupt source in the SoC; it stays high while any `IRQ_STATUS` bit is set, so a handler must clear the status before returning. Software must also set `mtvec` itself: nothing in `sw/` does by default (see [`ISSUES.md`](ISSUES.md)).
+
+In the testbench each pin reads back its own output when `gpio_oe` is set and the constant `0xA5` otherwise. `sw/c/gpio_test` exercises the pins and the SET/CLR/TGL registers, then enables a rising-edge interrupt on pin 1 and takes it through `mtvec`. It prints `in=aa`, `af`, `ac`, `a5` and `irq count=1 status=02 mcause=8000000b pending=00`, and needs about 1.2M cycles to finish printing.
+
+### Macro-based RAM
+`wb_ram_dp_macro` is a drop-in alternative to `wb_ram_dp` for RAM0 that builds the 32 KB out of hard SRAM macros instead of an inferred array: eight 2048 x 16 dual-port macros, four banks in depth by two halves in width. It has the same ports and the same pipelined contract as `wb_ram_dp` (one-cycle `ACK`, a write accepted on every request cycle). The low `MACRO_ADDR_BITS` (11) bits of the word address index inside a macro and the bits above select the bank; only the addressed bank is enabled. `sel_a_i` becomes an active-high per-bit write mask, one byte lane at a time, `sel_a_i(0..1)` into the low half and `sel_a_i(2..3)` into the high one. Port B is tied read-only because it serves the instruction master.
+
+The macros are reached through `sram_dp`, a technology-neutral interface declared once in `soc/rtl/sram_dp.vhdl`: per port a clock, `en`, `we`, `wmask`, `addr`, `d` and `q`, all active high. Its contract is that of a synchronous SRAM: one cycle of read latency, and `q` changes only on a read cycle, so a write or an idle port holds the last value read. That is why the wrapper registers the bank of each read to steer the output mux on the `ACK` cycle. A read that meets a write to the same word on the other port returns unknowns, and two writes to one word corrupt the bits both of them enable. The entity also carries `INIT_FILE`, `INIT_BANK` and `INIT_HALF`, which only a simulation architecture uses. `wb_ram_dp_macro` instantiates `sram_dp` as a component so that a configuration can pick the architecture:
+
+- `soc/tbs/sram_dp_sim.vhdl` holds architecture `sim`, a behavioural model of that contract. With `INIT_FILE` set it zero-fills the array and loads the half-words of its bank from a raw little-endian image; with `INIT_FILE = ""` the array powers up unknown.
+- A technology architecture maps `sram_dp` onto a real macro's pins. It is not part of this repository: it lives in the directory named by `TECH_DIR` (default `tech/`, which is gitignored), because the macro, its model and its documentation come from a memory compiler under NDA.
+
+`RAM` selects what the testbench binds to `soc_ram0`, as a different top-level configuration rather than a source edit:
+
+| `RAM` | Top | RAM0 |
+|-------|-----|------|
+| `BEHAV` | `leaf_soc_tb_sim` | `wb_ram_dp_sim`, the inferred array |
+| `MACRO` | `leaf_soc_tb_macro` | `wb_ram_dp_macro` over `sram_dp(sim)` |
+| `TECH` | `leaf_soc_tb_tech` | `wb_ram_dp_macro` over the technology architecture |
+
+`MACRO` goes through `wb_ram_dp_macro_sim`, which instantiates the configuration `wb_ram_dp_macro_preloaded`: it binds each macro to `sram_dp(sim)` with its bank and half preloaded from `work/program.bin`, so the `RAM_JUMP_CMD` shortcut still applies. A configuration has no loop, so the four banks are spelled out, and `wb_ram_dp_macro_sim` asserts `BITS = 15` rather than silently preloading part of the RAM. Every configuration lives in its own file, one top per file, so that each top's dependency closure stays separate. For `TECH`, the directory must supply the technology architecture of `sram_dp` and a configuration `leaf_soc_tb_tech`; the Makefile adds its `*.vhdl` files to the build when it exists and refuses `RAM=TECH` when it does not. RAM1 always uses `wb_ram_dp`: at 256 words it is smaller than one macro.
+
+Synthesis works the same way. `leaf_soc` instantiates `soc_ram0` as the `wb_ram_dp` component, so synthesising `leaf_soc` directly gives the inferred array. To get the macros, synthesise a configuration of `leaf_soc` that binds `soc_ram0` to `wb_ram_dp_macro` and `sram_dp` to the technology architecture, leaving the macro cell itself unbound so it becomes a black box. That configuration lives with the technology files too. RAM1 stays on `wb_ram_dp` in synthesis as well, by design: its 8 Kbit are built as flip-flops rather than a macro.
+
+`sw/c/ram_test` checks the array end to end. It sweeps the free part of RAM0, which crosses all four banks, with word stores, then byte and half-word stores on every fourth word, then a store followed at once by a load of the same word. It reads everything back and prints an order-dependent checksum and an error count, so a bank-decode or write-mask fault moves the checksum. It must not call `uart_init`, since rewriting the baud divisor corrupts the ACK the boot ROM still has in flight when it jumps to RAM, and the checksum avoids `*` because a software multiply on rv32i would dominate the run. It needs about 6M cycles and prints `checksum 9A1081FB`, `errors 00000000` under every `RAM`:
+
+```bash
+make -C sw/c/ram_test
+make run PROGRAM=sw/c/ram_test/ram_test.bin RAM=MACRO RUN_CYCLES=6000000
+```
 
 ### System Controller
 The **Syscon** module handles global clock buffering and synchronized reset generation for the entire SoC.
+
+## :zap: Pulse Generator (QPE)
+
+The waveform generator can be reached through two mutually exclusive interfaces, selected at elaboration time by the `WGEN_IF_COP` generic of `leaf_soc`, which picks between two `generate` blocks. The testbench passes it through, and the Makefile sets it from the `WGEN_IF` variable (`-gWGEN_IF_COP=false` for `MMIO`) when the simulation starts, so both modes are built into the same executable and switching recompiles nothing.
+
+- **`COP` (default):** `leaf_qpe` replaces the plain core, instantiating `leaf` + `qpe_csrs` + `sig_gen`. Pulse parameters live in the CPU's custom CSR window `0x7C0`–`0x7FF`, so a trigger costs no bus transaction. Nothing is attached to IO1, which answers every access with `ERR`, so a stray MMIO access traps instead of hanging.
+- **`MMIO`:** the plain core plus `wb_sig_gen` hung off IO1 as an ordinary Wishbone peripheral.
+
+Seven parameters, in the same order in both modes — CSR `0x7C0 + n` in COP, word `IO1_BASE + 4n` in MMIO:
+
+| n | Register | Meaning |
+|---|----------|---------|
+| 0 | FTW   | Frequency tuning word (32-bit phase increment) |
+| 1 | POW   | Phase offset word (32-bit) |
+| 2 | AMP   | Amplitude scalar (16-bit unsigned) |
+| 3 | DRAG  | Pre-scaled DRAG term, Q1.15 — **not** the coefficient β |
+| 4 | ENV   | Envelope step (32-bit); sets the pulse width |
+| 5 | DELAY | Inter-pulse delay in clock cycles (24-bit) |
+| 6 | TRIG  | Write bit 0 to fire; read for ready/valid status |
+
+`sw/c/common/wgen.c` abstracts over both interfaces and compiles to CSR or MMIO accesses under `WGEN_IF_MMIO`. No Makefile defines that macro, so C builds target the COP path unless you add `-DWGEN_IF_MMIO`.
+
+The I/Q output width is **not** fixed by the SoC: it follows `OUT_RES_BITS` in the generated `ips/wgen/rtl/sine_lut_pkg.vhd` (currently 10 bits), which `leaf_soc_pkg.vhdl` derives its own constant from.
+
+> **Note — the COP registers hold pointers, not values.** Writing a parameter CSR stores `wdata[4:0]` as a *GPR index*; `qpe_csrs` then snoops the register-file write port and mirrors whatever lands in that GPR. Bind first, then load the register:
+>
+> ```asm
+> li  t0, 22
+> qp.amp t0            # AMP now tracks x22
+> li  x22, 0x0000FFFF  # picked up through the register-file snoop
+> ```
+>
+> The assembly examples under `sw/asm/` predate this convention and load literal values into the pointed registers, so they bind to arbitrary GPRs and emit an all-zero pulse. The MMIO path stores values directly and is unaffected.
 
 ## :file_folder: Project Structure
 
 The repository is organized into the following main directories:
 
-- [`ips/`](ips/): Intellectual Property blocks (Git submodules).
+- [`ips/`](ips/): Intellectual Property blocks (Git submodules, each with its own Makefile and tests).
   - [`cpu/`](ips/cpu/): The Leaf RISC-V processor core.
   - [`uart/`](ips/uart/): UART controller with Wishbone interface.
   - [`wgen/`](ips/wgen/): DDS-based signal generator.
+  - [`gpio/`](ips/gpio/): GPIO with Wishbone interface.
 - [`soc/`](soc/): SoC-level RTL implementation and top-level testbenches.
 - [`sw/`](sw/): RISC-V software, including bootloaders, libraries, and C/Assembly examples.
 - [`waves/`](waves/): Output directory for simulation waveforms (generated at runtime).
 
+Changes under `ips/` belong to the submodule repositories, not to this one.
+
+Instances are written as `entity work.<name>`, so each interface is declared only once, in its entity. `leaf_soc_pkg` keeps component declarations only where a binding has to stay open: `wb_ram_dp`, which the testbench configurations rebind for `soc_ram0`, `leaf_soc`, the instance they descend through, and `sram_dp`, whose architecture a configuration picks per macro (see Macro-based RAM). A hard macro or a Verilog cell instantiated from VHDL also needs a component, since it has no VHDL entity to name.
+
 ## :test_tube: Simulation
 
-The SoC can be fully simulated using the provided Makefiles and open-source VHDL tools.
+The SoC can be fully simulated using the provided Makefiles and open-source VHDL tools. The whole design analyses as **VHDL-93**.
 
 ### Dependencies
 To build and simulate the project, ensure the following tools are installed:
@@ -57,6 +177,7 @@ To build and simulate the project, ensure the following tools are installed:
 - **GHDL:** VHDL simulator for logic verification.
 - **RISC-V Toolchain:** `riscv32-unknown-elf-gcc` (must support `-march=rv32i -mabi=ilp32`).
 - **GNU Make:** Used to orchestrate the build and simulation process.
+- **Spike:** (Optional) Required only by the CPU differential test suite in `ips/cpu/verif/tests`.
 - **GTKWave:** (Optional) Recommended for viewing `.ghw` waveform files.
 
 ### Running a Simulation
@@ -76,10 +197,46 @@ To build and simulate the project, ensure the following tools are installed:
    make run PROGRAM=sw/c/hello_world/hello_world.bin
    ```
 
+   The program's UART TX is decoded to stdout, so `printf`/`uart_puts` is the primary debugging channel.
+
 4. **View Waveforms:**
    ```bash
+   make run PROGRAM=sw/c/hello_world/hello_world.bin WAVEFORM=ghw
    gtkwave waves/hello_world.ghw
    ```
+
+### Makefile Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROGRAM` | `sw/asm/hello-world/hello-world.bin` | `.bin` to run; also names the waveform and CSV outputs |
+| `RUN_CYCLES` | `500000` | Simulated cycles after load; CoreMark needs tens of millions |
+| `WGEN_IF` | `COP` | `COP` or `MMIO` — see the Pulse Generator section |
+| `RAM` | `BEHAV` | `BEHAV`, `MACRO` or `TECH` — see Macro-based RAM |
+| `TECH_DIR` | `tech` | Directory with the technology sources for `RAM=TECH` |
+| `WAVEFORM` | *(none)* | `ghw` or `fst`; written to `waves/<program>.<ext>` |
+| `SAMPLES` | *(none)* | `1` dumps every active I/Q sample to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
+
+`make clean` runs `ghdl clean` and drops `work/` and `waves/`. The build globs the RTL directories and records the import in a stamp file, so *adding* a source is picked up automatically — but *renaming or deleting* one leaves a stale unit behind and needs a `make clean`.
+
+### Other Targets
+
+```bash
+make -C ips/cpu/verif/tests compare                       # CPU differential suite (needs Spike)
+make -C ips/wgen run                                      # pulse generator IP testbench
+make -C sw run-quick                                      # build CoreMark + simulate, log to sw/logs/
+make -C sw upload BIN=./c/hello_world/hello_world.bin PORT=/dev/ttyUSB0
+```
+
+`make rtl-tar` packs the synthesisable sources of the SoC into `dist/leaf_soc_rtl.tar`: every file under `soc/rtl` and the IPs' `rtl` directories, with no testbenches and nothing from `TECH_DIR`. The archive is flat: it holds only the files, with no directories, and the build fails if two sources share a file name. Next to them it writes `files.f`, the files in analysis order. GHDL derives that order from the `RTL_TOP` elaboration (default `leaf_soc`), and appends the files that are outside that closure, `sram_dp` and `wb_ram_dp_macro`. The target analyses the list once in a scratch library before packing, so an order that does not analyse fails the build instead of producing the tar. The sources are VHDL-93 and need no `--ieee=synopsys`:
+
+```bash
+make rtl-tar
+mkdir rtl && tar -xf dist/leaf_soc_rtl.tar -C rtl && cd rtl
+ghdl -a $(cat files.f) && ghdl --synth --out=none leaf_soc
+```
+
+That archive synthesises RAM0 as the inferred array. `make rtl-tar RAM=TECH` builds `dist/leaf_soc_tech_rtl.tar` for the macro RAM instead: it adds the technology's synthesis sources, which `TECH_DIR` lists in a file `syn.f` (names relative to `TECH_DIR`, no simulation models), and takes its order from the configuration `leaf_soc_tech`, which that directory must provide and which is the unit to synthesise. The macro cell itself stays unbound, a black box whose views come from the memory compiler, so GHDL's "not bound" warning on it is expected. This archive carries the technology files and follows their licence terms, not this repository's. `RAM=MACRO` is refused, since `sram_dp(sim)` is not synthesisable.
 
 ## :balance_scale: License
 

@@ -3,7 +3,8 @@ ENTRY(_start)
 
 MEMORY
 {
-    RAM (rwx) : ORIGIN = 0x80000000, LENGTH = 0x00008000
+    RAM0 (rwx) : ORIGIN = 0x80000000, LENGTH = 0x00008000
+    RAM1 (rwx) : ORIGIN = 0x90000000, LENGTH = 0x00000400
 }
 
 SECTIONS
@@ -15,7 +16,7 @@ SECTIONS
 		*(.text*)
 		. = ALIGN(4);
 		__text_end = .;
-	} > RAM
+	} > RAM0
 
 	.rodata :
 	{
@@ -23,7 +24,7 @@ SECTIONS
 		*(.rodata*)
 		. = ALIGN(4);
 		__rodata_end = .;
-	} > RAM
+	} > RAM0
 
 	.data :
 	{
@@ -32,7 +33,7 @@ SECTIONS
 		*(.eh_frame*)
 		. = ALIGN(4);
 		__data_end = .;
-	} > RAM
+	} > RAM0
 
 	.bss :
 	{
@@ -41,7 +42,7 @@ SECTIONS
 		*(.sbss*)
 		. = ALIGN(4);
 		__bss_end = .;
-	} > RAM
+	} > RAM0
 
 	.sdata : 
 	{
@@ -49,12 +50,20 @@ SECTIONS
 		*(.sdata*)
 		. = ALIGN(4);
 		__sdata_end = .;
-	} > RAM
+	} > RAM0
 
 	__global_pointer$ = __sdata_begin + 0x800;
 
-	__stack_top = ORIGIN(RAM) + LENGTH(RAM);
+	__stack_top = ORIGIN(RAM0) + LENGTH(RAM0);
 	__end = .;
+
+	.ram1 (NOLOAD) :
+	{
+		__ram1_begin = .;
+		*(.ram1*)
+		. = ALIGN(4);
+		__ram1_end = .;
+	} > RAM1
 
 	/DISCARD/ :
 	{
