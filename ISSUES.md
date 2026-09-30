@@ -4,8 +4,8 @@ Open issues only; fixed ones are removed, and their history is in git.
 Entries are ordered by the effort their fix takes, simplest first; the
 section at the end orders them by priority for the tapeout.
 
-Issues 2 and 3 come from a read of every file under `soc/rtl/` (`develop` @
-`8d0689d`), issue 1 from a later one (`develop` @ `3aa5783`).
+Both entries come from a read of every file under `soc/rtl/` (`develop` @
+`8d0689d`).
 
 Issues opened on GitHub are tracked there and not repeated here:
 
@@ -20,7 +20,9 @@ Issues opened on GitHub are tracked there and not repeated here:
 - [#5](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/5): no timer
   interrupt;
 - [#6](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/6): set the XIP timing from the
-  chosen flash's datasheet.
+  chosen flash's datasheet;
+- [#7](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/7): XIP, abandon a
+  fetch in flight on a redirect (enhancement).
 
 Defects of the Leaf core are filed in its own repository: the duplicate `time`
 counter ([leaf#6](https://github.com/daniel-santos-7/leaf/issues/6)) and the
@@ -32,28 +34,7 @@ synthesis) or is **analysis** (read from the RTL, not yet observed).
 
 ---
 
-## 1. XIP: a fetch in flight cannot be abandoned
-
-**Status:** analysis. Performance only.
-**Files:** `soc/rtl/wb_xip_ctrl.vhdl`, `soc/rtl/wb_channel.vhdl:144-148`, `:158`
-
-Once `wb_xip_ctrl` leaves `IDLE` it runs the whole 64-bit transfer, and
-`wb_channel` holds `xip_sel_reg`, and with it `STALL`, until the `ACK`. When
-the core redirects (a taken branch or a trap) while a sequential prefetch from
-XIP is in flight, the fetch at the new target waits for the stale word: up to
-a full word latency, 130 cycles, for an instruction that is thrown away. Code
-running from flash pays it on every taken branch whose fall-through word was
-already requested, including a jump from XIP into RAM0.
-
-**Fix:** only if XIP performance matters. Let the core abandon the cycle by
-dropping `CYC`, which Wishbone allows, and have `wb_xip_ctrl` return to `IDLE`
-and `wb_channel` clear `xip_sel_reg` when it does. The core drops `CYC` today
-only when its instruction buffer is full, not on a redirect, so the change
-starts in the CPU submodule. Recheck `xip_test` after it.
-
----
-
-## 2. RAM0 macros: a store and a fetch of the same word in one cycle
+## 1. RAM0 macros: a store and a fetch of the same word in one cycle
 
 **Status:** analysis. Not seen in any test.
 **Files:** `soc/rtl/wb_ram_dp_macro.vhdl`, `soc/tbs/sram_dp_sim.vhdl`,
@@ -108,7 +89,7 @@ would show it if one did: `BEHAV` returns the old word silently, and `MACRO`/
 
 ---
 
-## 3. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
+## 2. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
 
 **Status:** part A verified in simulation; part B analysis.
 **Files:** `soc/rtl/qpe_csrs.vhdl:83-109`, `:135-137`, `sw/c/common/wgen.c`,
@@ -196,10 +177,10 @@ Before tapeout:
   handler.
 - GitHub issue [#6](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/6), the XIP timing: set
   `XIP_SCK_DIV` and `XIP_CS_HIGH_CYCLES` from the chosen flash's datasheet.
-- **Issue 3**, because COP is the default interface and emits no pulse today;
+- **Issue 2**, because COP is the default interface and emits no pulse today;
   the snapshot in `qpe_csrs` is hardware and cannot follow in software.
 
-Then, in any order: issues 1 and 2.
+Then: issue 1.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,
