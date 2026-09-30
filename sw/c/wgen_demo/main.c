@@ -43,6 +43,7 @@ static const wgen_pulse_t readout_pulse = {
 int main(void)
 {
     uart_puts("wgen_demo\n");
+    wgen_init();
 
     for (;;) {
         wgen_pulse(&pi_pulse);

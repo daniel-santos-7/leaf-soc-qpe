@@ -49,6 +49,8 @@ int  wgen_is_ready(void);
 int  wgen_is_valid(void);
 void wgen_wait_ready(void);
 
+void wgen_init(void);
+
 void wgen_configure(const wgen_pulse_t *p);
 void wgen_pulse(const wgen_pulse_t *p);
 
