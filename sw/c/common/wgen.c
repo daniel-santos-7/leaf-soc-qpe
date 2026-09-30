@@ -1,4 +1,5 @@
 #include "wgen.h"
+#include "leaf.h"
 
 #ifdef WGEN_IF_MMIO
 
@@ -177,4 +178,16 @@ void wgen_pulse(const wgen_pulse_t *p)
 {
     wgen_configure(p);
     wgen_trigger();
+}
+
+void wgen_init(void)
+{
+    if (!wgen_is_ready()) {
+#ifdef WGEN_IF_MMIO
+        uart_puts("WGEN: no pulse generator on IO1\n");
+#else
+        uart_puts("WGEN: no coprocessor, is this an MMIO SoC?\n");
+#endif
+        for (;;);
+    }
 }

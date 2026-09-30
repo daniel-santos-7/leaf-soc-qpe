@@ -4,11 +4,8 @@ Open issues only; fixed ones are removed, and their history is in git.
 Entries are ordered by the effort their fix takes, simplest first; the
 section at the end orders them by priority for the tapeout.
 
-Issue 2 comes from a pass aimed at the ASIC tapeout (`develop` @ `d832821`),
-which also covered the RTL of the three IPs and a generic Yosys synthesis of
-`leaf_soc` in both `WGEN_IF` modes. Issues 3, 5 and 6 come from a read of
-`soc/rtl/` (`develop` @ `8d0689d`), issues 1 and 4 from a later one (`develop`
-@ `3aa5783`).
+Issues 1, 3 and 4 come from a read of every file under `soc/rtl/` (`develop` @
+`8d0689d`), issue 2 from a later one (`develop` @ `3aa5783`).
 
 Issues opened on GitHub are tracked there and not repeated here:
 
@@ -19,55 +16,21 @@ Issues opened on GitHub are tracked there and not repeated here:
 - [#3](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/3): `active`
   leads the I/Q samples by 5 cycles and is not registered;
 - [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4): no trap
-  vector is set, so any trap loops at address 0.
+  vector is set, so any trap loops at address 0;
+- [#5](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/5): no timer
+  interrupt.
+
+Defects of the Leaf core are filed in its own repository: the duplicate `time`
+counter ([leaf#6](https://github.com/daniel-santos-7/leaf/issues/6)) and the
+CSR read-after-write bypass
+([leaf#7](https://github.com/daniel-santos-7/leaf/issues/7)).
 
 Each entry says whether it was **verified** (reproduced in simulation or
 synthesis) or is **analysis** (read from the RTL, not yet observed).
 
 ---
 
-## 1. MMIO mode: the COP CSR window is accepted silently
-
-**Status:** analysis.
-**Files:** `soc/rtl/leaf_soc.vhdl:185-188`, `:211`, `ips/cpu/rtl/csrs.vhdl:124-125`, `:149-150`
-
-The core decodes `0x7C0–0x7FF` as the coprocessor window whether or not a
-coprocessor is attached, and raises no exception for any CSR address. In MMIO
-mode the plain `leaf` has its `cop_*` port tied off: `cop_dat_i` is `0` and
-the write outputs are open. A program built for COP (every C build today,
-since nothing defines `WGEN_IF_MMIO`) therefore runs on an MMIO SoC without a
-fault: its parameter writes vanish and no pulse comes out. One that waits on
-`TRIG` reads `0` forever and hangs in the poll.
-
-The opposite mismatch is visible: an MMIO program on a COP SoC gets `err` on
-IO1 and traps (see GitHub issue
-[#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4)).
-
-**Fix:** in the CPU submodule, a generic that disables the window, so that an
-access to it without a coprocessor is an illegal instruction; `leaf_soc` sets
-it in `mmio_qpe_gen`. Until then, document the behaviour in `README.md` under
-"Two ways to reach the pulse generator".
-
----
-
-## 2. `time` duplicates `cycle`, and nothing can raise a timer interrupt
-
-**Status:** analysis.
-**Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:147-148`, `:183-184`
-
-`counters` keeps `timer_reg` and `cycle_reg` as two identical 64-bit counters,
-both incremented every clock: 64 flip-flops and an adder with no function.
-The SoC ties `sw_irq_i` and `tm_irq_i` to `'0'` and has no `mtimecmp`, so
-the chip has no timer interrupt; the GPIO on `ex_irq_i` is its only interrupt
-source.
-
-**Fix:** either drive `time` from a real time base with an `mtimecmp` that
-raises `tm_irq_i`, or read `time` from the cycle counter and drop the
-duplicate. The first is a change in the CPU submodule.
-
----
-
-## 3. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
+## 1. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
 
 **Status:** verified in simulation (the timing below); the datasheet check is
 open until a flash is chosen.
@@ -105,7 +68,7 @@ depend on both.
 
 ---
 
-## 4. XIP: a fetch in flight cannot be abandoned
+## 2. XIP: a fetch in flight cannot be abandoned
 
 **Status:** analysis. Performance only.
 **Files:** `soc/rtl/wb_xip_ctrl.vhdl`, `soc/rtl/wb_channel.vhdl:144-148`, `:158`
@@ -126,7 +89,7 @@ starts in the CPU submodule. Recheck `xip_test` after it.
 
 ---
 
-## 5. RAM0 macros: a store and a fetch of the same word in one cycle
+## 3. RAM0 macros: a store and a fetch of the same word in one cycle
 
 **Status:** analysis. Not seen in any test.
 **Files:** `soc/rtl/wb_ram_dp_macro.vhdl`, `soc/tbs/sram_dp_sim.vhdl`,
@@ -181,7 +144,7 @@ would show it if one did: `BEHAV` returns the old word silently, and `MACRO`/
 
 ---
 
-## 6. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
+## 4. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
 
 **Status:** part A verified in simulation; part B analysis.
 **Files:** `soc/rtl/qpe_csrs.vhdl:83-109`, `:135-137`, `sw/c/common/wgen.c`,
@@ -267,12 +230,12 @@ Before tapeout:
 - GitHub issue [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4), the boot ROM trap handler, because the ROM cannot
   change after tapeout. Test the whole bootloader with it, not just the
   handler.
-- **Issue 3**, the XIP timing: add the generics, then set them from the
+- **Issue 1**, the XIP timing: add the generics, then set them from the
   chosen flash's datasheet.
-- **Issue 6**, because COP is the default interface and emits no pulse today;
+- **Issue 4**, because COP is the default interface and emits no pulse today;
   the snapshot in `qpe_csrs` is hardware and cannot follow in software.
 
-Then, in any order: issue 1, issue 2, issue 4 and issue 5.
+Then, in any order: issues 2 and 3.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,

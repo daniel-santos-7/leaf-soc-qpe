@@ -53,6 +53,7 @@ static void print_dec(uint32_t v)
 int main(void)
 {
     uart_puts("t1\n");
+    wgen_init();
 
     for (int r = 0; r < REPEAT; r++) {
         for (uint32_t delay = DELAY_MIN_US; delay <= DELAY_MAX_US; delay += DELAY_STEP_US) {

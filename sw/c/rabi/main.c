@@ -13,6 +13,7 @@
 
 int main(void)
 {
+    wgen_init();
     wgen_write_ftw(FTW_PI);
     wgen_write_pow(0);
     wgen_write_env(ENV_PI);
