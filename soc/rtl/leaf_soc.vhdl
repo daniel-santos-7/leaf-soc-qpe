@@ -358,7 +358,10 @@ begin
         gpio_oe_o  => gpio_oe
     );
 
-    soc_xip: entity work.wb_xip_ctrl port map (
+    soc_xip: entity work.wb_xip_ctrl generic map (
+        SCK_DIV        => XIP_SCK_DIV,
+        CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES
+    ) port map (
         clk_i     => soc_syscon_clk,
         rst_i     => soc_syscon_rst,
         cyc_i     => soc_inst_xip_cyc,

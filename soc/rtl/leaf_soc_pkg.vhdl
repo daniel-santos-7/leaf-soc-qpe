@@ -33,6 +33,9 @@ package leaf_soc_pkg is
 
     constant GPIO_WIDTH : natural := 8;
 
+    constant XIP_SCK_DIV        : positive := 1;
+    constant XIP_CS_HIGH_CYCLES : positive := 2;
+
     component wb_ram_dp is
         generic (
             BITS : natural := 15

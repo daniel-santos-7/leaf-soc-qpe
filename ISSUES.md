@@ -4,8 +4,8 @@ Open issues only; fixed ones are removed, and their history is in git.
 Entries are ordered by the effort their fix takes, simplest first; the
 section at the end orders them by priority for the tapeout.
 
-Issues 1, 3 and 4 come from a read of every file under `soc/rtl/` (`develop` @
-`8d0689d`), issue 2 from a later one (`develop` @ `3aa5783`).
+Issues 2 and 3 come from a read of every file under `soc/rtl/` (`develop` @
+`8d0689d`), issue 1 from a later one (`develop` @ `3aa5783`).
 
 Issues opened on GitHub are tracked there and not repeated here:
 
@@ -18,7 +18,9 @@ Issues opened on GitHub are tracked there and not repeated here:
 - [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4): no trap
   vector is set, so any trap loops at address 0;
 - [#5](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/5): no timer
-  interrupt.
+  interrupt;
+- [#6](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/6): set the XIP timing from the
+  chosen flash's datasheet.
 
 Defects of the Leaf core are filed in its own repository: the duplicate `time`
 counter ([leaf#6](https://github.com/daniel-santos-7/leaf/issues/6)) and the
@@ -30,45 +32,7 @@ synthesis) or is **analysis** (read from the RTL, not yet observed).
 
 ---
 
-## 1. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
-
-**Status:** verified in simulation (the timing below); the datasheet check is
-open until a flash is chosen.
-**File:** `soc/rtl/wb_xip_ctrl.vhdl`
-
-`wb_xip_ctrl` issues a plain `03h` READ per word and derives every SPI timing
-from the system clock, with no parameter. Measured on `xip_test` with the
-testbench's 100 MHz clock:
-
-| Parameter | Where it comes from | Measured |
-|-----------|---------------------|----------|
-| SCK period | `sck` toggles every cycle: clock / 2 | 20 ns (50 MHz) |
-| CS# high between reads (tSHSL) | `DONE` for one cycle, then `IDLE` takes the next request at once | 20 ns, every one of 117 gaps |
-| CS# low to first SCK rise (tSLCH) | `IDLE` drops CS#, `SHIFT` raises SCK on the next cycle | 10 ns |
-| last SCK rise to CS# high (tCHSH) | CS# rises with the last SCK fall | 10 ns |
-| MISO sampling | sampled on the cycle SCK rises, half an SCK period after the fall that launched it | 10 ns for tCLQV plus pad and board delays |
-
-During code execution from flash the fetches are back to back, so the CS# gap
-is always the minimum; nothing in the RTL enforces a longer one. Every one of
-these scales with the clock: a faster chip clock shortens them all.
-
-**Fix:** when the flash is chosen, check against its datasheet:
-
-- tSHSL, the minimum CS# deselect time, for the read command;
-- fR, the maximum SCK frequency for `03h` (lower than for the fast-read
-  commands on many parts);
-- tCLQV, with the pad and board delays, against the half SCK period;
-- tSLCH and tCHSH.
-
-Before tapeout, parameterise `wb_xip_ctrl` with generics set from `leaf_soc`,
-`CS_HIGH_CYCLES` (a counter that holds `IDLE`) and `SCK_DIV` (a divider for
-SCK), so that the datasheet values do not force an RTL change late. Recheck
-`xip_test`, whose cycle budget and the 130-cycle word latency in `README.md`
-depend on both.
-
----
-
-## 2. XIP: a fetch in flight cannot be abandoned
+## 1. XIP: a fetch in flight cannot be abandoned
 
 **Status:** analysis. Performance only.
 **Files:** `soc/rtl/wb_xip_ctrl.vhdl`, `soc/rtl/wb_channel.vhdl:144-148`, `:158`
@@ -89,7 +53,7 @@ starts in the CPU submodule. Recheck `xip_test` after it.
 
 ---
 
-## 3. RAM0 macros: a store and a fetch of the same word in one cycle
+## 2. RAM0 macros: a store and a fetch of the same word in one cycle
 
 **Status:** analysis. Not seen in any test.
 **Files:** `soc/rtl/wb_ram_dp_macro.vhdl`, `soc/tbs/sram_dp_sim.vhdl`,
@@ -144,7 +108,7 @@ would show it if one did: `BEHAV` returns the old word silently, and `MACRO`/
 
 ---
 
-## 4. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
+## 3. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
 
 **Status:** part A verified in simulation; part B analysis.
 **Files:** `soc/rtl/qpe_csrs.vhdl:83-109`, `:135-137`, `sw/c/common/wgen.c`,
@@ -230,12 +194,12 @@ Before tapeout:
 - GitHub issue [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4), the boot ROM trap handler, because the ROM cannot
   change after tapeout. Test the whole bootloader with it, not just the
   handler.
-- **Issue 1**, the XIP timing: add the generics, then set them from the
-  chosen flash's datasheet.
-- **Issue 4**, because COP is the default interface and emits no pulse today;
+- GitHub issue [#6](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/6), the XIP timing: set
+  `XIP_SCK_DIV` and `XIP_CS_HIGH_CYCLES` from the chosen flash's datasheet.
+- **Issue 3**, because COP is the default interface and emits no pulse today;
   the snapshot in `qpe_csrs` is hardware and cannot follow in software.
 
-Then, in any order: issues 2 and 3.
+Then, in any order: issues 1 and 2.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,
