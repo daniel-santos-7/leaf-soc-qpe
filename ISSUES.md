@@ -4,12 +4,11 @@ Open issues only; fixed ones are removed, and their history is in git.
 Entries are ordered by the effort their fix takes, simplest first; the
 section at the end orders them by priority for the tapeout.
 
-Issue 2 comes from a read of every file under `soc/rtl/` (`develop` @
-`1c06fa7`). Issues 3 and 5 come from a second pass aimed at the ASIC tapeout
-(`develop` @ `d832821`), which also covered the RTL of the three IPs and a
-generic Yosys synthesis of `leaf_soc` in both `WGEN_IF` modes. Issues 1, 6, 8
-and 9 come from a third read of `soc/rtl/` (`develop` @ `8d0689d`), issues 4
-and 7 from a fourth (`develop` @ `3aa5783`).
+Issue 2 comes from a pass aimed at the ASIC tapeout (`develop` @ `d832821`),
+which also covered the RTL of the three IPs and a generic Yosys synthesis of
+`leaf_soc` in both `WGEN_IF` modes. Issues 3, 5 and 6 come from a read of
+`soc/rtl/` (`develop` @ `8d0689d`), issues 1 and 4 from a later one (`develop`
+@ `3aa5783`).
 
 Issues opened on GitHub are tracked there and not repeated here:
 
@@ -18,123 +17,16 @@ Issues opened on GitHub are tracked there and not repeated here:
 - [#2](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/2): no sample
   clock goes out with `sig_i` / `sig_q`;
 - [#3](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/3): `active`
-  leads the I/Q samples by 5 cycles and is not registered.
+  leads the I/Q samples by 5 cycles and is not registered;
+- [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4): no trap
+  vector is set, so any trap loops at address 0.
 
 Each entry says whether it was **verified** (reproduced in simulation or
-synthesis) or is **analysis** (read from the RTL, not yet observed). Issue 2
-is a software issue.
+synthesis) or is **analysis** (read from the RTL, not yet observed).
 
 ---
 
-## 1. `qpe_csrs`: the trigger reaches `sig_gen` through a long combinational path
-
-**Status:** analysis. A timing risk, not a functional fault.
-**Files:** `soc/rtl/qpe_csrs.vhdl:135-137`, `ips/cpu/rtl/csrs.vhdl:321`,
-`ips/cpu/rtl/trap_ctrl.vhdl:77`, `:164`, `ips/cpu/rtl/dmls_block.vhdl:305-306`,
-`ips/wgen/rtl/sig_gen_ctrl.vhd:101-117`
-
-`valid_o` is combinational: `valid_int` is high in the same cycle as a `TRIG`
-write, through `we_i`. Traced back into the core:
-
-- `cop_we_o <= wr_en_i and cop_sel_wr` (`csrs.vhdl:321`);
-- `wr_en_i` is `csrwr_en_o <= csrwr_en_i and not exc_fault` (`trap_ctrl.vhdl:164`);
-- `exc_fault` ORs the misalignment checks on the EX address adder and on the
-  branch target, and `dmld_fault`/`dmst_fault`, which are `data_err_i` from
-  the bus gated with the access type (`dmls_block.vhdl:305-306`).
-
-Forward, `valid_o` becomes `sync <= valid_i and ready` in `sig_gen_ctrl`,
-which enables over a hundred parameter flip-flops and moves the state machine. The
-likely worst path in one cycle is therefore: register file → operand
-forwarding → EX adder → alignment check → `exc_fault` → `csrwr_en` →
-`cop_we` → `valid_int` → `sync` → a high-fanout enable.
-
-Functionally it is fine: with a CSR instruction in EX, `dmem_rd/wr` are `0`
-and the address is irrelevant, but static timing analysis does not know that.
-The core already has the same path into its own CSRs; the QPE extends it
-across a block boundary and ends it on a wide enable. How much it costs
-depends on the target clock and the PDK library, so it is not measurable
-before that synthesis.
-
-**Fix:** register the trigger in `qpe_csrs`, so that `valid_o` comes from a
-flip-flop only. Every `TRIG` write is latched, and the pulse starts one cycle
-later; reading `TRIG` (`ready and not valid`) still works, since `valid` is
-visible from the next cycle on. It fits the hardware fix of issue 9: the
-snapshot registers can load in the same cycle, and `sig_gen` then sees only
-registers from `qpe_csrs`. The alternative is to wait for static timing
-analysis with the PDK and only act if the path shows up as critical.
-
----
-
-## 2. No trap vector is set, so any trap loops at address 0 (software)
-
-**Status:** verified in simulation.
-**Files:** `sw/asm/boot/start.S`, `sw/c/common/crt0.S`
-
-Not a hardware defect: the privileged spec leaves `mtvec`'s reset value to the
-implementation, and the Leaf core resets it to `0`
-(`ips/cpu/rtl/csrs.vhdl:276`). Setting it before a trap can happen is
-software's job, and nothing under `sw/` does — not the boot ROM, not `crt0.S`,
-not the assembly examples. Only the CPU tests in `ips/cpu/verif/tests` write
-`mtvec`.
-
-`0x0` is outside the memory map (the ROM starts at `0x1000`), so the first trap
-of any kind fetches from `0`, gets `err`, takes an instruction access fault and
-traps to `0` again, forever. From the second round on, `mepc` and `mtval` read
-`0`, so the address that caused the first trap is lost.
-
-Reproduced with a two-instruction program, `li t0, 0x10000000` / `jr t0` (a
-fetch from the UART, which is not routed to the instruction channel), in COP
-mode:
-
-```
- 88145 ns  adr=0x10000000 stb=1 ack=1 err=0   -- ack for the last RAM fetch
- 88155 ns  adr=0x10000004 stb=1 ack=0 err=1   -- err for the fetch at 0x10000000
- 88165 ns  adr=0x10000008 stb=1 ack=0 err=1   -- prefetches, flushed by the trap
- 88175 ns  adr=0x1000000c stb=1 ack=0 err=1
- 88185 ns  adr=0x0        stb=1 ack=0 err=1   -- trap to mtvec = 0
- 88195 ns  adr=0x4        stb=1 ack=0 err=1
- 88205 ns  adr=0x8        stb=1 ack=0 err=1
- 88215 ns  adr=0xc        stb=1 ack=0 err=1
- 88225 ns  adr=0x0        ...                 -- and again, forever
-```
-
-28235 of the 37048 simulated cycles had `inst_err = 1`.
-
-Unrouted and unmapped accesses no longer hang the CPU on the bus: they are
-answered with `err`. But the program still never continues; the difference is
-that this one is recoverable in software.
-
-**Fix:** have the boot ROM point `mtvec` at a handler inside the ROM before it
-jumps to the program, and have that handler report `mcause`, `mepc` and
-`mtval` over the UART and stop. Every program, C or assembly, is then covered,
-and one that wants its own handler just overwrites `mtvec`. Changing the boot
-ROM means `make -C sw/asm/boot` and copying the generated package over
-`soc/rtl/boot_pkg.vhdl`.
-
-This has to land before tapeout. `boot_pkg.vhdl` becomes fixed logic in
-silicon, and the UART bootloader is the only way to load a program: the chip
-has no JTAG or debug port. Whatever the boot ROM does at tapeout, it does for
-the life of the chip.
-
----
-
-## 3. No bus timeout
-
-**Status:** analysis.
-**Files:** `soc/rtl/wb_channel.vhdl`, `ips/cpu/rtl/dmls_block.vhdl`, `ips/cpu/rtl/if_stage.vhdl`
-
-A routed slave that never answers leaves the CPU waiting forever: neither
-`wb_channel` nor the CPU counts cycles, and there is no watchdog. Only reset
-recovers. No slave does that today (XIP is the only one that answers late,
-and it always answers), but any future slave with a bug of its own would.
-
-**Fix:** a cycle counter in `wb_channel` that answers with `err` when a
-request goes unanswered for N cycles, so the CPU traps instead of hanging.
-Alternatively a watchdog that resets the chip.
-
----
-
-## 4. MMIO mode: the COP CSR window is accepted silently
+## 1. MMIO mode: the COP CSR window is accepted silently
 
 **Status:** analysis.
 **Files:** `soc/rtl/leaf_soc.vhdl:185-188`, `:211`, `ips/cpu/rtl/csrs.vhdl:124-125`, `:149-150`
@@ -148,7 +40,8 @@ fault: its parameter writes vanish and no pulse comes out. One that waits on
 `TRIG` reads `0` forever and hangs in the poll.
 
 The opposite mismatch is visible: an MMIO program on a COP SoC gets `err` on
-IO1 and traps (issue 2).
+IO1 and traps (see GitHub issue
+[#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4)).
 
 **Fix:** in the CPU submodule, a generic that disables the window, so that an
 access to it without a coprocessor is an illegal instruction; `leaf_soc` sets
@@ -157,7 +50,7 @@ it in `mmio_qpe_gen`. Until then, document the behaviour in `README.md` under
 
 ---
 
-## 5. `time` duplicates `cycle`, and nothing can raise a timer interrupt
+## 2. `time` duplicates `cycle`, and nothing can raise a timer interrupt
 
 **Status:** analysis.
 **Files:** `ips/cpu/rtl/counters.vhdl:48`, `soc/rtl/leaf_soc.vhdl:147-148`, `:183-184`
@@ -174,7 +67,7 @@ duplicate. The first is a change in the CPU submodule.
 
 ---
 
-## 6. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
+## 3. XIP: the SPI timing is fixed in the RTL and unchecked against a flash
 
 **Status:** verified in simulation (the timing below); the datasheet check is
 open until a flash is chosen.
@@ -212,7 +105,7 @@ depend on both.
 
 ---
 
-## 7. XIP: a fetch in flight cannot be abandoned
+## 4. XIP: a fetch in flight cannot be abandoned
 
 **Status:** analysis. Performance only.
 **Files:** `soc/rtl/wb_xip_ctrl.vhdl`, `soc/rtl/wb_channel.vhdl:144-148`, `:158`
@@ -233,7 +126,7 @@ starts in the CPU submodule. Recheck `xip_test` after it.
 
 ---
 
-## 8. RAM0 macros: a store and a fetch of the same word in one cycle
+## 5. RAM0 macros: a store and a fetch of the same word in one cycle
 
 **Status:** analysis. Not seen in any test.
 **Files:** `soc/rtl/wb_ram_dp_macro.vhdl`, `soc/tbs/sram_dp_sim.vhdl`,
@@ -258,7 +151,8 @@ It needs a store into a word the fetch unit is reading at that moment:
 1. Code that writes instructions just ahead of the PC. `FENCE.I` does not help:
    the core decodes the `FENCE` opcode as a no-op (`main_ctrl.vhdl:311`), so it
    discards nothing already fetched. On silicon the fetched word can be garbage,
-   an illegal instruction, and then the loop of issue 2.
+   an illegal instruction, and then the loop of GitHub issue
+   [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4).
 2. Prefetch running past the end of `.text` into writable `.rodata`/`.data`
    while a store hits that word. The fetched word is flushed and never
    executed, but the collision still happens on the macro.
@@ -287,7 +181,7 @@ would show it if one did: `BEHAV` returns the old word silently, and `MACRO`/
 
 ---
 
-## 9. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
+## 6. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
 
 **Status:** part A verified in simulation; part B analysis.
 **Files:** `soc/rtl/qpe_csrs.vhdl:83-109`, `:135-137`, `sw/c/common/wgen.c`,
@@ -370,15 +264,15 @@ pulse's amplitude in the CSV.
 
 Before tapeout:
 
-- **Issue 2**, the boot ROM trap handler, because the ROM cannot change after
-  tapeout. Test the whole bootloader with it, not just the handler.
-- **Issue 6**, the XIP timing: add the generics, then set them from the
+- GitHub issue [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4), the boot ROM trap handler, because the ROM cannot
+  change after tapeout. Test the whole bootloader with it, not just the
+  handler.
+- **Issue 3**, the XIP timing: add the generics, then set them from the
   chosen flash's datasheet.
-- **Issue 9**, because COP is the default interface and emits no pulse today;
+- **Issue 6**, because COP is the default interface and emits no pulse today;
   the snapshot in `qpe_csrs` is hardware and cannot follow in software.
-  Do issue 1 in the same change: it touches the same lines.
 
-Then, in any order: issue 3 (timeout), issue 4, issue 5, issue 7 and issue 8.
+Then, in any order: issue 1, issue 2, issue 4 and issue 5.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,
