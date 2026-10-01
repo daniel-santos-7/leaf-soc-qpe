@@ -158,19 +158,20 @@ A program only works on a SoC built for the same interface. An MMIO program on a
 
 The I/Q output width is **not** fixed by the SoC: it follows `OUT_RES_BITS` in the generated `ips/wgen/rtl/sine_lut_pkg.vhd` (currently 10 bits), which `leaf_soc_pkg.vhdl` derives its own constant from. Do not hardcode it in the package, or the SoC ports stop matching `sig_gen`'s.
 
-> **Note — the COP registers hold pointers, not values.** Writing a parameter CSR stores `wdata[4:0]` as a *GPR index*; `qpe_csrs` then snoops the register-file write port and mirrors whatever lands in that GPR. Bind first, then load the register:
+> **Note — the COP registers hold pointers, not values.** Writing a parameter CSR stores `wdata[4:0]` as a *GPR index*; `qpe_csrs` then snoops the register-file write port and mirrors whatever lands in that GPR from then on. Binding does not copy the register's current value, so bind first, then load the register. The `qp.*` macros in `sw/asm/common/qp.inc` take the register *number* and bind with `csrwi`, which needs no scratch register:
 >
 > ```asm
-> li  t0, 22
-> qp.amp t0            # AMP now tracks x22
+> qp.amp 22            # AMP now tracks x22
 > li  x22, 0x0000FFFF  # picked up through the register-file snoop
 > ```
 >
-> The pointer scheme avoids giving the register file extra read ports for the pulse parameters: each one costs a full 32-way read mux, and they synthesised poorly. `x0` is never mirrored, since the register file discards writes to it, so a parameter bound to `x0` keeps its reset value, 0.
+> The assembly examples bind every parameter once at the start and then only write the registers; a sweep is just an `addi` on the bound register. A bound register must not be reused for anything else until the pulse it feeds has launched: `sig_gen` latches the parameters when a trigger is accepted, not when it is written, so a queued `TRIG` launches with whatever the registers hold at that moment.
+>
+> The pointer scheme avoids giving the register file extra read ports for the pulse parameters: each one costs a full 32-way read mux, and they synthesised poorly. `x0` is never mirrored, since the register file discards writes to it, so a parameter bound to `x0` keeps its last value (0 after reset).
+>
+> C cannot keep a GPR to itself, since the compiler reuses every register. The COP setters in `wgen.c` therefore bind, fill and release: `csrwi <reg>, 5` binds the parameter to `t0`, `mv t0, <value>` loads it, and `csrwi <reg>, 0` binds it back to `x0`, which freezes the mirror at that value. This is safe because the core writes CSRs and the register file in the same stage, in program order. Reading a parameter CSR returns the pointer, so in a COP build the `wgen_read_*` getters return 0, not the parameter.
 >
 > A `TRIG` write reaches `sig_gen` combinationally: when the generator is idle (`ready` high) the pulse starts in the same cycle and nothing is stored. When it is busy, `qpe_csrs` latches the request in `valid_reg` until `ready` rises.
->
-> The assembly examples under `sw/asm/` predate this convention and load literal values into the pointed registers, so they bind to arbitrary GPRs and emit an all-zero pulse. The MMIO path stores values directly and is unaffected.
 
 ## :file_folder: Project Structure
 

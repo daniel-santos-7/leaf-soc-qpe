@@ -19,6 +19,7 @@ static inline void wgen_write(unsigned off, uint32_t val)
 #else
 
 #define csr_write(addr, val) __asm__("csrw %0, %1" :: "i"(addr), "r"((uint32_t)(val)))
+#define cop_set(addr, val) __asm__ volatile("csrwi %0, 5\n\tmv t0, %1\n\tcsrwi %0, 0" :: "i"(addr), "r"((uint32_t)(val)) : "t0")
 #define csr_read(addr) ({ uint32_t _v; __asm__("csrr %0, %1" : "=r"(_v) : "i"(addr)); _v; })
 
 #endif
@@ -28,7 +29,7 @@ void wgen_write_ftw(uint32_t val)
 #ifdef WGEN_IF_MMIO
     wgen_write(WGEN_OFF_FTW, val);
 #else
-    csr_write(WGEN_CSR_FTW, val);
+    cop_set(WGEN_CSR_FTW, val);
 #endif
 }
 
@@ -37,7 +38,7 @@ void wgen_write_pow(uint32_t val)
 #ifdef WGEN_IF_MMIO
     wgen_write(WGEN_OFF_POW, val);
 #else
-    csr_write(WGEN_CSR_POW, val);
+    cop_set(WGEN_CSR_POW, val);
 #endif
 }
 
@@ -46,7 +47,7 @@ void wgen_write_amp(uint16_t val)
 #ifdef WGEN_IF_MMIO
     *(volatile uint16_t *)((uintptr_t)wgen + WGEN_OFF_AMP) = val;
 #else
-    csr_write(WGEN_CSR_AMP, val);
+    cop_set(WGEN_CSR_AMP, val);
 #endif
 }
 
@@ -55,7 +56,7 @@ void wgen_write_drag(uint16_t val)
 #ifdef WGEN_IF_MMIO
     *(volatile uint16_t *)((uintptr_t)wgen + WGEN_OFF_DRAG) = val;
 #else
-    csr_write(WGEN_CSR_DRAG, val);
+    cop_set(WGEN_CSR_DRAG, val);
 #endif
 }
 
@@ -64,7 +65,7 @@ void wgen_write_env(uint32_t val)
 #ifdef WGEN_IF_MMIO
     wgen_write(WGEN_OFF_ENV, val);
 #else
-    csr_write(WGEN_CSR_ENV, val);
+    cop_set(WGEN_CSR_ENV, val);
 #endif
 }
 
@@ -73,7 +74,7 @@ void wgen_write_delay(uint32_t val)
 #ifdef WGEN_IF_MMIO
     wgen_write(WGEN_OFF_DELAY, val);
 #else
-    csr_write(WGEN_CSR_DELAY, val);
+    cop_set(WGEN_CSR_DELAY, val);
 #endif
 }
 

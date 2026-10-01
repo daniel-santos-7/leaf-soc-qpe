@@ -28,6 +28,13 @@
 _start:
     li sp, RAM_TOP
 
+    qp.ftw   8
+    qp.pow   9
+    qp.amp   18
+    qp.drag  20
+    qp.env   19
+    qp.delay 21
+
     li s0, FTW_PI
     li s1, 0
     li s2, AMP_PI
@@ -164,12 +171,6 @@ cmd_help:
 // fire_pulse
 // --------------------------------------------------
 fire_pulse:
-    qp.ftw   s0
-    qp.pow   s1
-    qp.amp   s2
-    qp.drag  s4
-    qp.env   s3
-    qp.delay s5
     qp.trigger
 1:  csrr t0, WG_TRIG
     andi t0, t0, 1
