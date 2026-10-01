@@ -1,46 +1,45 @@
-# WGEN global register layout (non-banked)
-# Each register has a fixed CSR address.
+# QPE over the coprocessor CSR window
 # qpe_csrs: FTW(0), POW(1), AMP(2), DRAG(3), ENV(4), DELAY(5), TRIG(6)
 # CSR base = 0x7C0
 
-.equ WG_FTW,   0x7C0
-.equ WG_POW,   0x7C1
-.equ WG_AMP,   0x7C2
-.equ WG_DRAG,  0x7C3
-.equ WG_ENV,   0x7C4
-.equ WG_DELAY, 0x7C5
-.equ WG_TRIG,  0x7C6
+.equ QPE_CSR_FTW,   0x7C0
+.equ QPE_CSR_POW,   0x7C1
+.equ QPE_CSR_AMP,   0x7C2
+.equ QPE_CSR_DRAG,  0x7C3
+.equ QPE_CSR_ENV,   0x7C4
+.equ QPE_CSR_DELAY, 0x7C5
+.equ QPE_CSR_TRIG,  0x7C6
 
 .macro qpe.ftw n
-    csrwi WG_FTW, \n
+    csrwi QPE_CSR_FTW, \n
 .endm
 
 .macro qpe.pow n
-    csrwi WG_POW, \n
+    csrwi QPE_CSR_POW, \n
 .endm
 
 .macro qpe.amp n
-    csrwi WG_AMP, \n
+    csrwi QPE_CSR_AMP, \n
 .endm
 
 .macro qpe.drag n
-    csrwi WG_DRAG, \n
+    csrwi QPE_CSR_DRAG, \n
 .endm
 
 .macro qpe.env n
-    csrwi WG_ENV, \n
+    csrwi QPE_CSR_ENV, \n
 .endm
 
 .macro qpe.delay n
-    csrwi WG_DELAY, \n
+    csrwi QPE_CSR_DELAY, \n
 .endm
 
 .macro qpe.trigger
-    csrwi WG_TRIG, 1
+    csrwi QPE_CSR_TRIG, 1
 .endm
 
 .macro qpe.wait
-1:  csrr t0, WG_TRIG
+1:  csrr t0, QPE_CSR_TRIG
     andi t0, t0, 2
     beqz t0, 1b
 .endm

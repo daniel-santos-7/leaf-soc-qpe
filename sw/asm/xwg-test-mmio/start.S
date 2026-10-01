@@ -1,6 +1,6 @@
 .equ RAM_TOP, 0x80008000
 
-.include "../common/wgen.inc"
+.include "../common/qpe_mmio.inc"
 
 .section .text
 .globl _start
@@ -15,14 +15,14 @@ _start:
     li s4, 0x0147AE14
     li s5, 0x0000000A
 
-    wgen.ftw   s0
-    wgen.pow   s1
-    wgen.amp   s2
-    wgen.drag  s3
-    wgen.env   s4
-    wgen.delay s5
-    wgen.trigger
-    wgen.wait
+    qpe_mmio.ftw   s0
+    qpe_mmio.pow   s1
+    qpe_mmio.amp   s2
+    qpe_mmio.drag  s3
+    qpe_mmio.env   s4
+    qpe_mmio.delay s5
+    qpe_mmio.trigger
+    qpe_mmio.wait
 
 2:  wfi
     j 2b
