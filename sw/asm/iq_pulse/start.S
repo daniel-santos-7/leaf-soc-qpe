@@ -2,7 +2,7 @@
 .equ RAM_BASE, 0x80000000
 .equ RAM_TOP,  RAM_BASE + RAM_SIZE
 
-.include "../common/qp.inc"
+.include "../common/qpe.inc"
 
 .section .text
 .globl _start
@@ -10,12 +10,12 @@
 _start:
     li sp, RAM_TOP
 
-    qp.ftw   8
-    qp.pow   0
-    qp.amp   18
-    qp.drag  20
-    qp.env   19
-    qp.delay 21
+    qpe.ftw   8
+    qpe.pow   0
+    qpe.amp   18
+    qpe.drag  20
+    qpe.env   19
+    qpe.delay 21
 
     li s0, 0x028F5C28    # FTW ~1 MHz
     li s2, 0x0000FFFF    # AMP max
@@ -24,6 +24,6 @@ _start:
     li s5, 0x0000C350    # DELAY = 50000 (~500 µs gap após pulso)
 
 loop:
-    qp.trigger
-    qp.wait
+    qpe.trigger
+    qpe.wait
     j loop

@@ -15,14 +15,14 @@ _start:
     li s4, 0x0147AE14
     li s5, 0x0000000A
 
-    wg.ftw   s0
-    wg.pow   s1
-    wg.amp   s2
-    wg.drag  s3
-    wg.env   s4
-    wg.delay s5
-    wg.trigger
-    wg.wait
+    wgen.ftw   s0
+    wgen.pow   s1
+    wgen.amp   s2
+    wgen.drag  s3
+    wgen.env   s4
+    wgen.delay s5
+    wgen.trigger
+    wgen.wait
 
 2:  wfi
     j 2b

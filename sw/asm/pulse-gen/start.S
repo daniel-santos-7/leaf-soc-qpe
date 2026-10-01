@@ -20,7 +20,7 @@
 .equ AMP_READOUT,    0x00000C00
 .equ ENV_READOUT,    0x0083126F
 
-.include "../common/qp.inc"
+.include "../common/qpe.inc"
 
 .section .text
 .globl _start
@@ -28,12 +28,12 @@
 _start:
     li sp, RAM_TOP
 
-    qp.ftw   8
-    qp.pow   9
-    qp.amp   18
-    qp.drag  20
-    qp.env   19
-    qp.delay 21
+    qpe.ftw   8
+    qpe.pow   9
+    qpe.amp   18
+    qpe.drag  20
+    qpe.env   19
+    qpe.delay 21
 
     li s0, FTW_PI
     li s1, 0
@@ -171,7 +171,7 @@ cmd_help:
 // fire_pulse
 // --------------------------------------------------
 fire_pulse:
-    qp.trigger
+    qpe.trigger
 1:  csrr t0, WG_TRIG
     andi t0, t0, 1
     bnez t0, 1b

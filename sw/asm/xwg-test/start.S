@@ -1,6 +1,6 @@
 .equ RAM_TOP, 0x80008000
 
-.include "../common/qp.inc"
+.include "../common/qpe.inc"
 
 .section .text
 .globl _start
@@ -8,12 +8,12 @@
 _start:
     li sp, RAM_TOP
 
-    qp.ftw   8
-    qp.pow   9
-    qp.amp   18
-    qp.drag  19
-    qp.env   20
-    qp.delay 21
+    qpe.ftw   8
+    qpe.pow   9
+    qpe.amp   18
+    qpe.drag  19
+    qpe.env   20
+    qpe.delay 21
 
     li s0, 0x1999999A   # FTW = 10 MHz
     li s1, 0x40000000   # POW = quarter-cycle phase
@@ -21,8 +21,8 @@ _start:
     li s3, 0x00001999   # DRAG = 0.2
     li s4, 0x0147AE14   # ENV = 200 cyc (4 us)
     li s5, 0x0000000A   # DELAY = 10 cycles
-    qp.trigger
-    qp.wait
+    qpe.trigger
+    qpe.wait
 
 2:  wfi
     j 2b
