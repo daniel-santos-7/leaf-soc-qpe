@@ -1,16 +1,7 @@
-#ifndef WGENGEN_H
-#define WGENGEN_H
+#ifndef WGEN_H
+#define WGEN_H
 
 #include <stdint.h>
-
-#define WGEN_CSR_FTW   0x7C0
-#define WGEN_CSR_POW   0x7C1
-#define WGEN_CSR_AMP   0x7C2
-#define WGEN_CSR_DRAG  0x7C3
-#define WGEN_CSR_ENV   0x7C4
-#define WGEN_CSR_DELAY 0x7C5
-#define WGEN_CSR_TRIG  0x7C6
-#define WGEN_CSR_CTRL  0x7C7
 
 #define WGEN_BASE      0x10001000
 #define WGEN_OFF_FTW   0x00
@@ -44,6 +35,7 @@ uint16_t wgen_read_amp(void);
 uint32_t wgen_read_env(void);
 uint16_t wgen_read_drag(void);
 uint32_t wgen_read_delay(void);
+
 void wgen_trigger(void);
 int  wgen_is_ready(void);
 int  wgen_is_valid(void);

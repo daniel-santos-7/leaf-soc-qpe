@@ -1,5 +1,5 @@
 #include "../common/leaf.h"
-#include "../common/wgen.h"
+#include "../common/qpe.h"
 
 #define FTW_PI   0x1999999A
 #define ENV_PI   0x0147AE14
@@ -13,18 +13,18 @@
 
 int main(void)
 {
-    wgen_init();
-    wgen_write_ftw(FTW_PI);
-    wgen_write_pow(0);
-    wgen_write_env(ENV_PI);
-    wgen_write_drag(DRAG_PI);
-    wgen_write_delay(0);
+    qpe_init();
+    qpe_set_ftw(FTW_PI);
+    qpe_set_pow(0);
+    qpe_set_env(ENV_PI);
+    qpe_set_drag(DRAG_PI);
+    qpe_set_delay(0);
 
     for (int r = 0; r < REPEAT; r++) {
         for (uint32_t amp = AMP_MIN; amp <= AMP_MAX; amp += AMP_STEP) {
-            wgen_write_amp((uint16_t)amp);
-            wgen_trigger();
-            wgen_wait_ready();
+            qpe_set_amp((uint16_t)amp);
+            qpe_trigger();
+            qpe_wait_ready();
         }
     }
 

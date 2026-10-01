@@ -1,163 +1,82 @@
 #include "wgen.h"
 #include "leaf.h"
 
-#ifdef WGEN_IF_MMIO
-
-static volatile uint32_t *const wgen =
-    (volatile uint32_t *)WGEN_BASE;
-
-static inline uint32_t wgen_read(unsigned off)
-{
-    return *(volatile uint32_t *)((uintptr_t)wgen + off);
-}
-
-static inline void wgen_write(unsigned off, uint32_t val)
-{
-    *(volatile uint32_t *)((uintptr_t)wgen + off) = val;
-}
-
-#else
-
-#define csr_write(addr, val) __asm__("csrw %0, %1" :: "i"(addr), "r"((uint32_t)(val)))
-#define cop_set(addr, val) __asm__ volatile("csrwi %0, 5\n\tmv t0, %1\n\tcsrwi %0, 0" :: "i"(addr), "r"((uint32_t)(val)) : "t0")
-#define csr_read(addr) ({ uint32_t _v; __asm__("csrr %0, %1" : "=r"(_v) : "i"(addr)); _v; })
-
-#endif
+#define WGEN_REG32(off) (*(volatile uint32_t *)(WGEN_BASE + (off)))
+#define WGEN_REG16(off) (*(volatile uint16_t *)(WGEN_BASE + (off)))
 
 void wgen_write_ftw(uint32_t val)
 {
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_FTW, val);
-#else
-    cop_set(WGEN_CSR_FTW, val);
-#endif
+    WGEN_REG32(WGEN_OFF_FTW) = val;
 }
 
 void wgen_write_pow(uint32_t val)
 {
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_POW, val);
-#else
-    cop_set(WGEN_CSR_POW, val);
-#endif
+    WGEN_REG32(WGEN_OFF_POW) = val;
 }
 
 void wgen_write_amp(uint16_t val)
 {
-#ifdef WGEN_IF_MMIO
-    *(volatile uint16_t *)((uintptr_t)wgen + WGEN_OFF_AMP) = val;
-#else
-    cop_set(WGEN_CSR_AMP, val);
-#endif
+    WGEN_REG16(WGEN_OFF_AMP) = val;
 }
 
 void wgen_write_drag(uint16_t val)
 {
-#ifdef WGEN_IF_MMIO
-    *(volatile uint16_t *)((uintptr_t)wgen + WGEN_OFF_DRAG) = val;
-#else
-    cop_set(WGEN_CSR_DRAG, val);
-#endif
+    WGEN_REG16(WGEN_OFF_DRAG) = val;
 }
 
 void wgen_write_env(uint32_t val)
 {
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_ENV, val);
-#else
-    cop_set(WGEN_CSR_ENV, val);
-#endif
+    WGEN_REG32(WGEN_OFF_ENV) = val;
 }
 
 void wgen_write_delay(uint32_t val)
 {
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_DELAY, val);
-#else
-    cop_set(WGEN_CSR_DELAY, val);
-#endif
+    WGEN_REG32(WGEN_OFF_DELAY) = val;
 }
 
 uint32_t wgen_read_ftw(void)
 {
-#ifdef WGEN_IF_MMIO
-    return wgen_read(WGEN_OFF_FTW);
-#else
-    return csr_read(WGEN_CSR_FTW);
-#endif
+    return WGEN_REG32(WGEN_OFF_FTW);
 }
 
 uint32_t wgen_read_pow(void)
 {
-#ifdef WGEN_IF_MMIO
-    return wgen_read(WGEN_OFF_POW);
-#else
-    return csr_read(WGEN_CSR_POW);
-#endif
+    return WGEN_REG32(WGEN_OFF_POW);
 }
 
 uint16_t wgen_read_amp(void)
 {
-#ifdef WGEN_IF_MMIO
-    return (uint16_t)wgen_read(WGEN_OFF_AMP);
-#else
-    return (uint16_t)csr_read(WGEN_CSR_AMP);
-#endif
+    return (uint16_t)WGEN_REG32(WGEN_OFF_AMP);
 }
 
 uint32_t wgen_read_env(void)
 {
-#ifdef WGEN_IF_MMIO
-    return wgen_read(WGEN_OFF_ENV);
-#else
-    return csr_read(WGEN_CSR_ENV);
-#endif
+    return WGEN_REG32(WGEN_OFF_ENV);
 }
 
 uint16_t wgen_read_drag(void)
 {
-#ifdef WGEN_IF_MMIO
-    return (uint16_t)wgen_read(WGEN_OFF_DRAG);
-#else
-    return (uint16_t)csr_read(WGEN_CSR_DRAG);
-#endif
+    return (uint16_t)WGEN_REG32(WGEN_OFF_DRAG);
 }
 
 uint32_t wgen_read_delay(void)
 {
-#ifdef WGEN_IF_MMIO
-    return wgen_read(WGEN_OFF_DELAY);
-#else
-    return csr_read(WGEN_CSR_DELAY);
-#endif
-}
-
-static uint32_t wgen_read_status(void)
-{
-#ifdef WGEN_IF_MMIO
-    return wgen_read(WGEN_OFF_TRIG);
-#else
-    return csr_read(WGEN_CSR_TRIG);
-#endif
+    return WGEN_REG32(WGEN_OFF_DELAY);
 }
 
 void wgen_trigger(void)
 {
-#ifdef WGEN_IF_MMIO
-    wgen_write(WGEN_OFF_TRIG, 1);
-#else
-    csr_write(WGEN_CSR_TRIG, 1);
-#endif
+    WGEN_REG32(WGEN_OFF_TRIG) = 1;
 }
 
 int wgen_is_ready(void)
 {
-    return (wgen_read_status() & (1u << 1)) != 0;
+    return (WGEN_REG32(WGEN_OFF_TRIG) & (1u << 1)) != 0;
 }
 
 int wgen_is_valid(void)
 {
-    return (wgen_read_status() & (1u << 0)) != 0;
+    return (WGEN_REG32(WGEN_OFF_TRIG) & (1u << 0)) != 0;
 }
 
 void wgen_wait_ready(void)
@@ -184,11 +103,7 @@ void wgen_pulse(const wgen_pulse_t *p)
 void wgen_init(void)
 {
     if (!wgen_is_ready()) {
-#ifdef WGEN_IF_MMIO
-        uart_puts("WGEN: no pulse generator on IO1\n");
-#else
-        uart_puts("WGEN: no coprocessor, is this an MMIO SoC?\n");
-#endif
+        uart_puts("WGEN: no pulse generator on IO1, is this a COP SoC?\n");
         for (;;);
     }
 }
