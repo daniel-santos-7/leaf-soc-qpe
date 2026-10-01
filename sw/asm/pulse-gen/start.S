@@ -154,7 +154,7 @@ cmd_status:
 
     la a0, active_lbl
     call uart_print_str
-    csrr t0, WG_TRIG
+    csrr t0, QPE_CSR_TRIG
     andi t0, t0, 1
     mv a0, t0
     call uart_print_dec
@@ -172,7 +172,7 @@ cmd_help:
 // --------------------------------------------------
 fire_pulse:
     qpe.trigger
-1:  csrr t0, WG_TRIG
+1:  csrr t0, QPE_CSR_TRIG
     andi t0, t0, 1
     bnez t0, 1b
     la a0, ok_str
