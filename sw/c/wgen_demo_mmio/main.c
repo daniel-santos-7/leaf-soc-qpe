@@ -1,5 +1,5 @@
 #include "../common/leaf.h"
-#include "../common/qpe.h"
+#include "../common/wgen.h"
 
 #define FTW_PI        0x1999999A
 #define AMP_PI        0x000007FF
@@ -13,7 +13,7 @@
 #define AMP_READOUT   0x00000C00
 #define ENV_READOUT   0x0083126F
 
-static const qpe_pulse_t pi_pulse = {
+static const wgen_pulse_t pi_pulse = {
     .ftw   = FTW_PI,
     .pow   = 0,
     .amp   = AMP_PI,
@@ -22,7 +22,7 @@ static const qpe_pulse_t pi_pulse = {
     .delay = 0,
 };
 
-static const qpe_pulse_t pi2_pulse = {
+static const wgen_pulse_t pi2_pulse = {
     .ftw   = FTW_PI,
     .pow   = 0,
     .amp   = AMP_PI2,
@@ -31,7 +31,7 @@ static const qpe_pulse_t pi2_pulse = {
     .delay = 0,
 };
 
-static const qpe_pulse_t readout_pulse = {
+static const wgen_pulse_t readout_pulse = {
     .ftw   = FTW_READOUT,
     .pow   = 0,
     .amp   = AMP_READOUT,
@@ -42,20 +42,20 @@ static const qpe_pulse_t readout_pulse = {
 
 int main(void)
 {
-    uart_puts("wgen_demo\n");
-    qpe_init();
+    uart_puts("wgen_demo_mmio\n");
+    wgen_init();
 
     for (;;) {
-        qpe_pulse(&pi_pulse);
-        qpe_wait_ready();
+        wgen_pulse(&pi_pulse);
+        wgen_wait_ready();
         uart_puts(".");
 
-        qpe_pulse(&pi2_pulse);
-        qpe_wait_ready();
+        wgen_pulse(&pi2_pulse);
+        wgen_wait_ready();
         uart_puts(".");
 
-        qpe_pulse(&readout_pulse);
-        qpe_wait_ready();
+        wgen_pulse(&readout_pulse);
+        wgen_wait_ready();
         uart_puts(".");
     }
 }

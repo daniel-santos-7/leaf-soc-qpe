@@ -1,5 +1,5 @@
 #include "../common/leaf.h"
-#include "../common/wgen.h"
+#include "../common/qpe.h"
 
 #define FTW_PI       0x1999999A
 #define DRAG_PI      0x00001999
@@ -18,7 +18,7 @@
 
 #define REPEAT 3
 
-static const wgen_pulse_t pi2_pulse = {
+static const qpe_pulse_t pi2_pulse = {
     .ftw   = FTW_PI,
     .pow   = 0,
     .amp   = AMP_PI2,
@@ -27,7 +27,7 @@ static const wgen_pulse_t pi2_pulse = {
     .delay = 0,
 };
 
-static const wgen_pulse_t readout_pulse = {
+static const qpe_pulse_t readout_pulse = {
     .ftw   = FTW_READOUT,
     .pow   = 0,
     .amp   = AMP_READOUT,
@@ -54,21 +54,21 @@ static void print_dec(uint32_t v)
 int main(void)
 {
     uart_puts("ramsey\n");
-    wgen_init();
+    qpe_init();
 
     for (int r = 0; r < REPEAT; r++) {
         for (uint32_t delay = DELAY_MIN_US; delay <= DELAY_MAX_US; delay += DELAY_STEP_US) {
-            wgen_pulse(&pi2_pulse);
-            wgen_wait_ready();
+            qpe_pulse(&pi2_pulse);
+            qpe_wait_ready();
 
             if (delay > 0)
                 delay_us(delay);
 
-            wgen_pulse(&pi2_pulse);
-            wgen_wait_ready();
+            qpe_pulse(&pi2_pulse);
+            qpe_wait_ready();
 
-            wgen_pulse(&readout_pulse);
-            wgen_wait_ready();
+            qpe_pulse(&readout_pulse);
+            qpe_wait_ready();
 
             print_dec(delay);
             uart_puts("\n");
