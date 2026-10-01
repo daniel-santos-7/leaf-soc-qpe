@@ -92,7 +92,7 @@ The GPIO is the [`wb-gpio`](https://github.com/daniel-santos-7/wb-gpio) IP (subm
 | `0x1C` | IRQ_FALL   | RW    | Falling-edge interrupt enable |
 | `0x20` | IRQ_STATUS | R/W1C | Pending events; writing 1 clears |
 
-`leaf_soc` brings the pins out as three vectors, `gpio_i`, `gpio_o` and `gpio_oe` (1 = drive), and leaves the tri-state buffer to the padframe or the board. The GPIO's `irq_o` drives the CPU's external interrupt input (`ex_irq_i`, `mip.MEIP`), the only interrupt source in the SoC; it stays high while any `IRQ_STATUS` bit is set, so a handler must clear the status before returning. Software must also set `mtvec` itself: nothing in `sw/` does by default (see [`ISSUES.md`](ISSUES.md)).
+`leaf_soc` brings the pins out as three vectors, `gpio_i`, `gpio_o` and `gpio_oe` (1 = drive), and leaves the tri-state buffer to the padframe or the board. The GPIO's `irq_o` drives the CPU's external interrupt input (`ex_irq_i`, `mip.MEIP`), the only interrupt source in the SoC; it stays high while any `IRQ_STATUS` bit is set, so a handler must clear the status before returning. Software must also set `mtvec` itself: nothing in `sw/` does by default (see [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4)).
 
 In the testbench each pin reads back its own output when `gpio_oe` is set and the constant `0xA5` otherwise. `sw/c/gpio_test` exercises the pins and the SET/CLR/TGL registers, then enables a rising-edge interrupt on pin 1 and takes it through `mtvec`. It prints `in=aa`, `af`, `ac`, `a5` and `irq count=1 status=02 mcause=8000000b pending=00`, and needs about 1.2M cycles to finish printing.
 
