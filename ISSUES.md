@@ -4,7 +4,7 @@ Open issues only; fixed ones are removed, and their history is in git.
 Entries are ordered by the effort their fix takes, simplest first; the
 section at the end orders them by priority for the tapeout.
 
-Both entries come from a read of every file under `soc/rtl/` (`develop` @
+The entry below comes from a read of every file under `soc/rtl/` (`develop` @
 `8d0689d`).
 
 Issues opened on GitHub are tracked there and not repeated here:
@@ -22,74 +22,22 @@ Issues opened on GitHub are tracked there and not repeated here:
 - [#6](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/6): set the XIP timing from the
   chosen flash's datasheet;
 - [#7](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/7): XIP, abandon a
-  fetch in flight on a redirect (enhancement).
+  fetch in flight on a redirect (enhancement);
+- [#8](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/8): RAM0 macros,
+  make a store and a fetch of the same word safe (enhancement).
 
 Defects of the Leaf core are filed in its own repository: the duplicate `time`
 counter ([leaf#6](https://github.com/daniel-santos-7/leaf/issues/6)) and the
 CSR read-after-write bypass
-([leaf#7](https://github.com/daniel-santos-7/leaf/issues/7)).
+([leaf#7](https://github.com/daniel-santos-7/leaf/issues/7)) and `FENCE.I`
+executing as a no-op ([leaf#8](https://github.com/daniel-santos-7/leaf/issues/8)).
 
 Each entry says whether it was **verified** (reproduced in simulation or
 synthesis) or is **analysis** (read from the RTL, not yet observed).
 
 ---
 
-## 1. RAM0 macros: a store and a fetch of the same word in one cycle
-
-**Status:** analysis. Not seen in any test.
-**Files:** `soc/rtl/wb_ram_dp_macro.vhdl`, `soc/tbs/sram_dp_sim.vhdl`,
-`ips/cpu/rtl/main_ctrl.vhdl:311`
-
-RAM0 is dual-port on one clock: port A for data, port B for instruction
-fetch. When port A writes a word and port B reads the same word in the same
-cycle:
-
-| Model | Port B returns |
-|-------|----------------|
-| `wb_ram_dp` (`RAM=BEHAV`) | the old word, cleanly |
-| `sram_dp(sim)` and the technology model (`RAM=MACRO`/`TECH`) | the whole word unknown |
-| silicon | undefined: both ports drive the same cell |
-
-The write itself lands. The macro also specifies a minimum clock separation
-between its two ports for same-address accesses, which a single clock only
-meets if the collision never happens.
-
-It needs a store into a word the fetch unit is reading at that moment:
-
-1. Code that writes instructions just ahead of the PC. `FENCE.I` does not help:
-   the core decodes the `FENCE` opcode as a no-op (`main_ctrl.vhdl:311`), so it
-   discards nothing already fetched. On silicon the fetched word can be garbage,
-   an illegal instruction, and then the loop of GitHub issue
-   [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4).
-2. Prefetch running past the end of `.text` into writable `.rodata`/`.data`
-   while a store hits that word. The fetched word is flushed and never
-   executed, but the collision still happens on the macro.
-
-`ram1_test` copies code and jumps to it in RAM1, which is flip-flops and has no
-such problem. The `RAM=MACRO`/`TECH` regressions matched `RAM=BEHAV` everywhere
-except the read-data bus on write acks, so no current program collides. Nothing
-would show it if one did: `BEHAV` returns the old word silently, and `MACRO`/
-`TECH` put an unknown on a bus that only a waveform shows.
-
-**Fix:**
-
-- make it visible: a `report ... severity warning` on contention in
-  `sram_dp(sim)` (and in the technology model), so a colliding program shows
-  up in the `RAM=MACRO`/`TECH` log;
-- document the rule for software in `README.md`: never store into
-  instruction words inside the prefetch window; after writing code, jump to it,
-  since the jump discards what was prefetched; do not rely on `FENCE.I`;
-- in the CPU submodule, make `FENCE.I` flush the fetch buffers, as the
-  RISC-V spec requires for the core to see its own instruction stores;
-- only if self-modifying code in RAM0 is ever needed: detect the collision in
-  `wb_ram_dp_macro` and delay port B one cycle. That needs a stall from RAM0 on
-  the instruction channel, which `wb_intercon` only generates for XIP today.
-  Forwarding the write data does not work: on a byte or half-word store the
-  bytes not written also come out unknown.
-
----
-
-## 2. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
+## 1. COP pulses: software does not follow the pointer scheme, and a queued trigger launches with late values
 
 **Status:** part A verified in simulation; part B analysis.
 **Files:** `soc/rtl/qpe_csrs.vhdl:83-109`, `:135-137`, `sw/c/common/wgen.c`,
@@ -177,10 +125,8 @@ Before tapeout:
   handler.
 - GitHub issue [#6](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/6), the XIP timing: set
   `XIP_SCK_DIV` and `XIP_CS_HIGH_CYCLES` from the chosen flash's datasheet.
-- **Issue 2**, because COP is the default interface and emits no pulse today;
+- **Issue 1**, because COP is the default interface and emits no pulse today;
   the snapshot in `qpe_csrs` is hardware and cannot follow in software.
-
-Then: issue 1.
 
 This list does not replace the rest of the ASIC flow. Synthesis with the PDK
 library and timing constraints, static timing analysis at the target clock,
