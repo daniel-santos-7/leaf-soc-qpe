@@ -123,6 +123,8 @@ make -C sw/c/ram_test
 make run PROGRAM=sw/c/ram_test/ram_test.bin RAM=MACRO RUN_CYCLES=6000000
 ```
 
+RAM0's two ports share one clock, so a store on port A and an instruction fetch on port B can hit the same word in the same cycle. The store lands, but the fetch does not get a defined word: `wb_ram_dp` returns the old word, `sram_dp(sim)` returns unknowns, and a real macro is undefined there and also specifies a minimum clock separation between its ports for the same address. Both simulation models print a warning when it happens (`wb_ram_dp_sim` under `RAM=BEHAV`, `sram_dp(sim)` under `RAM=MACRO`), so a colliding program shows up even in the default runs. With this core it has not been seen: in straight-line code, right after a jump and with the store as the jump target, the fetch was three words ahead with its buffer full in the cycle the store reached the bus. That is a property of the fetch unit, not a guarantee, so software must not store into instruction words inside the prefetch window (the few words after the PC). After writing code, jump to it, since a jump discards what was fetched, and do not rely on `FENCE.I`, which the core executes as a no-op ([leaf#8](https://github.com/daniel-santos-7/leaf/issues/8)). Code that copies itself and runs belongs in RAM1, which is flip-flops; making RAM0 itself safe is [#8](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/8).
+
 ### System Controller
 `wb_syscon` generates the SoC reset from the `rst_n` pin, which is active low. It passes the clock through unchanged; the clock tree is left to the physical design flow. The reset goes through a two-flip-flop synchroniser that asserts asynchronously and deasserts synchronously:
 
