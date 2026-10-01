@@ -20,15 +20,16 @@
 _start:
     li   sp, RAM_TOP
 
+    qp.ftw   9
+    qp.pow   0
+    qp.amp   18
+    qp.drag  0
+    qp.env   19
+    qp.delay 0
+
     li   s1, FTW_PI
     li   s3, ENV_START
     li   s2, AMP_HALF
-
-    qp.ftw  s1
-    qp.pow  x0
-    qp.amp  s2
-    qp.drag x0
-    qp.delay x0
 
     li   s4, REPEAT
     li   s5, ENV_STEP
@@ -38,7 +39,6 @@ repeat_loop:
     li   s3, ENV_START
 
 pulse_loop:
-    qp.env  s3
     qp.wait
     qp.trigger
 

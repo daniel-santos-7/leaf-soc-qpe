@@ -21,15 +21,16 @@
 _start:
     li   sp, RAM_TOP
 
+    qp.ftw   9
+    qp.pow   0
+    qp.amp   10
+    qp.drag  0
+    qp.env   18
+    qp.delay 19
+
     li   s1, FTW_PI
     li   s2, ENV_PI
     li   a0, AMP_HALF
-
-    qp.ftw  s1
-    qp.pow  x0
-    qp.amp  a0
-    qp.drag x0
-    qp.env  s2
 
     li   s4, REPEAT
     li   s5, DELAY_STEP
@@ -38,7 +39,6 @@ _start:
 repeat_loop:
     beqz s4, done
     li   s3, DELAY_START
-    qp.delay s3
     qp.trigger           # fire pulse1[n] — gerador ocioso, dispara imediato
 
 delay_loop:
@@ -51,7 +51,6 @@ delay_loop:
     j    repeat_loop
 
 enqueue_next:
-    qp.delay s3
     qp.trigger           # fire pulse1[n+1] — gerador ocioso, dispara imediato
     j delay_loop
 
