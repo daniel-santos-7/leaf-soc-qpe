@@ -9,7 +9,7 @@
 .equ AMP_MAX,  4095
 .equ REPEAT,   1
 
-.include "../common/qp.inc"
+.include "../common/qpe.inc"
 
 .section .text
 .globl _start
@@ -17,12 +17,12 @@
 _start:
     li   sp, RAM_TOP
 
-    qp.ftw   9
-    qp.pow   0
-    qp.amp   10
-    qp.drag  19
-    qp.env   18
-    qp.delay 0
+    qpe.ftw   9
+    qpe.pow   0
+    qpe.amp   10
+    qpe.drag  19
+    qpe.env   18
+    qpe.delay 0
 
     li   s1, FTW_PI
     li   s2, ENV_PI
@@ -35,8 +35,8 @@ repeat_loop:
     li   a0, 0
 
 pulse_loop:
-    qp.wait
-    qp.trigger
+    qpe.wait
+    qpe.trigger
 
     addi a0, a0, AMP_STEP
     li   t0, AMP_MAX

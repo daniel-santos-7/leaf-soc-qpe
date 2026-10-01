@@ -13,7 +13,7 @@
 .equ DELAY_END,   0x00002800
 .equ REPEAT,      1
 
-.include "../common/qp.inc"
+.include "../common/qpe.inc"
 
 .section .text
 .globl _start
@@ -21,12 +21,12 @@
 _start:
     li   sp, RAM_TOP
 
-    qp.ftw   9
-    qp.pow   0
-    qp.amp   10
-    qp.drag  0
-    qp.env   18
-    qp.delay 19
+    qpe.ftw   9
+    qpe.pow   0
+    qpe.amp   10
+    qpe.drag  0
+    qpe.env   18
+    qpe.delay 19
 
     li   s1, FTW_PI
     li   s2, ENV_PI
@@ -39,11 +39,11 @@ _start:
 repeat_loop:
     beqz s4, done
     li   s3, DELAY_START
-    qp.trigger           # fire pulse1[n] — gerador ocioso, dispara imediato
+    qpe.trigger           # fire pulse1[n] — gerador ocioso, dispara imediato
 
 delay_loop:
-    qp.trigger           # enqueue pulse2[n] — gerador ocupado, enfileira
-    qp.wait              # aguarda pulse1[n] + pulse2[n] completarem
+    qpe.trigger           # enqueue pulse2[n] — gerador ocupado, enfileira
+    qpe.wait              # aguarda pulse1[n] + pulse2[n] completarem
 
     add  s3, s3, s5
     ble  s3, s6, enqueue_next
@@ -51,7 +51,7 @@ delay_loop:
     j    repeat_loop
 
 enqueue_next:
-    qp.trigger           # fire pulse1[n+1] — gerador ocioso, dispara imediato
+    qpe.trigger           # fire pulse1[n+1] — gerador ocioso, dispara imediato
     j delay_loop
 
 done:

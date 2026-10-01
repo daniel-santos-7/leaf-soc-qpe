@@ -9,43 +9,43 @@
 .equ WGEN_TRIG,     0x18
 .equ WGEN_CTRL,     0x1C
 
-.macro wg.ftw reg
+.macro wgen.ftw reg
     lui  t6, %hi(WGEN_BASE)
     sw   \reg, WGEN_FTW(t6)
 .endm
 
-.macro wg.pow reg
+.macro wgen.pow reg
     lui  t6, %hi(WGEN_BASE)
     sw   \reg, WGEN_POW(t6)
 .endm
 
-.macro wg.amp reg
+.macro wgen.amp reg
     lui  t6, %hi(WGEN_BASE)
     sw   \reg, WGEN_AMP(t6)
 .endm
 
-.macro wg.drag reg
+.macro wgen.drag reg
     lui  t6, %hi(WGEN_BASE)
     sw   \reg, WGEN_DRAG(t6)
 .endm
 
-.macro wg.env reg
+.macro wgen.env reg
     lui  t6, %hi(WGEN_BASE)
     sw   \reg, WGEN_ENV(t6)
 .endm
 
-.macro wg.delay reg
+.macro wgen.delay reg
     lui  t6, %hi(WGEN_BASE)
     sw   \reg, WGEN_DELAY(t6)
 .endm
 
-.macro wg.trigger
+.macro wgen.trigger
     lui  t6, %hi(WGEN_BASE)
     li   t0, 1
     sw   t0, WGEN_TRIG(t6)
 .endm
 
-.macro wg.wait
+.macro wgen.wait
     lui  t6, %hi(WGEN_BASE)
 1:  lw   t0, WGEN_TRIG(t6)
     andi t0, t0, 2

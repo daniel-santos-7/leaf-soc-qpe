@@ -11,35 +11,35 @@
 .equ WG_DELAY, 0x7C5
 .equ WG_TRIG,  0x7C6
 
-.macro qp.ftw n
+.macro qpe.ftw n
     csrwi WG_FTW, \n
 .endm
 
-.macro qp.pow n
+.macro qpe.pow n
     csrwi WG_POW, \n
 .endm
 
-.macro qp.amp n
+.macro qpe.amp n
     csrwi WG_AMP, \n
 .endm
 
-.macro qp.drag n
+.macro qpe.drag n
     csrwi WG_DRAG, \n
 .endm
 
-.macro qp.env n
+.macro qpe.env n
     csrwi WG_ENV, \n
 .endm
 
-.macro qp.delay n
+.macro qpe.delay n
     csrwi WG_DELAY, \n
 .endm
 
-.macro qp.trigger
+.macro qpe.trigger
     csrwi WG_TRIG, 1
 .endm
 
-.macro qp.wait
+.macro qpe.wait
 1:  csrr t0, WG_TRIG
     andi t0, t0, 2
     beqz t0, 1b
