@@ -28,7 +28,10 @@ entity wb_dbg_spi is
         ack_i      : in  std_logic;
         err_i      : in  std_logic;
         stall_i    : in  std_logic;
-        halt_o     : out std_logic
+        halt_o     : out std_logic;
+        sig_src_o  : out std_logic;
+        sig_i_o    : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+        sig_q_o    : out std_logic_vector(OUT_RES_BITS-1 downto 0)
     );
 end entity wb_dbg_spi;
 
@@ -39,6 +42,7 @@ architecture rtl of wb_dbg_spi is
     constant CMD_STATUS : std_logic_vector(7 downto 0) := x"03";
     constant CMD_CTRL   : std_logic_vector(7 downto 0) := x"04";
     constant CMD_ID     : std_logic_vector(7 downto 0) := x"05";
+    constant CMD_SIG    : std_logic_vector(7 downto 0) := x"06";
 
     type bus_state_t is (B_IDLE, B_REQ, B_WAIT);
     signal bus_state : bus_state_t;
@@ -67,6 +71,10 @@ architecture rtl of wb_dbg_spi is
     signal we_reg    : std_logic;
 
     signal halt_reg : std_logic;
+    signal src_reg  : std_logic;
+    signal sig_i_reg : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal sig_q_reg : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal sig_word  : std_logic_vector(39 downto 0);
     signal err_reg  : std_logic;
     signal ovr_reg  : std_logic;
     signal busy     : std_logic;
@@ -77,6 +85,8 @@ architecture rtl of wb_dbg_spi is
     signal status_rd : std_logic;
 
 begin
+
+    assert OUT_RES_BITS <= 16 report "wb_dbg_spi: OUT_RES_BITS must fit in 16 bits" severity failure;
 
     sync_proc: process(clk_i)
     begin
@@ -98,6 +108,7 @@ begin
     sck_fall <= sck_s(2) and not sck_s(1);
 
     rx_byte   <= rx_sh & mosi_s(1);
+    sig_word  <= wdata_reg & rx_byte;
     byte_done <= '1' when cs_act = '1' and sck_rise = '1' and bit_cnt = 7 else '0';
 
     start_wr  <= '1' when byte_done = '1' and cmd_reg = CMD_WRITE and byte_cnt = 8 else '0';
@@ -116,6 +127,9 @@ begin
                 addr_reg  <= (others => '0');
                 wdata_reg <= (others => '0');
                 halt_reg  <= '0';
+                src_reg   <= '0';
+                sig_i_reg <= (others => '0');
+                sig_q_reg <= (others => '0');
             elsif cs_act = '0' then
                 bit_cnt  <= (others => '0');
                 byte_cnt <= (others => '0');
@@ -139,6 +153,14 @@ begin
                     if cmd_reg = CMD_WRITE and byte_cnt >= 5 and byte_cnt <= 8 then
                         wdata_reg <= wdata_reg(SOC_DATA_WIDTH-9 downto 0) & rx_byte;
                     end if;
+                    if cmd_reg = CMD_SIG and byte_cnt >= 1 and byte_cnt <= 4 then
+                        wdata_reg <= wdata_reg(SOC_DATA_WIDTH-9 downto 0) & rx_byte;
+                    end if;
+                    if cmd_reg = CMD_SIG and byte_cnt = 5 then
+                        src_reg   <= sig_word(32);
+                        sig_i_reg <= sig_word(16+OUT_RES_BITS-1 downto 16);
+                        sig_q_reg <= sig_word(OUT_RES_BITS-1 downto 0);
+                    end if;
                     if cmd_reg = CMD_CTRL and byte_cnt = 1 then
                         halt_reg <= rx_byte(0);
                     end if;
@@ -155,7 +177,7 @@ begin
     end process spi_proc;
 
     busy   <= '0' when bus_state = B_IDLE else '1';
-    status <= "0000" & ovr_reg & busy & err_reg & halt_reg;
+    status <= "000" & src_reg & ovr_reg & busy & err_reg & halt_reg;
 
     tx_proc: process(cmd_reg, byte_cnt, rdata_reg, status)
     begin
@@ -235,5 +257,9 @@ begin
     adr_o  <= addr_reg(SOC_ADDR_WIDTH-1 downto 2);
     dat_o  <= wdata_reg;
     halt_o <= halt_reg;
+
+    sig_src_o <= src_reg;
+    sig_i_o   <= sig_i_reg;
+    sig_q_o   <= sig_q_reg;
 
 end architecture rtl;
