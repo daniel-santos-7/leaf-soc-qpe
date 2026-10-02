@@ -140,6 +140,8 @@ Every other register in the SoC and in the IPs resets synchronously, so it only 
 ### Debug Bridge
 `wb_dbg_spi` is an SPI slave on four dedicated pins (`dbg_sck`, `dbg_cs_n`, `dbg_mosi`, `dbg_miso`) that turns SPI frames into Wishbone transfers on the data channel. It needs nothing from the core: it can read and write every slave the data master reaches (UART, IO1, GPIO, RAM0 and RAM1 through port A) while a program runs, and it can hold the CPU in reset to load a program. It cannot see the CPU's registers or PC, nor set breakpoints, since the core has no debug port.
 
+`wb_dbg_spi` is structural and splits the work in two. `spi_slave` handles the pins only: it synchronises them, shifts bits and offers a byte interface, `rx_data_o` with a one-cycle `rx_valid_o` per received byte, and `tx_load_o`, the pulse in which it takes `tx_data_i` as the next byte to send (on the falling edge that ends a byte), plus `active_o` while `CS#` is low. It knows nothing about commands and can be reused for another SPI peripheral. `wb_dbg_ctrl` counts bytes within the frame, decodes the commands below, holds `HALT`, the I/Q registers and the status, and is the Wishbone master.
+
 **SPI:** mode 0 (SCK idle low, MOSI sampled on the rising edge, MISO changes on the falling edge), MSB first, one command per `CS#` low. SCK, `CS#` and MOSI are oversampled by the system clock through two-flip-flop synchronisers, so there is no second clock domain; the price is that SCK must stay at least 5 system cycles high and 5 low (SCK ≤ clk/10, 10 MHz at 100 MHz), which leaves time for MISO to update after a falling edge. Raising `CS#` mid-frame abandons the frame; a bus transfer already started still completes.
 
 | Cmd | Host sends after the command | Host receives | Action |
