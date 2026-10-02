@@ -142,6 +142,12 @@ architecture rtl of leaf_soc is
     signal soc_dbg_err   : std_logic;
     signal soc_dbg_stall : std_logic;
     signal soc_dbg_halt  : std_logic;
+    signal soc_dbg_src   : std_logic;
+    signal soc_dbg_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal soc_dbg_sig_q : std_logic_vector(OUT_RES_BITS-1 downto 0);
+
+    signal soc_qpe_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal soc_qpe_sig_q : std_logic_vector(OUT_RES_BITS-1 downto 0);
 
     signal soc_cop_csr_rdata : std_logic_vector(31 downto 0);
 
@@ -173,8 +179,14 @@ begin
         ack_i      => soc_dbg_ack,
         err_i      => soc_dbg_err,
         stall_i    => soc_dbg_stall,
-        halt_o     => soc_dbg_halt
+        halt_o     => soc_dbg_halt,
+        sig_src_o  => soc_dbg_src,
+        sig_i_o    => soc_dbg_sig_i,
+        sig_q_o    => soc_dbg_sig_q
     );
+
+    sig_i <= soc_dbg_sig_i when soc_dbg_src = '1' else soc_qpe_sig_i;
+    sig_q <= soc_dbg_sig_q when soc_dbg_src = '1' else soc_qpe_sig_q;
 
     cop_qpe_gen: if WGEN_IF_COP generate
         soc_cpu: entity work.leaf_qpe generic map (
@@ -202,8 +214,8 @@ begin
             data_ack_i   => soc_cpu_data_ack,
             data_err_i   => soc_cpu_data_err,
             data_stall_i => soc_cpu_data_stall,
-            sig_i_o  => sig_i,
-            sig_q_o  => sig_q,
+            sig_i_o  => soc_qpe_sig_i,
+            sig_q_o  => soc_qpe_sig_q,
             active_o => active
         );
 
@@ -262,8 +274,8 @@ begin
             ack_o    => soc_io1_ack,
             stall_o  => open,
             dat_o    => soc_io1_dat,
-            sig_i_o  => sig_i,
-            sig_q_o  => sig_q,
+            sig_i_o  => soc_qpe_sig_i,
+            sig_q_o  => soc_qpe_sig_q,
             active_o => active
         );
     end generate;

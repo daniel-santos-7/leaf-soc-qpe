@@ -255,12 +255,21 @@ begin
             dbg_read(x"80000000", dbg_data, dbg_stat);
             assert dbg_stat = x"01" report "DBG: RAM0 read faulted" severity failure;
 
+            dbg_frame(x"06" & x"01" & x"0123" & x"FF55", dbg_rx(47 downto 0));
+            dbg_wait(8);
+            assert sig_i = "0100100011" and sig_q = "1101010101" report "DBG: debug I/Q not on the outputs" severity failure;
+            dbg_cmd(x"03", x"00", dbg_stat);
+            assert dbg_stat = x"11" report "DBG: SIG bit not in status" severity failure;
+            dbg_frame(x"06" & x"00" & x"0000" & x"0000", dbg_rx(47 downto 0));
+            dbg_wait(8);
+            assert sig_i = (sig_i'range => '0') and sig_q = (sig_q'range => '0') report "DBG: QPE not back on the outputs" severity failure;
+
             dbg_cmd(x"04", x"00", dbg_stat);
             dbg_wait(512);
             uart_transmit(rx, RAM_JUMP_CMD);
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
             assert uart_data = ACK report "DBG: no ACK after release" severity failure;
-            report "DBG ok: id, RAM1 write/read, ROM err, halt, release";
+            report "DBG ok: id, RAM1 write/read, ROM err, halt, I/Q mux, release";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop
