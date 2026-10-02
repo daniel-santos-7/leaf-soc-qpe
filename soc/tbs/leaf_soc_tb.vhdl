@@ -12,7 +12,8 @@ entity leaf_soc_tb is
         SKIP_UART_LOAD : boolean := false;
         RUN_CYCLES : natural := 500000;
         SAMPLES_FILE : string := "";
-        WGEN_IF_COP : boolean := true
+        WGEN_IF_COP : boolean := true;
+        DBG_TEST : boolean := false
     );
 end entity leaf_soc_tb;
 
@@ -36,6 +37,13 @@ architecture tb of leaf_soc_tb is
     signal gpio_i  : std_logic_vector(GPIO_WIDTH-1 downto 0);
     signal gpio_o  : std_logic_vector(GPIO_WIDTH-1 downto 0);
     signal gpio_oe : std_logic_vector(GPIO_WIDTH-1 downto 0);
+
+    signal dbg_sck  : std_logic;
+    signal dbg_cs_n : std_logic;
+    signal dbg_mosi : std_logic;
+    signal dbg_miso : std_logic;
+
+    constant DBG_HALF : natural := 5;
 
     constant GPIO_EXT : std_logic_vector(GPIO_WIDTH-1 downto 0) := "10100101";
 
@@ -64,7 +72,11 @@ begin
         spi_cs_n => spi_cs_n,
         gpio_i   => gpio_i,
         gpio_o   => gpio_o,
-        gpio_oe  => gpio_oe
+        gpio_oe  => gpio_oe,
+        dbg_sck  => dbg_sck,
+        dbg_cs_n => dbg_cs_n,
+        dbg_mosi => dbg_mosi,
+        dbg_miso => dbg_miso
     );
 
     gpio_pad_proc: process(gpio_o, gpio_oe)
@@ -141,7 +153,62 @@ begin
     end process samples_proc;
 
     test: process
+        variable dbg_rx   : std_logic_vector(87 downto 0);
+        variable dbg_data : std_logic_vector(31 downto 0);
+        variable dbg_stat : std_logic_vector(7 downto 0);
+
+        procedure dbg_wait(constant n : in natural) is
+        begin
+            for i in 1 to n loop
+                wait until rising_edge(clk);
+            end loop;
+        end procedure dbg_wait;
+
+        procedure dbg_frame(constant tx_bits : in std_logic_vector; variable rx_bits : out std_logic_vector) is
+            variable t : std_logic_vector(tx_bits'length-1 downto 0);
+            variable r : std_logic_vector(tx_bits'length-1 downto 0);
+        begin
+            t := tx_bits;
+            dbg_cs_n <= '0';
+            dbg_wait(DBG_HALF);
+            for i in t'high downto 0 loop
+                dbg_mosi <= t(i);
+                dbg_wait(DBG_HALF);
+                dbg_sck <= '1';
+                r(i) := dbg_miso;
+                dbg_wait(DBG_HALF);
+                dbg_sck <= '0';
+            end loop;
+            dbg_wait(DBG_HALF);
+            dbg_cs_n <= '1';
+            dbg_wait(2*DBG_HALF);
+            rx_bits := r;
+        end procedure dbg_frame;
+
+        procedure dbg_write(constant addr : in std_logic_vector(31 downto 0); constant data : in std_logic_vector(31 downto 0)) is
+            variable r : std_logic_vector(71 downto 0);
+        begin
+            dbg_frame(x"01" & addr & data, r);
+        end procedure dbg_write;
+
+        procedure dbg_read(constant addr : in std_logic_vector(31 downto 0); variable data : out std_logic_vector(31 downto 0); variable stat : out std_logic_vector(7 downto 0)) is
+            variable r : std_logic_vector(87 downto 0);
+        begin
+            dbg_frame(x"02" & addr & x"000000000000", r);
+            data := r(39 downto 8);
+            stat := r(7 downto 0);
+        end procedure dbg_read;
+
+        procedure dbg_cmd(constant cmd : in std_logic_vector(7 downto 0); constant arg : in std_logic_vector(7 downto 0); variable stat : out std_logic_vector(7 downto 0)) is
+            variable r : std_logic_vector(15 downto 0);
+        begin
+            dbg_frame(cmd & arg, r);
+            stat := r(7 downto 0);
+        end procedure dbg_cmd;
     begin
+        dbg_sck  <= '0';
+        dbg_cs_n <= '1';
+        dbg_mosi <= '0';
         rst_n <= '0';
         rx   <= '1';
         clk_en <= '1';
@@ -168,6 +235,32 @@ begin
             end if;
         else
             leaf_soc_send_program(rx, uart_data, PROGRAM);
+        end if;
+
+        if DBG_TEST then
+            dbg_frame(x"05" & x"00000000", dbg_rx(39 downto 0));
+            assert dbg_rx(31 downto 0) = DBG_ID report "DBG: bad ID" severity failure;
+
+            dbg_write(x"90000000", x"DEADBEEF");
+            dbg_read(x"90000000", dbg_data, dbg_stat);
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"00" report "DBG: RAM1 read mismatch" severity failure;
+
+            dbg_read(x"00001000", dbg_data, dbg_stat);
+            assert dbg_stat = x"02" report "DBG: ROM read did not fault" severity failure;
+
+            dbg_cmd(x"04", x"01", dbg_stat);
+            dbg_cmd(x"03", x"00", dbg_stat);
+            assert dbg_stat = x"03" report "DBG: bad status after halt" severity failure;
+
+            dbg_read(x"80000000", dbg_data, dbg_stat);
+            assert dbg_stat = x"01" report "DBG: RAM0 read faulted" severity failure;
+
+            dbg_cmd(x"04", x"00", dbg_stat);
+            dbg_wait(512);
+            uart_transmit(rx, RAM_JUMP_CMD);
+            wait on uart_data'transaction until uart_data = ACK for 1 ms;
+            assert uart_data = ACK report "DBG: no ACK after release" severity failure;
+            report "DBG ok: id, RAM1 write/read, ROM err, halt, release";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop

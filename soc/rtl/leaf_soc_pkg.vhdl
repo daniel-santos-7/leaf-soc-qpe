@@ -36,6 +36,8 @@ package leaf_soc_pkg is
     constant XIP_SCK_DIV        : positive := 1;
     constant XIP_CS_HIGH_CYCLES : positive := 2;
 
+    constant DBG_ID : std_logic_vector(SOC_DATA_WIDTH-1 downto 0) := x"4C454146";
+
     component wb_ram_dp is
         generic (
             BITS : natural := 15
@@ -100,7 +102,11 @@ package leaf_soc_pkg is
             spi_cs_n : out std_logic;
             gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
             gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
-            gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0)
+            gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
+            dbg_sck  : in  std_logic;
+            dbg_cs_n : in  std_logic;
+            dbg_mosi : in  std_logic;
+            dbg_miso : out std_logic
         );
     end component leaf_soc;
 
