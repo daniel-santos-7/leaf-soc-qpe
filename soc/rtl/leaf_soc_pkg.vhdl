@@ -26,7 +26,7 @@ package leaf_soc_pkg is
     constant IO1_ADDR_WIDTH : natural := 5;
     constant IO2_ADDR_WIDTH : natural := 6;
     constant XIP_ADDR_WIDTH : natural := 24;
-    constant RAM0_ADDR_WIDTH : natural := 15;
+    constant RAM0_ADDR_WIDTH : natural := 14;
     constant RAM1_ADDR_WIDTH : natural := 10;
 
     constant OUT_RES_BITS : natural := work.sine_lut_pkg.OUT_RES_BITS;

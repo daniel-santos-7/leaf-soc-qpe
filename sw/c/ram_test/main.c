@@ -4,7 +4,7 @@
 extern char __end[];
 
 #define STACK_HEADROOM  2048u
-#define RAM_TOP         (0x80000000u + 0x8000u)
+#define RAM_TOP         (0x80000000u + 0x4000u)
 
 static uint32_t checksum;
 
