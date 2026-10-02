@@ -11,6 +11,7 @@ This repository carries the SoC together with a **QPE** (Quantum Pulse Extension
 - **Memory System:** Integrated Boot ROM, two internal dual-port RAMs: RAM0 (32 KB) and RAM1 (1 KB).
 - **Standard Peripherals:** UART for serial communication and an 8-pin GPIO with edge interrupts.
 - **Pulse Generator:** DDS signal generator with Gaussian envelopes and DRAG correction, reachable either as a coprocessor or as a memory-mapped peripheral.
+- **Debug Bridge:** SPI slave that reads and writes the data bus and holds the CPU in reset, with no change to the core.
 - **Expandability:** Ready for XIP (Execute-In-Place) and custom hardware via a dedicated coprocessor interface.
 - **FPGA Friendly:** Synthesizable VHDL design optimized for modern FPGA architectures.
 
@@ -22,7 +23,7 @@ The SoC architecture is centered around the **Wishbone B4** interconnect, which 
 The **Leaf** core implements the RV32I base integer instruction set. It features a 2-stage pipeline (Fetch and Execute) and supports Machine-mode CSRs, hardware counters, and interrupts.
 
 ### Bus & Interconnect
-The Leaf core is Harvard: it has two Wishbone B4 masters, one for instruction fetch and one for data. Both drive the bus as **pipelined** masters: `STB` is asserted for a single cycle and `ACK` is awaited with `CYC` held. Byte selects (`SEL`) and error reporting (`ERR`) are supported.
+The Leaf core is Harvard: it has two Wishbone B4 masters, one for instruction fetch and one for data. A third master, the SPI debug bridge, shares the data channel with the core. Both drive the bus as **pipelined** masters: `STB` is asserted for a single cycle and `ACK` is awaited with `CYC` held. Byte selects (`SEL`) and error reporting (`ERR`) are supported.
 
 A single **Intercon** (`wb_intercon`) connects both masters to the slaves as a partial crossbar:
 
@@ -30,8 +31,9 @@ A single **Intercon** (`wb_intercon`) connects both masters to the slaves as a p
 |--------|:---:|:---:|:------:|:------:|:----:|:---:|:----:|:------:|:------:|
 | Instruction | ✓ | ✓ | ✓ | ✓ | | | | | |
 | Data | | | | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Debug (via data) | | | | | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-The two sets of slaves are disjoint, so there is no arbitration and both channels run in parallel. Each dual-port RAM appears as two slave interfaces, which is what lets a fetch and a load/store complete in the same cycle. Both are instances of the same `wb_ram_dp`: RAM0 with `BITS => 15`, RAM1 with `BITS => 10`.
+The instruction and data sets of slaves are disjoint, so the two CPU channels run in parallel with no arbitration between them. The debug bridge reaches exactly the data set, through `wb_arbiter` in front of the data `wb_channel` (see Debug Bridge). Each dual-port RAM appears as two slave interfaces, which is what lets a fetch and a load/store complete in the same cycle. Both are instances of the same `wb_ram_dp`: RAM0 with `BITS => 15`, RAM1 with `BITS => 10`.
 
 `wb_intercon` is structural: one **`wb_channel`** per master, i.e. per CPU channel. `wb_channel` has a port group for every slave in the memory map (`rom_*`, `io0_*`, `io1_*`, `io2_*`, `xip_*`, `ram0_*`, `ram1_*`) and decodes them against the bases and widths in `leaf_soc_pkg`. The regions are disjoint, which keeps the select one-hot. Each instance connects the slaves routed to its master and ties off the others: their outputs are left `open`, and their inputs are tied to `ACK = '0'`, `ERR = '1'` and zero data.
 
@@ -134,6 +136,31 @@ RAM0's two ports share one clock, so a store on port A and an instruction fetch 
 - **Deassertion:** once the pin is released, a `'0'` shifts through the two stages, so `rst_o` falls two edges later and always right after a clock edge, and every register leaves reset on the same cycle. If the release violates the first stage's recovery time, that stage may go metastable, but the second still holds `'1'` and the first has a whole cycle to settle before it is sampled.
 
 Every other register in the SoC and in the IPs resets synchronously, so it only takes its reset value once the clock runs with `rst_o` high; the board must supply the clock while reset is held. Since the assertion is asynchronous, any pulse on the pin resets the chip, so the pin must be filtered in the pad or on the board.
+
+### Debug Bridge
+`wb_dbg_spi` is an SPI slave on four dedicated pins (`dbg_sck`, `dbg_cs_n`, `dbg_mosi`, `dbg_miso`) that turns SPI frames into Wishbone transfers on the data channel. It needs nothing from the core: it can read and write every slave the data master reaches (UART, IO1, GPIO, RAM0 and RAM1 through port A) while a program runs, and it can hold the CPU in reset to load a program. It cannot see the CPU's registers or PC, nor set breakpoints, since the core has no debug port.
+
+**SPI:** mode 0 (SCK idle low, MOSI sampled on the rising edge, MISO changes on the falling edge), MSB first, one command per `CS#` low. SCK, `CS#` and MOSI are oversampled by the system clock through two-flip-flop synchronisers, so there is no second clock domain; the price is that SCK must stay at least 5 system cycles high and 5 low (SCK ≤ clk/10, 10 MHz at 100 MHz), which leaves time for MISO to update after a falling edge. Raising `CS#` mid-frame abandons the frame; a bus transfer already started still completes.
+
+| Cmd | Host sends after the command | Host receives | Action |
+|-----|------------------------------|---------------|--------|
+| `0x01` WRITE | address (4 B), data (4 B) | — | word write at `address`, started after the last data bit |
+| `0x02` READ | address (4 B), then 6 dummy bytes | byte 5 dummy, bytes 6–9 data, byte 10 status | word read, started after the last address bit |
+| `0x03` STATUS | 1 dummy byte | status | clears `OVR` |
+| `0x04` CTRL | control byte | — | bit 0 = `HALT` |
+| `0x05` ID | 4 dummy bytes | `0x4C454146` (`DBG_ID` in `leaf_soc_pkg`) | link check |
+
+Status byte: bit 0 `HALT`, bit 1 `ERR` (the last transfer ended with `ERR`, e.g. an unmapped address or the ROM, which the data channel does not reach), bit 2 `BUSY` (a transfer is in progress), bit 3 `OVR` (a WRITE or READ arrived while `BUSY`, and was dropped). Transfers are whole words: the low two address bits are ignored and `SEL` is always `1111`, so a byte or halfword register has to be updated by read-modify-write. A transfer takes a handful of system cycles, so at the maximum SCK a READ's data is ready long before byte 6 and a WRITE is over before the next command's first byte; `BUSY` and `OVR` only show up if the host ignores the SCK limit.
+
+**Arbitration:** `wb_arbiter` merges the CPU data master (`m0`) and the bridge (`m1`) into the data `wb_channel`. The grant is combinational and held while the owner's `CYC` is high; when the bus is free and both raise `CYC` in the same cycle the bridge wins, which cannot starve the CPU because the bridge issues at most one transfer per SPI frame. The master without the grant sees `STALL` and keeps its request pending (the core's `dmls_block` waits in `REQUEST` on `STALL`). `ACK` and `ERR` go only to the owner. The bridge only looks for its `ACK` from the cycle after its strobe was accepted, so a late response to a CPU request cut short by `HALT` cannot be taken for its own.
+
+**HALT:** OR-ed into the CPU's reset (`soc_cpu_rst`). In COP mode that also resets the pulse generator inside `leaf_qpe`; the peripherals, the RAMs, the bus and the bridge itself keep running, and so does the UART's transmit FIFO, which drains what the program had queued. `HALT` resets to 0. To load a program: `HALT = 1`, WRITE the image into RAM0, `HALT = 0`; the boot ROM then runs and waits for `RAM_JUMP_CMD` (`0x4A`) on the UART, as after a power-up.
+
+The testbench checks the bridge with `DBG=1`: after the program starts it reads the ID, writes and reads back a RAM1 word while the CPU is printing, reads the ROM and expects `ERR`, halts, reads RAM0, releases and sends `RAM_JUMP_CMD` again, so the program's output appears twice; the run ends with `DBG ok`:
+
+```bash
+make run PROGRAM=sw/c/hello_world/hello_world.bin DBG=1 RUN_CYCLES=300000
+```
 
 ## :zap: Pulse Generator (QPE)
 
@@ -241,6 +268,7 @@ To build and simulate the project, ensure the following tools are installed:
 | `TECH_DIR` | `tech` | Directory with the technology sources for `RAM=TECH` |
 | `WAVEFORM` | *(none)* | `ghw` or `fst`; written to `waves/<program>.<ext>` |
 | `SAMPLES` | *(none)* | `1` dumps every active I/Q sample to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
+| `DBG` | *(none)* | `1` runs the SPI debug bridge check after the program starts — see Debug Bridge |
 
 `make clean` runs `ghdl clean` and drops `work/` and `waves/`. The build globs the RTL directories and records the import in a stamp file, so *adding* a source is picked up automatically — but *renaming or deleting* one leaves a stale unit behind and needs a `make clean`.
 

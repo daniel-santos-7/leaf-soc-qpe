@@ -27,7 +27,11 @@ entity leaf_soc is
         spi_cs_n : out std_logic;
         gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
-        gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0)
+        gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
+        dbg_sck  : in  std_logic;
+        dbg_cs_n : in  std_logic;
+        dbg_mosi : in  std_logic;
+        dbg_miso : out std_logic
     );
 end entity leaf_soc;
 
@@ -35,6 +39,7 @@ architecture rtl of leaf_soc is
 
     signal soc_syscon_clk : std_logic;
     signal soc_syscon_rst : std_logic;
+    signal soc_cpu_rst    : std_logic;
 
     signal soc_cpu_inst_cyc : std_logic;
     signal soc_cpu_inst_stb : std_logic;
@@ -126,6 +131,18 @@ architecture rtl of leaf_soc is
     signal soc_xip_ack : std_logic;
     signal soc_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
+    signal soc_dbg_cyc   : std_logic;
+    signal soc_dbg_stb   : std_logic;
+    signal soc_dbg_we    : std_logic;
+    signal soc_dbg_sel   : std_logic_vector(3 downto 0);
+    signal soc_dbg_adr   : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+    signal soc_dbg_dat_w : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_dbg_dat_r : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_dbg_ack   : std_logic;
+    signal soc_dbg_err   : std_logic;
+    signal soc_dbg_stall : std_logic;
+    signal soc_dbg_halt  : std_logic;
+
     signal soc_cop_csr_rdata : std_logic_vector(31 downto 0);
 
 begin
@@ -137,12 +154,34 @@ begin
         rst_o => soc_syscon_rst
     );
 
+    soc_cpu_rst <= soc_syscon_rst or soc_dbg_halt;
+
+    soc_dbg: entity work.wb_dbg_spi port map (
+        clk_i      => soc_syscon_clk,
+        rst_i      => soc_syscon_rst,
+        spi_sck_i  => dbg_sck,
+        spi_cs_n_i => dbg_cs_n,
+        spi_mosi_i => dbg_mosi,
+        spi_miso_o => dbg_miso,
+        cyc_o      => soc_dbg_cyc,
+        stb_o      => soc_dbg_stb,
+        we_o       => soc_dbg_we,
+        sel_o      => soc_dbg_sel,
+        adr_o      => soc_dbg_adr,
+        dat_o      => soc_dbg_dat_w,
+        dat_i      => soc_dbg_dat_r,
+        ack_i      => soc_dbg_ack,
+        err_i      => soc_dbg_err,
+        stall_i    => soc_dbg_stall,
+        halt_o     => soc_dbg_halt
+    );
+
     cop_qpe_gen: if WGEN_IF_COP generate
         soc_cpu: entity work.leaf_qpe generic map (
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (
             clk_i    => soc_syscon_clk,
-            rst_i    => soc_syscon_rst,
+            rst_i    => soc_cpu_rst,
             ex_irq_i => soc_gpio_irq,
             sw_irq_i => '0',
             tm_irq_i => '0',
@@ -178,7 +217,7 @@ begin
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (
             clk_i        => soc_syscon_clk,
-            rst_i        => soc_syscon_rst,
+            rst_i        => soc_cpu_rst,
             ex_irq_i     => soc_gpio_irq,
             sw_irq_i     => '0',
             tm_irq_i     => '0',
@@ -249,6 +288,16 @@ begin
         data_ack_o   => soc_cpu_data_ack,
         data_err_o   => soc_cpu_data_err,
         data_stall_o => soc_cpu_data_stall,
+        dbg_cyc_i    => soc_dbg_cyc,
+        dbg_stb_i    => soc_dbg_stb,
+        dbg_we_i     => soc_dbg_we,
+        dbg_sel_i    => soc_dbg_sel,
+        dbg_adr_i    => soc_dbg_adr,
+        dbg_dat_i    => soc_dbg_dat_w,
+        dbg_dat_o    => soc_dbg_dat_r,
+        dbg_ack_o    => soc_dbg_ack,
+        dbg_err_o    => soc_dbg_err,
+        dbg_stall_o  => soc_dbg_stall,
         rom_cyc_o    => soc_inst_rom_cyc,
         rom_stb_o    => soc_inst_rom_stb,
         rom_adr_o    => soc_inst_rom_adr,
