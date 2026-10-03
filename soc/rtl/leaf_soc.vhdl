@@ -28,8 +28,8 @@ entity leaf_soc is
         gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
-        par_i    : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
-        par_sel  : in  std_logic;
+        dac_dat  : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
+        dac_sel  : in  std_logic;
         dbg_sck  : in  std_logic;
         dbg_cs_n : in  std_logic;
         dbg_mosi : in  std_logic;
@@ -205,8 +205,8 @@ begin
         halt_o     => soc_dbg_halt
     );
 
-    sig_i <= par_i when par_sel = '1' else soc_qpe_sig_i;
-    sig_q <= par_i when par_sel = '1' else soc_qpe_sig_q;
+    sig_i <= dac_dat when dac_sel = '1' else soc_qpe_sig_i;
+    sig_q <= dac_dat when dac_sel = '1' else soc_qpe_sig_q;
 
     cop_qpe_gen: if WGEN_IF_COP generate
         soc_cpu: entity work.leaf_qpe generic map (

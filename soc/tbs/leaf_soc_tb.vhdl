@@ -45,9 +45,9 @@ architecture tb of leaf_soc_tb is
 
     constant DBG_HALF : natural := 5;
 
-    signal par_sel : std_logic;
+    signal dac_sel : std_logic;
 
-    constant PAR_EXT : std_logic_vector(OUT_RES_BITS-1 downto 0) := "0100100011";
+    constant DAC_EXT : std_logic_vector(OUT_RES_BITS-1 downto 0) := "0100100011";
 
     constant GPIO_EXT : std_logic_vector(GPIO_WIDTH-1 downto 0) := "10100101";
 
@@ -77,8 +77,8 @@ begin
         gpio_i   => gpio_i,
         gpio_o   => gpio_o,
         gpio_oe  => gpio_oe,
-        par_i    => PAR_EXT,
-        par_sel  => par_sel,
+        dac_dat  => DAC_EXT,
+        dac_sel  => dac_sel,
         dbg_sck  => dbg_sck,
         dbg_cs_n => dbg_cs_n,
         dbg_mosi => dbg_mosi,
@@ -215,7 +215,7 @@ begin
         dbg_sck  <= '0';
         dbg_cs_n <= '1';
         dbg_mosi <= '0';
-        par_sel  <= '0';
+        dac_sel  <= '0';
         rst_n <= '0';
         rx   <= '1';
         clk_en <= '1';
@@ -244,10 +244,10 @@ begin
             leaf_soc_send_program(rx, uart_data, PROGRAM);
         end if;
 
-        par_sel <= '1';
+        dac_sel <= '1';
         wait until rising_edge(clk);
-        assert sig_i = PAR_EXT and sig_q = PAR_EXT report "parallel port not on sig_i/sig_q" severity failure;
-        par_sel <= '0';
+        assert sig_i = DAC_EXT and sig_q = DAC_EXT report "parallel port not on sig_i/sig_q" severity failure;
+        dac_sel <= '0';
         wait until rising_edge(clk);
         assert active = '1' or (sig_i = (sig_i'range => '0') and sig_q = (sig_q'range => '0')) report "pulse generator not back on sig_i/sig_q" severity failure;
 
