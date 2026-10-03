@@ -8,21 +8,21 @@ use work.uart_tb_pkg.uart_transmit, work.uart_tb_pkg.uart_receive;
 
 entity leaf_soc_tb is
     generic (
-        PROGRAM : string;
+        PROGRAM        : string;
         SKIP_UART_LOAD : boolean := false;
-        RUN_CYCLES : natural := 500000;
-        SAMPLES_FILE : string := "";
-        WGEN_IF_COP : boolean := true;
-        DBG_TEST : boolean := false
+        RUN_CYCLES     : natural := 500000;
+        SAMPLES_FILE   : string := "";
+        WGEN_IF_COP    : boolean := true;
+        DBG_TEST       : boolean := false
     );
 end entity leaf_soc_tb;
 
 architecture tb of leaf_soc_tb is
 
-    signal clk : std_logic;
-    signal rst_n : std_logic;
-    signal rx  : std_logic;
-    signal tx  : std_logic;
+    signal clk    : std_logic;
+    signal rst_n  : std_logic;
+    signal rx     : std_logic;
+    signal tx     : std_logic;
     signal sig_i  : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal sig_q  : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal active : std_logic;
@@ -39,10 +39,10 @@ architecture tb of leaf_soc_tb is
     signal miso_oe : std_logic;
     signal dbg     : std_logic;
 
-    signal pad_sclk  : std_logic;
-    signal pad_cs_n  : std_logic;
-    signal pad_mosi  : std_logic;
-    signal pad_miso  : std_logic;
+    signal pad_sclk   : std_logic;
+    signal pad_cs_n   : std_logic;
+    signal pad_mosi   : std_logic;
+    signal pad_miso   : std_logic;
     signal flash_cs_n : std_logic;
     signal flash_miso : std_logic;
 
@@ -74,31 +74,31 @@ begin
     uut: leaf_soc generic map (
         WGEN_IF_COP => WGEN_IF_COP
     ) port map (
-        clk      => clk,
-        rst_n    => rst_n,
-        rx       => rx,
-        tx       => tx,
-        sig_i    => sig_i,
-        sig_q    => sig_q,
-        active   => active,
-        sclk_i   => pad_sclk,
-        sclk_o   => sclk_o,
-        sclk_oe  => sclk_oe,
-        cs_n_i   => pad_cs_n,
-        cs_n_o   => cs_n_o,
-        cs_n_oe  => cs_n_oe,
-        mosi_i   => pad_mosi,
-        mosi_o   => mosi_o,
-        mosi_oe  => mosi_oe,
-        miso_i   => pad_miso,
-        miso_o   => miso_o,
-        miso_oe  => miso_oe,
-        dbg      => dbg,
-        gpio_i   => gpio_i,
-        gpio_o   => gpio_o,
-        gpio_oe  => gpio_oe,
-        dac_dat  => DAC_EXT,
-        dac_sel  => dac_sel
+        clk     => clk,
+        rst_n   => rst_n,
+        rx      => rx,
+        tx      => tx,
+        sig_i   => sig_i,
+        sig_q   => sig_q,
+        active  => active,
+        sclk_i  => pad_sclk,
+        sclk_o  => sclk_o,
+        sclk_oe => sclk_oe,
+        cs_n_i  => pad_cs_n,
+        cs_n_o  => cs_n_o,
+        cs_n_oe => cs_n_oe,
+        mosi_i  => pad_mosi,
+        mosi_o  => mosi_o,
+        mosi_oe => mosi_oe,
+        miso_i  => pad_miso,
+        miso_o  => miso_o,
+        miso_oe => miso_oe,
+        dbg     => dbg,
+        gpio_i  => gpio_i,
+        gpio_o  => gpio_o,
+        gpio_oe => gpio_oe,
+        dac_dat => DAC_EXT,
+        dac_sel => dac_sel
     );
 
     pad_sclk   <= sclk_o  when sclk_oe  = '1' else dbg_sclk;
@@ -135,7 +135,7 @@ begin
         type char_file is file of character;
         file out_file : char_file;
         variable rx_data : std_logic_vector(7 downto 0);
-        variable char : character;
+        variable char    : character;
     begin
         wait until rst_n = '1';
         wait until rising_edge(clk);
@@ -155,7 +155,7 @@ begin
     -- offline plotting, covering the whole run (all pulses), not just one.
     samples_proc: process
         file f : text;
-        variable l : line;
+        variable l     : line;
         variable cycle : natural := 0;
     begin
         if SAMPLES_FILE'length > 0 then
@@ -237,11 +237,11 @@ begin
         dbg_sclk <= '0';
         dbg_cs_n <= '1';
         dbg_mosi <= '0';
-        dbg  <= '0';
+        dbg      <= '0';
         dac_sel  <= '0';
-        rst_n <= '0';
-        rx   <= '1';
-        clk_en <= '1';
+        rst_n    <= '0';
+        rx       <= '1';
+        clk_en   <= '1';
         wait until rising_edge(clk);
         wait until rising_edge(clk);
         wait until rising_edge(clk);
