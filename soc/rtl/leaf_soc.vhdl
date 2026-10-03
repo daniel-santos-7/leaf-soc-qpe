@@ -131,6 +131,13 @@ architecture rtl of leaf_soc is
     signal soc_xip_ack : std_logic;
     signal soc_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
+    signal soc_dbg_active   : std_logic;
+    signal soc_dbg_rx_data  : std_logic_vector(7 downto 0);
+    signal soc_dbg_rx_valid : std_logic;
+    signal soc_dbg_tx_data  : std_logic_vector(7 downto 0);
+    signal soc_dbg_tx_valid : std_logic;
+    signal soc_dbg_tx_ready : std_logic;
+
     signal soc_dbg_cyc   : std_logic;
     signal soc_dbg_stb   : std_logic;
     signal soc_dbg_we    : std_logic;
@@ -162,13 +169,30 @@ begin
 
     soc_cpu_rst <= soc_syscon_rst or soc_dbg_halt;
 
-    soc_dbg: entity work.wb_dbg_spi port map (
+    soc_dbg_spi: entity work.spi_slave port map (
         clk_i      => soc_syscon_clk,
         rst_i      => soc_syscon_rst,
-        spi_sck_i  => dbg_sck,
-        spi_cs_n_i => dbg_cs_n,
-        spi_mosi_i => dbg_mosi,
-        spi_miso_o => dbg_miso,
+        sck_i      => dbg_sck,
+        cs_n_i     => dbg_cs_n,
+        mosi_i     => dbg_mosi,
+        miso_o     => dbg_miso,
+        active_o   => soc_dbg_active,
+        rx_data_o  => soc_dbg_rx_data,
+        rx_valid_o => soc_dbg_rx_valid,
+        tx_data_i  => soc_dbg_tx_data,
+        tx_valid_i => soc_dbg_tx_valid,
+        tx_ready_o => soc_dbg_tx_ready
+    );
+
+    soc_dbg_ctrl: entity work.wb_dbg_ctrl port map (
+        clk_i      => soc_syscon_clk,
+        rst_i      => soc_syscon_rst,
+        active_i   => soc_dbg_active,
+        rx_data_i  => soc_dbg_rx_data,
+        rx_valid_i => soc_dbg_rx_valid,
+        tx_data_o  => soc_dbg_tx_data,
+        tx_valid_o => soc_dbg_tx_valid,
+        tx_ready_i => soc_dbg_tx_ready,
         cyc_o      => soc_dbg_cyc,
         stb_o      => soc_dbg_stb,
         we_o       => soc_dbg_we,
