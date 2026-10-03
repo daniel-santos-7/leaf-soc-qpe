@@ -40,7 +40,8 @@ architecture rtl of wb_dbg_spi is
     signal rx_data  : std_logic_vector(7 downto 0);
     signal rx_valid : std_logic;
     signal tx_data  : std_logic_vector(7 downto 0);
-    signal tx_load  : std_logic;
+    signal tx_valid : std_logic;
+    signal tx_ready : std_logic;
 
 begin
 
@@ -55,7 +56,8 @@ begin
         rx_data_o  => rx_data,
         rx_valid_o => rx_valid,
         tx_data_i  => tx_data,
-        tx_load_o  => tx_load
+        tx_valid_i => tx_valid,
+        tx_ready_o => tx_ready
     );
 
     u_ctrl: entity work.wb_dbg_ctrl port map (
@@ -65,7 +67,8 @@ begin
         rx_data_i  => rx_data,
         rx_valid_i => rx_valid,
         tx_data_o  => tx_data,
-        tx_load_i  => tx_load,
+        tx_valid_o => tx_valid,
+        tx_ready_i => tx_ready,
         cyc_o      => cyc_o,
         stb_o      => stb_o,
         we_o       => we_o,

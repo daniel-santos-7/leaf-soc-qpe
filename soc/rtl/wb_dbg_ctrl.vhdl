@@ -18,7 +18,8 @@ entity wb_dbg_ctrl is
         rx_data_i  : in  std_logic_vector(7 downto 0);
         rx_valid_i : in  std_logic;
         tx_data_o  : out std_logic_vector(7 downto 0);
-        tx_load_i  : in  std_logic;
+        tx_valid_o : out std_logic;
+        tx_ready_i : in  std_logic;
         cyc_o      : out std_logic;
         stb_o      : out std_logic;
         we_o       : out std_logic;
@@ -50,6 +51,7 @@ architecture rtl of wb_dbg_ctrl is
 
     signal byte_cnt : unsigned(3 downto 0);
     signal tx_byte  : std_logic_vector(7 downto 0);
+    signal tx_valid : std_logic;
 
     signal cmd_reg   : std_logic_vector(7 downto 0);
     signal addr_reg  : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0);
@@ -79,13 +81,14 @@ begin
 
     start_wr  <= '1' when rx_valid_i = '1' and cmd_reg = CMD_WRITE and byte_cnt = 8 else '0';
     start_rd  <= '1' when rx_valid_i = '1' and cmd_reg = CMD_READ and byte_cnt = 4 else '0';
-    status_rd <= '1' when tx_load_i = '1' and cmd_reg = CMD_STATUS and byte_cnt = 1 else '0';
+    status_rd <= '1' when tx_valid = '1' and tx_ready_i = '1' and cmd_reg = CMD_STATUS and byte_cnt = 1 else '0';
 
     frame_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 byte_cnt  <= (others => '0');
+                tx_valid  <= '0';
                 cmd_reg   <= (others => '0');
                 addr_reg  <= (others => '0');
                 wdata_reg <= (others => '0');
@@ -95,8 +98,10 @@ begin
                 sig_q_reg <= (others => '0');
             elsif active_i = '0' then
                 byte_cnt <= (others => '0');
+                tx_valid <= '0';
                 cmd_reg  <= (others => '0');
             elsif rx_valid_i = '1' then
+                tx_valid <= '1';
                 if byte_cnt /= 15 then
                     byte_cnt <= byte_cnt + 1;
                 end if;
@@ -120,6 +125,8 @@ begin
                 if cmd_reg = CMD_CTRL and byte_cnt = 1 then
                     halt_reg <= rx_data_i(0);
                 end if;
+            elsif tx_ready_i = '1' then
+                tx_valid <= '0';
             end if;
         end if;
     end process frame_proc;
@@ -196,7 +203,8 @@ begin
         end if;
     end process bus_proc;
 
-    tx_data_o <= tx_byte;
+    tx_data_o  <= tx_byte;
+    tx_valid_o <= tx_valid;
 
     cyc_o  <= busy;
     stb_o  <= '1' when bus_state = B_REQ else '0';
