@@ -18,9 +18,9 @@ entity qpe_csrs is
         we_i    : in  std_logic;
         rdata_o : out std_logic_vector(31 downto 0);
 
-        rf_we_i       : in  std_logic;
-        rf_wr_addr_i  : in  std_logic_vector(4 downto 0);
-        rf_wr_data_i  : in  std_logic_vector(31 downto 0);
+        rf_we_i      : in  std_logic;
+        rf_wr_addr_i : in  std_logic_vector(4 downto 0);
+        rf_wr_data_i : in  std_logic_vector(31 downto 0);
 
         ftw_o   : out std_logic_vector(31 downto 0);
         pow_o   : out std_logic_vector(31 downto 0);
@@ -57,8 +57,8 @@ architecture rtl of qpe_csrs is
     signal env_val   : std_logic_vector(31 downto 0) := (others => '0');
     signal delay_val : std_logic_vector(31 downto 0) := (others => '0');
 
-    signal valid_reg  : std_logic := '0';
-    signal valid_int  : std_logic;
+    signal valid_reg : std_logic := '0';
+    signal valid_int : std_logic;
 
 begin
 

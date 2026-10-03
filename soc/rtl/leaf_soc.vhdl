@@ -14,31 +14,31 @@ entity leaf_soc is
         WGEN_IF_COP : boolean := true
     );
     port (
-        clk      : in  std_logic;
-        rst_n    : in  std_logic;
-        rx       : in  std_logic;
-        tx       : out std_logic;
-        sig_i    : out std_logic_vector(OUT_RES_BITS-1 downto 0);
-        sig_q    : out std_logic_vector(OUT_RES_BITS-1 downto 0);
-        active   : out std_logic;
-        sclk_i   : in  std_logic;
-        sclk_o   : out std_logic;
-        sclk_oe  : out std_logic;
-        cs_n_i   : in  std_logic;
-        cs_n_o   : out std_logic;
-        cs_n_oe  : out std_logic;
-        mosi_i   : in  std_logic;
-        mosi_o   : out std_logic;
-        mosi_oe  : out std_logic;
-        miso_i   : in  std_logic;
-        miso_o   : out std_logic;
-        miso_oe  : out std_logic;
-        dbg      : in  std_logic;
-        gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
-        gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
-        gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
-        dac_dat  : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
-        dac_sel  : in  std_logic
+        clk     : in  std_logic;
+        rst_n   : in  std_logic;
+        rx      : in  std_logic;
+        tx      : out std_logic;
+        sig_i   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+        sig_q   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+        active  : out std_logic;
+        sclk_i  : in  std_logic;
+        sclk_o  : out std_logic;
+        sclk_oe : out std_logic;
+        cs_n_i  : in  std_logic;
+        cs_n_o  : out std_logic;
+        cs_n_oe : out std_logic;
+        mosi_i  : in  std_logic;
+        mosi_o  : out std_logic;
+        mosi_oe : out std_logic;
+        miso_i  : in  std_logic;
+        miso_o  : out std_logic;
+        miso_oe : out std_logic;
+        dbg     : in  std_logic;
+        gpio_i  : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
+        gpio_o  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
+        gpio_oe : out std_logic_vector(GPIO_WIDTH-1 downto 0);
+        dac_dat : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
+        dac_sel : in  std_logic
     );
 end entity leaf_soc;
 
@@ -55,15 +55,15 @@ architecture rtl of leaf_soc is
     signal soc_cpu_inst_ack : std_logic;
     signal soc_cpu_inst_err : std_logic;
 
-    signal soc_cpu_data_cyc : std_logic;
-    signal soc_cpu_data_stb : std_logic;
-    signal soc_cpu_data_we  : std_logic;
-    signal soc_cpu_data_sel : std_logic_vector(3 downto 0);
-    signal soc_cpu_data_adr : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
-    signal soc_cpu_data_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_cpu_data_cyc    : std_logic;
+    signal soc_cpu_data_stb    : std_logic;
+    signal soc_cpu_data_we     : std_logic;
+    signal soc_cpu_data_sel    : std_logic_vector(3 downto 0);
+    signal soc_cpu_data_adr    : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+    signal soc_cpu_data_dat    : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_cpu_data_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_cpu_data_ack : std_logic;
-    signal soc_cpu_data_err : std_logic;
+    signal soc_cpu_data_ack    : std_logic;
+    signal soc_cpu_data_err    : std_logic;
 
     signal soc_cpu_inst_stall : std_logic;
     signal soc_cpu_data_stall : std_logic;
@@ -74,51 +74,51 @@ architecture rtl of leaf_soc is
     signal soc_inst_xip_cyc : std_logic;
     signal soc_inst_xip_stb : std_logic;
     signal soc_inst_xip_adr : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-    signal soc_ram0_b_cyc : std_logic;
-    signal soc_ram0_b_stb : std_logic;
-    signal soc_ram0_b_adr : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
-    signal soc_ram0_b_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram0_b_ack : std_logic;
-    signal soc_ram1_b_cyc : std_logic;
-    signal soc_ram1_b_stb : std_logic;
-    signal soc_ram1_b_adr : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
-    signal soc_ram1_b_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram1_b_ack : std_logic;
+    signal soc_ram0_b_cyc   : std_logic;
+    signal soc_ram0_b_stb   : std_logic;
+    signal soc_ram0_b_adr   : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
+    signal soc_ram0_b_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram0_b_ack   : std_logic;
+    signal soc_ram1_b_cyc   : std_logic;
+    signal soc_ram1_b_stb   : std_logic;
+    signal soc_ram1_b_adr   : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
+    signal soc_ram1_b_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram1_b_ack   : std_logic;
 
-    signal soc_data_io0_cyc : std_logic;
-    signal soc_data_io0_stb : std_logic;
-    signal soc_data_io0_we  : std_logic;
-    signal soc_data_io0_sel : std_logic_vector(3 downto 0);
-    signal soc_data_io0_adr : std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
-    signal soc_data_io0_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_data_io1_cyc : std_logic;
-    signal soc_data_io1_stb : std_logic;
-    signal soc_data_io1_we  : std_logic;
-    signal soc_data_io1_sel : std_logic_vector(3 downto 0);
-    signal soc_data_io1_adr : std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
-    signal soc_data_io1_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_data_io2_cyc : std_logic;
-    signal soc_data_io2_stb : std_logic;
-    signal soc_data_io2_we  : std_logic;
-    signal soc_data_io2_sel : std_logic_vector(3 downto 0);
-    signal soc_data_io2_adr : std_logic_vector(IO2_ADDR_WIDTH-1 downto 2);
-    signal soc_data_io2_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram0_a_cyc : std_logic;
-    signal soc_ram0_a_stb : std_logic;
-    signal soc_ram0_a_we  : std_logic;
-    signal soc_ram0_a_sel : std_logic_vector(3 downto 0);
-    signal soc_ram0_a_adr : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
+    signal soc_data_io0_cyc  : std_logic;
+    signal soc_data_io0_stb  : std_logic;
+    signal soc_data_io0_we   : std_logic;
+    signal soc_data_io0_sel  : std_logic_vector(3 downto 0);
+    signal soc_data_io0_adr  : std_logic_vector(IO0_ADDR_WIDTH-1 downto 2);
+    signal soc_data_io0_dat  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_data_io1_cyc  : std_logic;
+    signal soc_data_io1_stb  : std_logic;
+    signal soc_data_io1_we   : std_logic;
+    signal soc_data_io1_sel  : std_logic_vector(3 downto 0);
+    signal soc_data_io1_adr  : std_logic_vector(IO1_ADDR_WIDTH-1 downto 2);
+    signal soc_data_io1_dat  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_data_io2_cyc  : std_logic;
+    signal soc_data_io2_stb  : std_logic;
+    signal soc_data_io2_we   : std_logic;
+    signal soc_data_io2_sel  : std_logic_vector(3 downto 0);
+    signal soc_data_io2_adr  : std_logic_vector(IO2_ADDR_WIDTH-1 downto 2);
+    signal soc_data_io2_dat  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_ram0_a_cyc    : std_logic;
+    signal soc_ram0_a_stb    : std_logic;
+    signal soc_ram0_a_we     : std_logic;
+    signal soc_ram0_a_sel    : std_logic_vector(3 downto 0);
+    signal soc_ram0_a_adr    : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
     signal soc_ram0_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram0_a_ack : std_logic;
-    signal soc_ram1_a_cyc : std_logic;
-    signal soc_ram1_a_stb : std_logic;
-    signal soc_ram1_a_we  : std_logic;
-    signal soc_ram1_a_sel : std_logic_vector(3 downto 0);
-    signal soc_ram1_a_adr : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
+    signal soc_ram0_a_ack    : std_logic;
+    signal soc_ram1_a_cyc    : std_logic;
+    signal soc_ram1_a_stb    : std_logic;
+    signal soc_ram1_a_we     : std_logic;
+    signal soc_ram1_a_sel    : std_logic_vector(3 downto 0);
+    signal soc_ram1_a_adr    : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
     signal soc_ram1_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram1_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_ram1_a_ack : std_logic;
+    signal soc_ram1_a_ack    : std_logic;
 
     signal soc_rom_ack : std_logic;
     signal soc_rom_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
@@ -135,10 +135,9 @@ architecture rtl of leaf_soc is
 
     signal soc_gpio_irq : std_logic;
 
-    signal soc_xip_ack : std_logic;
-    signal soc_xip_err : std_logic;
-    signal soc_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_spi_dbg : std_logic;
+    signal soc_xip_ack      : std_logic;
+    signal soc_xip_err      : std_logic;
+    signal soc_xip_dat      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_xip_tx_data  : std_logic_vector(7 downto 0);
     signal soc_xip_tx_last  : std_logic;
     signal soc_xip_tx_valid : std_logic;
@@ -146,6 +145,7 @@ architecture rtl of leaf_soc is
     signal soc_xip_rx_data  : std_logic_vector(7 downto 0);
     signal soc_xip_rx_valid : std_logic;
 
+    signal soc_spi_dbg      : std_logic;
     signal soc_dbg_active   : std_logic;
     signal soc_dbg_rx_data  : std_logic_vector(7 downto 0);
     signal soc_dbg_rx_valid : std_logic;
@@ -181,40 +181,15 @@ begin
 
     soc_cpu_rst <= soc_syscon_rst or soc_dbg_halt;
 
-    soc_dbg_ctrl: entity work.wb_dbg_ctrl port map (
-        clk_i      => soc_syscon_clk,
-        rst_i      => soc_syscon_rst,
-        active_i   => soc_dbg_active,
-        rx_data_i  => soc_dbg_rx_data,
-        rx_valid_i => soc_dbg_rx_valid,
-        tx_data_o  => soc_dbg_tx_data,
-        tx_valid_o => soc_dbg_tx_valid,
-        tx_ready_i => soc_dbg_tx_ready,
-        cyc_o      => soc_dbg_cyc,
-        stb_o      => soc_dbg_stb,
-        we_o       => soc_dbg_we,
-        sel_o      => soc_dbg_sel,
-        adr_o      => soc_dbg_adr,
-        dat_o      => soc_dbg_dat_w,
-        dat_i      => soc_dbg_dat_r,
-        ack_i      => soc_dbg_ack,
-        err_i      => soc_dbg_err,
-        stall_i    => soc_dbg_stall,
-        halt_o     => soc_dbg_halt
-    );
-
-    sig_i <= dac_dat when dac_sel = '1' else soc_qpe_sig_i;
-    sig_q <= dac_dat when dac_sel = '1' else soc_qpe_sig_q;
-
     cop_qpe_gen: if WGEN_IF_COP generate
         soc_cpu: entity work.leaf_qpe generic map (
             RESET_ADDR => ROM_BASE_ADDR
         ) port map (
-            clk_i    => soc_syscon_clk,
-            rst_i    => soc_cpu_rst,
-            ex_irq_i => soc_gpio_irq,
-            sw_irq_i => '0',
-            tm_irq_i => '0',
+            clk_i        => soc_syscon_clk,
+            rst_i        => soc_cpu_rst,
+            ex_irq_i     => soc_gpio_irq,
+            sw_irq_i     => '0',
+            tm_irq_i     => '0',
             inst_cyc_o   => soc_cpu_inst_cyc,
             inst_stb_o   => soc_cpu_inst_stb,
             inst_adr_o   => soc_cpu_inst_adr,
@@ -232,9 +207,9 @@ begin
             data_ack_i   => soc_cpu_data_ack,
             data_err_i   => soc_cpu_data_err,
             data_stall_i => soc_cpu_data_stall,
-            sig_i_o  => soc_qpe_sig_i,
-            sig_q_o  => soc_qpe_sig_q,
-            active_o => active
+            sig_i_o      => soc_qpe_sig_i,
+            sig_q_o      => soc_qpe_sig_q,
+            active_o     => active
         );
 
         soc_io1_ack <= '0';
@@ -255,9 +230,9 @@ begin
             cop_adr_o    => open,
             cop_dat_o    => open,
             cop_we_o     => open,
-            rf_wr_en_o    => open,
-            rf_wr_addr_o  => open,
-            rf_wr_data_o  => open,
+            rf_wr_en_o   => open,
+            rf_wr_addr_o => open,
+            rf_wr_data_o => open,
             inst_cyc_o   => soc_cpu_inst_cyc,
             inst_stb_o   => soc_cpu_inst_stb,
             inst_adr_o   => soc_cpu_inst_adr,
@@ -278,7 +253,7 @@ begin
         );
 
         soc_cop_csr_rdata <= (others => '0');
-        soc_io1_err <= '0';
+        soc_io1_err       <= '0';
 
         soc_wb_sig_gen: entity work.wb_sig_gen port map (
             rst_i    => soc_syscon_rst,
@@ -297,6 +272,9 @@ begin
             active_o => active
         );
     end generate;
+
+    sig_i <= dac_dat when dac_sel = '1' else soc_qpe_sig_i;
+    sig_q <= dac_dat when dac_sel = '1' else soc_qpe_sig_q;
 
     soc_intercon: entity work.wb_intercon port map (
         clk_i        => soc_syscon_clk,
@@ -490,8 +468,30 @@ begin
         s_tx_ready_o => soc_dbg_tx_ready
     );
 
+    soc_dbg_ctrl: entity work.wb_dbg_ctrl port map (
+        clk_i      => soc_syscon_clk,
+        rst_i      => soc_syscon_rst,
+        active_i   => soc_dbg_active,
+        rx_data_i  => soc_dbg_rx_data,
+        rx_valid_i => soc_dbg_rx_valid,
+        tx_data_o  => soc_dbg_tx_data,
+        tx_valid_o => soc_dbg_tx_valid,
+        tx_ready_i => soc_dbg_tx_ready,
+        cyc_o      => soc_dbg_cyc,
+        stb_o      => soc_dbg_stb,
+        we_o       => soc_dbg_we,
+        sel_o      => soc_dbg_sel,
+        adr_o      => soc_dbg_adr,
+        dat_o      => soc_dbg_dat_w,
+        dat_i      => soc_dbg_dat_r,
+        ack_i      => soc_dbg_ack,
+        err_i      => soc_dbg_err,
+        stall_i    => soc_dbg_stall,
+        halt_o     => soc_dbg_halt
+    );
+
     soc_ram0: wb_ram_dp generic map (
-        BITS  => RAM0_ADDR_WIDTH
+        BITS => RAM0_ADDR_WIDTH
     ) port map (
         clk_i   => soc_syscon_clk,
         rst_i   => soc_syscon_rst,
@@ -511,7 +511,7 @@ begin
     );
 
     soc_ram1: wb_ram_dp generic map (
-        BITS  => RAM1_ADDR_WIDTH
+        BITS => RAM1_ADDR_WIDTH
     ) port map (
         clk_i   => soc_syscon_clk,
         rst_i   => soc_syscon_rst,

@@ -14,34 +14,34 @@ entity spi_port is
         CS_HIGH_CYCLES : positive := 2
     );
     port (
-        clk_i          : in  std_logic;
-        rst_i          : in  std_logic;
-        dbg_i          : in  std_logic;
-        dbg_o          : out std_logic;
-        sclk_i         : in  std_logic;
-        sclk_o         : out std_logic;
-        sclk_oe        : out std_logic;
-        cs_n_i         : in  std_logic;
-        cs_n_o         : out std_logic;
-        cs_n_oe        : out std_logic;
-        mosi_i         : in  std_logic;
-        mosi_o         : out std_logic;
-        mosi_oe        : out std_logic;
-        miso_i         : in  std_logic;
-        miso_o         : out std_logic;
-        miso_oe        : out std_logic;
-        m_tx_data_i    : in  std_logic_vector(7 downto 0);
-        m_tx_last_i    : in  std_logic;
-        m_tx_valid_i   : in  std_logic;
-        m_tx_ready_o   : out std_logic;
-        m_rx_data_o    : out std_logic_vector(7 downto 0);
-        m_rx_valid_o   : out std_logic;
-        s_active_o     : out std_logic;
-        s_rx_data_o    : out std_logic_vector(7 downto 0);
-        s_rx_valid_o   : out std_logic;
-        s_tx_data_i    : in  std_logic_vector(7 downto 0);
-        s_tx_valid_i   : in  std_logic;
-        s_tx_ready_o   : out std_logic
+        clk_i        : in  std_logic;
+        rst_i        : in  std_logic;
+        dbg_i        : in  std_logic;
+        dbg_o        : out std_logic;
+        sclk_i       : in  std_logic;
+        sclk_o       : out std_logic;
+        sclk_oe      : out std_logic;
+        cs_n_i       : in  std_logic;
+        cs_n_o       : out std_logic;
+        cs_n_oe      : out std_logic;
+        mosi_i       : in  std_logic;
+        mosi_o       : out std_logic;
+        mosi_oe      : out std_logic;
+        miso_i       : in  std_logic;
+        miso_o       : out std_logic;
+        miso_oe      : out std_logic;
+        m_tx_data_i  : in  std_logic_vector(7 downto 0);
+        m_tx_last_i  : in  std_logic;
+        m_tx_valid_i : in  std_logic;
+        m_tx_ready_o : out std_logic;
+        m_rx_data_o  : out std_logic_vector(7 downto 0);
+        m_rx_valid_o : out std_logic;
+        s_active_o   : out std_logic;
+        s_rx_data_o  : out std_logic_vector(7 downto 0);
+        s_rx_valid_o : out std_logic;
+        s_tx_data_i  : in  std_logic_vector(7 downto 0);
+        s_tx_valid_i : in  std_logic;
+        s_tx_ready_o : out std_logic
     );
 end entity spi_port;
 

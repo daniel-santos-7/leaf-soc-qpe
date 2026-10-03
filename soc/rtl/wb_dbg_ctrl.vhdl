@@ -55,11 +55,11 @@ architecture rtl of wb_dbg_ctrl is
     signal rdata_reg : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal we_reg    : std_logic;
 
-    signal halt_reg  : std_logic;
-    signal err_reg   : std_logic;
-    signal ovr_reg   : std_logic;
-    signal busy      : std_logic;
-    signal status    : std_logic_vector(7 downto 0);
+    signal halt_reg : std_logic;
+    signal err_reg  : std_logic;
+    signal ovr_reg  : std_logic;
+    signal busy     : std_logic;
+    signal status   : std_logic_vector(7 downto 0);
 
     signal start_wr  : std_logic;
     signal start_rd  : std_logic;

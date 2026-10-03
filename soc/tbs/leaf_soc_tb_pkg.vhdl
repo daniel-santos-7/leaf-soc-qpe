@@ -18,10 +18,10 @@ package leaf_soc_tb_pkg is
     procedure init_mem (
         constant file_name : in string;
         constant mem_size  : in natural;
-        variable lane0 : inout byte_array_t;
-        variable lane1 : inout byte_array_t;
-        variable lane2 : inout byte_array_t;
-        variable lane3 : inout byte_array_t
+        variable lane0     : inout byte_array_t;
+        variable lane1     : inout byte_array_t;
+        variable lane2     : inout byte_array_t;
+        variable lane3     : inout byte_array_t
     );
 
     function calc_crc (
@@ -31,8 +31,8 @@ package leaf_soc_tb_pkg is
     ) return std_logic_vector;
 
     procedure leaf_soc_send_program (
-        signal tx : out std_logic;
-        signal rx_data : in std_logic_vector(7 downto 0);
+        signal   tx      : out std_logic;
+        signal   rx_data : in std_logic_vector(7 downto 0);
         constant program : in string
     );
 
@@ -66,15 +66,15 @@ package body leaf_soc_tb_pkg is
     procedure init_mem (
         constant file_name : in string;
         constant mem_size  : in natural;
-        variable lane0 : inout byte_array_t;
-        variable lane1 : inout byte_array_t;
-        variable lane2 : inout byte_array_t;
-        variable lane3 : inout byte_array_t
+        variable lane0     : inout byte_array_t;
+        variable lane1     : inout byte_array_t;
+        variable lane2     : inout byte_array_t;
+        variable lane3     : inout byte_array_t
     ) is
         type char_file is file of character;
         file bin_file : char_file;
-        variable byte : character;
-        variable addr : natural;
+        variable byte   : character;
+        variable addr   : natural;
         variable status : file_open_status;
     begin
         if file_name /= "" then
@@ -116,8 +116,8 @@ package body leaf_soc_tb_pkg is
     end function calc_crc;
 
     procedure leaf_soc_send_program (
-        signal tx : out std_logic;
-        signal rx_data : in std_logic_vector(7 downto 0);
+        signal   tx      : out std_logic;
+        signal   rx_data : in std_logic_vector(7 downto 0);
         constant program : in string
     ) is
 
@@ -134,7 +134,7 @@ package body leaf_soc_tb_pkg is
 
         constant crc_polynomial : std_logic_vector := x"07";
 
-        variable crc : std_logic_vector(7 downto 0) := (others => '0');
+        variable crc  : std_logic_vector(7 downto 0) := (others => '0');
         variable byte : std_logic_vector(7 downto 0) := (others => '0');
 
     begin
