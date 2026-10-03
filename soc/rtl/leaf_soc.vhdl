@@ -132,6 +132,12 @@ architecture rtl of leaf_soc is
 
     signal soc_xip_ack : std_logic;
     signal soc_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_xip_tx_data  : std_logic_vector(7 downto 0);
+    signal soc_xip_tx_last  : std_logic;
+    signal soc_xip_tx_valid : std_logic;
+    signal soc_xip_tx_ready : std_logic;
+    signal soc_xip_rx_data  : std_logic_vector(7 downto 0);
+    signal soc_xip_rx_valid : std_logic;
 
     signal soc_dbg_active   : std_logic;
     signal soc_dbg_rx_data  : std_logic_vector(7 downto 0);
@@ -439,21 +445,38 @@ begin
         gpio_oe_o  => gpio_oe
     );
 
-    soc_xip: entity work.wb_xip_ctrl generic map (
+    soc_xip: entity work.wb_xip_ctrl port map (
+        clk_i      => soc_syscon_clk,
+        rst_i      => soc_syscon_rst,
+        cyc_i      => soc_inst_xip_cyc,
+        stb_i      => soc_inst_xip_stb,
+        adr_i      => soc_inst_xip_adr,
+        ack_o      => soc_xip_ack,
+        dat_o      => soc_xip_dat,
+        tx_data_o  => soc_xip_tx_data,
+        tx_last_o  => soc_xip_tx_last,
+        tx_valid_o => soc_xip_tx_valid,
+        tx_ready_i => soc_xip_tx_ready,
+        rx_data_i  => soc_xip_rx_data,
+        rx_valid_i => soc_xip_rx_valid
+    );
+
+    soc_xip_spi: entity work.spi_master generic map (
         SCK_DIV        => XIP_SCK_DIV,
         CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES
     ) port map (
-        clk_i     => soc_syscon_clk,
-        rst_i     => soc_syscon_rst,
-        cyc_i     => soc_inst_xip_cyc,
-        stb_i     => soc_inst_xip_stb,
-        adr_i     => soc_inst_xip_adr,
-        ack_o     => soc_xip_ack,
-        dat_o     => soc_xip_dat,
-        spi_clk   => spi_clk,
-        spi_mosi  => spi_mosi,
-        spi_miso  => spi_miso,
-        spi_cs_n  => spi_cs_n
+        clk_i      => soc_syscon_clk,
+        rst_i      => soc_syscon_rst,
+        sck_o      => spi_clk,
+        cs_n_o     => spi_cs_n,
+        mosi_o     => spi_mosi,
+        miso_i     => spi_miso,
+        tx_data_i  => soc_xip_tx_data,
+        tx_last_i  => soc_xip_tx_last,
+        tx_valid_i => soc_xip_tx_valid,
+        tx_ready_o => soc_xip_tx_ready,
+        rx_data_o  => soc_xip_rx_data,
+        rx_valid_o => soc_xip_rx_valid
     );
 
     soc_ram0: wb_ram_dp generic map (
