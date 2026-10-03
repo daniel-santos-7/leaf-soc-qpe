@@ -21,7 +21,8 @@ entity spi_slave is
         rx_data_o  : out std_logic_vector(7 downto 0);
         rx_valid_o : out std_logic;
         tx_data_i  : in  std_logic_vector(7 downto 0);
-        tx_load_o  : out std_logic
+        tx_valid_i : in  std_logic;
+        tx_ready_o : out std_logic
     );
 end entity spi_slave;
 
@@ -39,6 +40,8 @@ architecture rtl of spi_slave is
     signal rx_sh   : std_logic_vector(6 downto 0);
     signal tx_sh   : std_logic_vector(7 downto 0);
     signal tx_load : std_logic;
+    signal tx_buf  : std_logic_vector(7 downto 0);
+    signal tx_full : std_logic;
 
 begin
 
@@ -69,20 +72,31 @@ begin
                 bit_cnt <= (others => '0');
                 rx_sh   <= (others => '0');
                 tx_sh   <= (others => '0');
+                tx_buf  <= (others => '0');
+                tx_full <= '0';
             elsif cs_act = '0' then
                 bit_cnt <= (others => '0');
                 tx_sh   <= (others => '0');
+                tx_full <= '0';
             else
                 if sck_rise = '1' then
                     rx_sh   <= rx_sh(5 downto 0) & mosi_s(1);
                     bit_cnt <= bit_cnt + 1;
                 end if;
-                if sck_fall = '1' then
-                    if tx_load = '1' then
+                if tx_load = '1' then
+                    tx_full <= '0';
+                    if tx_full = '1' then
+                        tx_sh <= tx_buf;
+                    elsif tx_valid_i = '1' then
                         tx_sh <= tx_data_i;
                     else
-                        tx_sh <= tx_sh(6 downto 0) & '0';
+                        tx_sh <= (others => '0');
                     end if;
+                elsif sck_fall = '1' then
+                    tx_sh <= tx_sh(6 downto 0) & '0';
+                elsif (tx_valid_i and not tx_full) = '1' then
+                    tx_buf  <= tx_data_i;
+                    tx_full <= '1';
                 end if;
             end if;
         end if;
@@ -92,6 +106,6 @@ begin
     active_o   <= cs_act;
     rx_data_o  <= rx_sh & mosi_s(1);
     rx_valid_o <= '1' when cs_act = '1' and sck_rise = '1' and bit_cnt = 7 else '0';
-    tx_load_o  <= tx_load;
+    tx_ready_o <= not tx_full;
 
 end architecture rtl;
