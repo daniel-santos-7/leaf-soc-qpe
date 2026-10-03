@@ -11,6 +11,7 @@ This repository carries the SoC together with a **QPE** (Quantum Pulse Extension
 - **Memory System:** Integrated Boot ROM, two internal dual-port RAMs: RAM0 (32 KB) and RAM1 (1 KB).
 - **Standard Peripherals:** UART for serial communication and an 8-pin GPIO with edge interrupts.
 - **Pulse Generator:** DDS signal generator with Gaussian envelopes and DRAG correction, reachable either as a coprocessor or as a memory-mapped peripheral.
+- **Debug Bridge:** SPI slave that reads and writes the data bus and holds the CPU in reset, with no change to the core.
 - **Expandability:** Ready for XIP (Execute-In-Place) and custom hardware via a dedicated coprocessor interface.
 - **FPGA Friendly:** Synthesizable VHDL design optimized for modern FPGA architectures.
 
@@ -22,7 +23,7 @@ The SoC architecture is centered around the **Wishbone B4** interconnect, which 
 The **Leaf** core implements the RV32I base integer instruction set. It features a 2-stage pipeline (Fetch and Execute) and supports Machine-mode CSRs, hardware counters, and interrupts.
 
 ### Bus & Interconnect
-The Leaf core is Harvard: it has two Wishbone B4 masters, one for instruction fetch and one for data. Both drive the bus as **pipelined** masters: `STB` is asserted for a single cycle and `ACK` is awaited with `CYC` held. Byte selects (`SEL`) and error reporting (`ERR`) are supported.
+The Leaf core is Harvard: it has two Wishbone B4 masters, one for instruction fetch and one for data. A third master, the SPI debug bridge, shares the data channel with the core. Both drive the bus as **pipelined** masters: `STB` is asserted for a single cycle and `ACK` is awaited with `CYC` held. Byte selects (`SEL`) and error reporting (`ERR`) are supported.
 
 A single **Intercon** (`wb_intercon`) connects both masters to the slaves as a partial crossbar:
 
@@ -30,8 +31,9 @@ A single **Intercon** (`wb_intercon`) connects both masters to the slaves as a p
 |--------|:---:|:---:|:------:|:------:|:----:|:---:|:----:|:------:|:------:|
 | Instruction | ✓ | ✓ | ✓ | ✓ | | | | | |
 | Data | | | | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Debug (via data) | | | | | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-The two sets of slaves are disjoint, so there is no arbitration and both channels run in parallel. Each dual-port RAM appears as two slave interfaces, which is what lets a fetch and a load/store complete in the same cycle. Both are instances of the same `wb_ram_dp`: RAM0 with `BITS => 15`, RAM1 with `BITS => 10`.
+The instruction and data sets of slaves are disjoint, so the two CPU channels run in parallel with no arbitration between them. The debug bridge reaches exactly the data set, through `wb_arbiter` in front of the data `wb_channel` (see Debug Bridge). Each dual-port RAM appears as two slave interfaces, which is what lets a fetch and a load/store complete in the same cycle. Both are instances of the same `wb_ram_dp`: RAM0 with `BITS => 15`, RAM1 with `BITS => 10`.
 
 `wb_intercon` is structural: one **`wb_channel`** per master, i.e. per CPU channel. `wb_channel` has a port group for every slave in the memory map (`rom_*`, `io0_*`, `io1_*`, `io2_*`, `xip_*`, `ram0_*`, `ram1_*`) and decodes them against the bases and widths in `leaf_soc_pkg`. The regions are disjoint, which keeps the select one-hot. Each instance connects the slaves routed to its master and ties off the others: their outputs are left `open`, and their inputs are tied to `ACK = '0'`, `ERR = '1'` and zero data.
 
@@ -47,12 +49,14 @@ The response path assumes every slave acknowledges exactly one cycle after its s
 Every slave also accepts a new request on every cycle, with no gating on its own pending `ACK`. A classic slave that writes only while its `ACK` is low would, behind a pipelined master, drop the second of two requests on consecutive cycles and still acknowledge it; `wb_ram_dp` therefore guards its port-A write with the request alone.
 
 ### XIP Controller
-`wb_xip_ctrl` turns each instruction fetch in `0x20000000`–`0x20FFFFFF` into one SPI Read (`0x03`) of four bytes: command, 24-bit address, 32 data bits, 64 SCK periods in all. It uses SPI mode 0. `CS#` falls together with the first MOSI bit, MOSI changes on SCK falling edges, and MISO is sampled in the system cycle in which SCK rises. `spi_clk`, `spi_mosi` and `spi_cs_n` all come straight from flip-flops.
+`wb_xip_ctrl` turns each instruction fetch in `0x20000000`–`0x20FFFFFF` into one SPI Read (`0x03`) of four bytes: command, 24-bit address, 32 data bits, 64 SCK periods in all. It uses SPI mode 0. `CS#` falls together with the first MOSI bit, MOSI changes on SCK falling edges, and MISO is sampled in the system cycle in which SCK rises. SCK, MOSI and `CS#` all come straight from flip-flops. The pins are shared with the debug bridge (see SPI Pins below).
 
-Two generics set the SPI timing, from `XIP_SCK_DIV` and `XIP_CS_HIGH_CYCLES` in `leaf_soc_pkg`:
+It is two modules. `spi_master` (inside `spi_port`, see SPI Pins) drives the pins and moves bytes: a byte is taken when `tx_valid_i` and `tx_ready_o` are both high, `tx_last_i` with it marks the end of the frame (`CS#` rises after that byte), and every byte clocked in comes out on `rx_data_o` with a one-cycle `rx_valid_o`, which for the last byte falls in the cycle after `CS#` rises. `tx_ready_o` is high when the master can start a frame (idle and the `CS#` hold over), and, inside a frame, in the cycle of the falling edge that ends a byte, so a byte already offered goes out with no gap; if none is offered then, SCK stops low with `CS#` still low until one is. `spi_master` holds `SCK_DIV`, `CS_HIGH_CYCLES` and the hold counter, and knows nothing about flash commands. `wb_xip_ctrl` (`soc_xip`) is the Wishbone side: on a request it latches the address and offers `03h`, the three address bytes and four dummy bytes, the last one marked `tx_last`; it assembles the four bytes received during the dummies little-endian and drives `ACK` combinationally in the cycle the last one arrives, so the timing is the same as the single-module controller it replaced (`CS#` edges compared cycle for cycle in `xip_test` with the defaults and with `SCK_DIV = 2`, `CS_HIGH_CYCLES = 4`).
+
+Two generics of `spi_master` set the SPI timing, from `XIP_SCK_DIV` and `XIP_CS_HIGH_CYCLES` in `leaf_soc_pkg`:
 
 - **`SCK_DIV`:** SCK stays `SCK_DIV` system cycles high and `SCK_DIV` low, and the first SCK rise comes `SCK_DIV` cycles after `CS#` falls. MISO is sampled `SCK_DIV` cycles after the falling edge that launched it, which is the window the flash's tCLQV plus pad and board delays must fit in.
-- **`CS_HIGH_CYCLES`:** `CS#` stays high for at least this many cycles between two reads (2 at minimum). A request that arrives earlier has its address latched and waits in `START` with `CS#` still high.
+- **`CS_HIGH_CYCLES`:** `CS#` stays high for at least this many cycles between two reads (2 at minimum). A request that arrives earlier has its address latched by `wb_xip_ctrl`, which keeps offering the command byte until `spi_master` is ready, with `CS#` still high.
 
 The defaults, 1 and 2, give SCK at half the system clock and 20 ns of `CS#` high at 100 MHz. Set both from the chosen flash's datasheet: the maximum SCK frequency of the `03h` read bounds `SCK_DIV`, and tSHSL bounds `CS_HIGH_CYCLES`. A word takes `128 × SCK_DIV + 2` cycles from request to `ACK` (130 with the defaults), plus whatever `CS#` hold is still pending, and the instruction master is stalled for all of it, so code in XIP runs roughly two orders of magnitude slower than from RAM.
 
@@ -135,6 +139,52 @@ RAM0's two ports share one clock, so a store on port A and an instruction fetch 
 
 Every other register in the SoC and in the IPs resets synchronously, so it only takes its reset value once the clock runs with `rst_o` high; the board must supply the clock while reset is held. Since the assertion is asynchronous, any pulse on the pin resets the chip, so the pin must be filtered in the pad or on the board.
 
+### SPI Pins
+XIP and the debug bridge share one set of four SPI pins, with the SoC as master for XIP and as slave for debug. `spi_port` (`soc_spi`) holds `spi_master`, `spi_slave` and the pin logic, and the input `dbg` picks the role:
+
+| `dbg` | Role | SCK, `CS#`, MOSI | MISO |
+|-----------|------|------------------|------|
+| 0 | master (XIP) | driven by the SoC | input from the flash |
+| 1 | slave (debug) | inputs from the debug host | driven by the SoC while `CS#` is low, released otherwise |
+
+There is no tri-state inside the SoC: each pin leaves `leaf_soc` as `_i`, `_o` and `_oe` (`sclk_*`, `cs_n_*`, `mosi_*`, `miso_*`), as the GPIO does, and the pads or the board resolve them. `dbg` goes through a two-flip-flop synchroniser and is a strap, not a run-time switch: change it only while no XIP read is in progress, e.g. with the CPU running from RAM or halted. While it is 1 the master's request input is gated off and `wb_xip_ctrl` answers every fetch with `ERR` one cycle later, so a jump into XIP takes an access fault instead of hanging; the slave sees `CS#` as high while it is 0, so XIP traffic never reaches the debug bridge.
+
+`CS#` is shared too, so in debug mode the flash sees the host's frames: the board must disconnect the flash (its `CS#` or the whole flash) while `dbg` is 1, or the flash will decode debug commands and fight the SoC on MISO. The testbench does the same: it holds the flash model's `CS#` high and resolves each pin from the `_oe` outputs, and the `DBG=1` check sets `dbg` around the debug frames while the CPU runs from RAM.
+
+### Debug Bridge
+The debug bridge is an SPI slave on the same four pins as XIP (see SPI Pins) that turns SPI frames into Wishbone transfers on the data channel. It needs nothing from the core: it can read and write every slave the data master reaches (UART, IO1, GPIO, RAM0 and RAM1 through port A) while a program runs, and it can hold the CPU in reset to load a program. It cannot see the CPU's registers or PC, nor set breakpoints, since the core has no debug port.
+
+It is two modules: `spi_slave` (inside `spi_port`) and `wb_dbg_ctrl` (`soc_dbg_ctrl`). `spi_slave` handles the pins only: it synchronises them, shifts bits and offers a byte interface plus `active_o` while `CS#` is low.
+
+- **Receive:** `rx_data_o` with a one-cycle `rx_valid_o` per received byte. There is no `ready`, because SPI cannot be held back: the consumer must take the byte in that cycle.
+- **Transmit:** ready/valid. A byte moves when `tx_valid_i` and `tx_ready_o` are both high; `tx_data_i` must stay stable while `tx_valid_i` waits. The slave has a one-byte buffer and `tx_ready_o` is high while it is empty. On the falling edge that ends a byte the buffer goes to the shift register and empties (a byte offered in that very cycle to an empty buffer goes straight to the shift register). If nothing was offered by then, the next byte on MISO is `0x00`, which is what the command byte of every frame carries. Raising `CS#` empties the buffer.
+
+The byte for position *k* of a frame can only be offered once the slave has received byte *k−1*, and it must be in before the falling edge that follows, at least 5 system cycles later at the maximum SCK. `wb_dbg_ctrl` raises `tx_valid` in the cycle after every `rx_valid`, holds it until `tx_ready`, and offers `0x00` where a command has nothing to send.
+
+`spi_slave` knows nothing about commands and can be reused for another SPI peripheral. `wb_dbg_ctrl` counts bytes within the frame, decodes the commands below, holds `HALT` and the status, and is the Wishbone master.
+
+**SPI:** mode 0 (SCK idle low, MOSI sampled on the rising edge, MISO changes on the falling edge), MSB first, one command per `CS#` low. SCK, `CS#` and MOSI are oversampled by the system clock through two-flip-flop synchronisers, so there is no second clock domain; the price is that SCK must stay at least 5 system cycles high and 5 low (SCK ≤ clk/10, 10 MHz at 100 MHz), which leaves time for MISO to update after a falling edge. Raising `CS#` mid-frame abandons the frame; a bus transfer already started still completes.
+
+| Cmd | Host sends after the command | Host receives | Action |
+|-----|------------------------------|---------------|--------|
+| `0x01` WRITE | address (4 B), data (4 B) | — | word write at `address`, started after the last data bit |
+| `0x02` READ | address (4 B), then 6 dummy bytes | byte 5 dummy, bytes 6–9 data, byte 10 status | word read, started after the last address bit |
+| `0x03` STATUS | 1 dummy byte | status | clears `OVR` |
+| `0x04` CTRL | control byte | — | bit 0 = `HALT` |
+| `0x05` ID | 4 dummy bytes | `0x4C454146` (`DBG_ID` in `leaf_soc_pkg`) | link check |
+
+Status byte: bit 0 `HALT`, bit 1 `ERR` (the last transfer ended with `ERR`, e.g. an unmapped address or the ROM, which the data channel does not reach), bit 2 `BUSY` (a transfer is in progress), bit 3 `OVR` (a WRITE or READ arrived while `BUSY`, and was dropped). Transfers are whole words: the low two address bits are ignored and `SEL` is always `1111`, so a byte or halfword register has to be updated by read-modify-write. A transfer takes a handful of system cycles, so at the maximum SCK a READ's data is ready long before byte 6 and a WRITE is over before the next command's first byte; `BUSY` and `OVR` only show up if the host ignores the SCK limit.
+
+**Arbitration:** `wb_arbiter` merges the CPU data master (`m0`) and the bridge (`m1`) into the data `wb_channel`. The grant is combinational and held while the owner's `CYC` is high; when the bus is free and both raise `CYC` in the same cycle the bridge wins, which cannot starve the CPU because the bridge issues at most one transfer per SPI frame. The master without the grant sees `STALL` and keeps its request pending (the core's `dmls_block` waits in `REQUEST` on `STALL`). `ACK` and `ERR` go only to the owner. The bridge only looks for its `ACK` from the cycle after its strobe was accepted, so a late response to a CPU request cut short by `HALT` cannot be taken for its own.
+
+**HALT:** OR-ed into the CPU's reset (`soc_cpu_rst`). In COP mode that also resets the pulse generator inside `leaf_qpe`; the peripherals, the RAMs, the bus and the bridge itself keep running, and so does the UART's transmit FIFO, which drains what the program had queued. `HALT` resets to 0. To load a program: `HALT = 1`, WRITE the image into RAM0, `HALT = 0`; the boot ROM then runs and waits for `RAM_JUMP_CMD` (`0x4A`) on the UART, as after a power-up.
+
+The testbench checks the bridge with `DBG=1`: after the program starts it reads the ID, writes and reads back a RAM1 word while the CPU is printing, reads the ROM and expects `ERR`, halts, reads RAM0, releases and sends `RAM_JUMP_CMD` again, so the program's output appears twice; the run ends with `DBG ok`:
+
+```bash
+make run PROGRAM=sw/c/hello_world/hello_world.bin DBG=1 RUN_CYCLES=300000
+```
+
 ## :zap: Pulse Generator (QPE)
 
 The waveform generator can be reached through two mutually exclusive interfaces, selected at elaboration time by the `WGEN_IF_COP` generic of `leaf_soc`, which picks between two `generate` blocks. The testbench passes it through, and the Makefile sets it from the `WGEN_IF` variable (`-gWGEN_IF_COP=false` for `MMIO`) when the simulation starts, so both modes are built into the same executable and switching recompiles nothing.
@@ -157,6 +207,8 @@ Seven parameters, in the same order in both modes — CSR `0x7C0 + n` in COP, wo
 QPE, the pulse generator as software sees it, has one API per interface, because the two work differently: `sw/c/common/qpe.c`/`qpe.h` (`qpe_*`) for COP and `sw/c/common/qpe_mmio.c`/`qpe_mmio.h` (`qpe_mmio_*`) for MMIO. A program names the one it needs in its Makefile, so the source says which SoC it targets. Both offer `*_set_*` setters, `*_trigger`, `*_wait_ready`, `*_init` and `*_pulse` with a parameter struct. Only `qpe_mmio` has getters (`qpe_mmio_get_*`), since a COP parameter CSR reads back the pointer, not the value. `rabi`, `ramsey`, `t1` and `wgen_demo` use `qpe`; `wgen_demo_mmio` is `wgen_demo` on `qpe_mmio` and emits the same I/Q samples. Assembly has the same split: `sw/asm/common/qpe.inc` (`qpe.*`, symbols `QPE_CSR_*`) and `sw/asm/common/qpe_mmio.inc` (`qpe_mmio.*`, symbols `QPE_MMIO_*`). A `qpe_mmio.*` setter takes the register holding the *value* and stores it with `sw`, using `t6` for the base; `qpe_mmio.trigger` and `qpe_mmio.wait` also use `t0`. `sw/asm/xwg-test-mmio` is `xwg-test` on `qpe_mmio.*` and emits the same samples. In the RTL, `qpe` names only the COP path (`leaf_qpe`, `qpe_csrs`); the MMIO path is `wb_sig_gen`.
 
 A program only works on a SoC built for the same interface. An MMIO program on a COP SoC traps on its first IO1 access, since nothing answers there but `ERR`. A COP program on an MMIO SoC raises no fault at all: the core forwards the CSR window whether or not a coprocessor is attached, and the MMIO SoC ties that port off, so parameter writes vanish, every read returns 0 and a wait on `TRIG` never ends. `qpe_init()` catches this: it reads `TRIG`, whose bit 1 (ready) is 1 whenever the generator is idle and 0 when nothing answers the CSR window; when it is 0 it prints `QPE: no coprocessor, is this an MMIO SoC?` and stops. `qpe_mmio_init()` does the same check on IO1 and prints `QPE MMIO: no pulse generator on IO1, is this a COP SoC?`, although on a COP SoC that access traps first. The pulse programs call it first, while the generator is still idle. A write followed by a read-back cannot serve as the probe: the core forwards a CSR write to a `csrr` of the same address in the very next instruction, so the read returns the written value even with no coprocessor attached ([leaf#7](https://github.com/daniel-santos-7/leaf/issues/7)).
+
+**DAC port:** `leaf_soc` has a 10-bit input `dac_dat` (`OUT_RES_BITS` wide) and a select input `dac_sel`. While `dac_sel` is 1, `sig_i` and `sig_q` both carry `dac_dat`; while it is 0 they carry the pulse generator's samples. The choice is up to whoever drives the pin: it does not follow `active`, which is not muxed and keeps reporting the generator, so a pulse fired while `dac_sel` is 1 plays internally but does not reach the pins. The mux is combinational and neither input is synchronised, so a change reaches the pins in the same cycle; a board that needs clean values must hold them stable or register them outside. The testbench drives `dac_dat` with `0x123`, and once the program has started it sets `dac_sel`, checks `0x123` on both pins, clears it and checks the idle generator's 0.
 
 The I/Q output width is **not** fixed by the SoC: it follows `OUT_RES_BITS` in the generated `ips/wgen/rtl/sine_lut_pkg.vhd` (currently 10 bits), which `leaf_soc_pkg.vhdl` derives its own constant from. Do not hardcode it in the package, or the SoC ports stop matching `sig_gen`'s.
 
@@ -241,6 +293,7 @@ To build and simulate the project, ensure the following tools are installed:
 | `TECH_DIR` | `tech` | Directory with the technology sources for `RAM=TECH` |
 | `WAVEFORM` | *(none)* | `ghw` or `fst`; written to `waves/<program>.<ext>` |
 | `SAMPLES` | *(none)* | `1` dumps every active I/Q sample to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
+| `DBG` | *(none)* | `1` runs the SPI debug bridge check after the program starts — see Debug Bridge |
 
 `make clean` runs `ghdl clean` and drops `work/` and `waves/`. The build globs the RTL directories and records the import in a stamp file, so *adding* a source is picked up automatically — but *renaming or deleting* one leaves a stale unit behind and needs a `make clean`.
 

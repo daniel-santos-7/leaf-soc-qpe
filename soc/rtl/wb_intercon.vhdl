@@ -30,6 +30,16 @@ entity wb_intercon is
         data_ack_o   : out std_logic;
         data_err_o   : out std_logic;
         data_stall_o : out std_logic;
+        dbg_cyc_i    : in  std_logic;
+        dbg_stb_i    : in  std_logic;
+        dbg_we_i     : in  std_logic;
+        dbg_sel_i    : in  std_logic_vector(3 downto 0);
+        dbg_adr_i    : in  std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+        dbg_dat_i    : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        dbg_dat_o    : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        dbg_ack_o    : out std_logic;
+        dbg_err_o    : out std_logic;
+        dbg_stall_o  : out std_logic;
         rom_cyc_o    : out std_logic;
         rom_stb_o    : out std_logic;
         rom_adr_o    : out std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
@@ -39,6 +49,7 @@ entity wb_intercon is
         xip_stb_o    : out std_logic;
         xip_adr_o    : out std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
         xip_ack_i    : in  std_logic;
+        xip_err_i    : in  std_logic;
         xip_dat_i    : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         ram0b_cyc_o  : out std_logic;
         ram0b_stb_o  : out std_logic;
@@ -96,7 +107,53 @@ end entity wb_intercon;
 
 architecture rtl of wb_intercon is
 
+    signal dch_cyc   : std_logic;
+    signal dch_stb   : std_logic;
+    signal dch_we    : std_logic;
+    signal dch_sel   : std_logic_vector(3 downto 0);
+    signal dch_adr   : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+    signal dch_dat_w : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal dch_dat_r : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal dch_ack   : std_logic;
+    signal dch_err   : std_logic;
+    signal dch_stall : std_logic;
+
 begin
+
+    data_arbiter: entity work.wb_arbiter port map (
+        clk_i      => clk_i,
+        rst_i      => rst_i,
+        m0_cyc_i   => data_cyc_i,
+        m0_stb_i   => data_stb_i,
+        m0_we_i    => data_we_i,
+        m0_sel_i   => data_sel_i,
+        m0_adr_i   => data_adr_i,
+        m0_dat_i   => data_dat_i,
+        m0_dat_o   => data_dat_o,
+        m0_ack_o   => data_ack_o,
+        m0_err_o   => data_err_o,
+        m0_stall_o => data_stall_o,
+        m1_cyc_i   => dbg_cyc_i,
+        m1_stb_i   => dbg_stb_i,
+        m1_we_i    => dbg_we_i,
+        m1_sel_i   => dbg_sel_i,
+        m1_adr_i   => dbg_adr_i,
+        m1_dat_i   => dbg_dat_i,
+        m1_dat_o   => dbg_dat_o,
+        m1_ack_o   => dbg_ack_o,
+        m1_err_o   => dbg_err_o,
+        m1_stall_o => dbg_stall_o,
+        s_cyc_o    => dch_cyc,
+        s_stb_o    => dch_stb,
+        s_we_o     => dch_we,
+        s_sel_o    => dch_sel,
+        s_adr_o    => dch_adr,
+        s_dat_o    => dch_dat_w,
+        s_dat_i    => dch_dat_r,
+        s_ack_i    => dch_ack,
+        s_err_i    => dch_err,
+        s_stall_i  => dch_stall
+    );
 
     inst_channel: entity work.wb_channel port map (
         clk_i       => clk_i,
@@ -118,7 +175,7 @@ begin
         io0_err_i   => '1',
         io1_err_i   => '1',
         io2_err_i   => '1',
-        xip_err_i   => '0',
+        xip_err_i   => xip_err_i,
         ram0_err_i  => '0',
         ram1_err_i  => '0',
         rom_dat_i   => rom_dat_i,
@@ -176,12 +233,12 @@ begin
     data_channel: entity work.wb_channel port map (
         clk_i       => clk_i,
         rst_i       => rst_i,
-        cpu_cyc_i   => data_cyc_i,
-        cpu_stb_i   => data_stb_i,
-        cpu_we_i    => data_we_i,
-        cpu_sel_i   => data_sel_i,
-        cpu_adr_i   => data_adr_i,
-        cpu_dat_i   => data_dat_i,
+        cpu_cyc_i   => dch_cyc,
+        cpu_stb_i   => dch_stb,
+        cpu_we_i    => dch_we,
+        cpu_sel_i   => dch_sel,
+        cpu_adr_i   => dch_adr,
+        cpu_dat_i   => dch_dat_w,
         rom_ack_i   => '0',
         io0_ack_i   => io0_ack_i,
         io1_ack_i   => io1_ack_i,
@@ -203,9 +260,9 @@ begin
         xip_dat_i   => (others => '0'),
         ram0_dat_i  => ram0a_dat_i,
         ram1_dat_i  => ram1a_dat_i,
-        cpu_ack_o   => data_ack_o,
-        cpu_err_o   => data_err_o,
-        cpu_stall_o => data_stall_o,
+        cpu_ack_o   => dch_ack,
+        cpu_err_o   => dch_err,
+        cpu_stall_o => dch_stall,
         rom_cyc_o   => open,
         io0_cyc_o   => io0_cyc_o,
         io1_cyc_o   => io1_cyc_o,
@@ -239,7 +296,7 @@ begin
         xip_adr_o   => open,
         ram0_adr_o  => ram0a_adr_o,
         ram1_adr_o  => ram1a_adr_o,
-        cpu_dat_o   => data_dat_o,
+        cpu_dat_o   => dch_dat_r,
         io0_dat_o   => io0_dat_o,
         io1_dat_o   => io1_dat_o,
         io2_dat_o   => io2_dat_o,
