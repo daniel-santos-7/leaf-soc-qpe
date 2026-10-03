@@ -10,126 +10,115 @@ use IEEE.std_logic_1164.all;
 use work.leaf_soc_pkg.all;
 
 entity wb_xip_ctrl is
-    generic (
-        SCK_DIV        : positive := 1;
-        CS_HIGH_CYCLES : positive := 2
-    );
     port (
-        clk_i     : in  std_logic;
-        rst_i     : in  std_logic;
-        cyc_i     : in  std_logic;
-        stb_i     : in  std_logic;
-        adr_i     : in  std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-        ack_o     : out std_logic;
-        dat_o     : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        spi_clk   : out std_logic;
-        spi_mosi  : out std_logic;
-        spi_miso  : in  std_logic;
-        spi_cs_n  : out std_logic
+        clk_i      : in  std_logic;
+        rst_i      : in  std_logic;
+        cyc_i      : in  std_logic;
+        stb_i      : in  std_logic;
+        adr_i      : in  std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+        ack_o      : out std_logic;
+        err_o      : out std_logic;
+        dat_o      : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        dis_i      : in  std_logic;
+        tx_data_o  : out std_logic_vector(7 downto 0);
+        tx_last_o  : out std_logic;
+        tx_valid_o : out std_logic;
+        tx_ready_i : in  std_logic;
+        rx_data_i  : in  std_logic_vector(7 downto 0);
+        rx_valid_i : in  std_logic
     );
 end entity wb_xip_ctrl;
 
 architecture rtl of wb_xip_ctrl is
 
-    type state_t is (IDLE, START, SHIFT, DONE);
+    constant CMD_READ : std_logic_vector(7 downto 0) := x"03";
 
-    signal state      : state_t;
-    signal sck        : std_logic;
-    signal cs_n       : std_logic;
-    signal bit_cnt    : natural range 0 to 63;
-    signal div_cnt    : natural range 0 to SCK_DIV-1;
-    signal hi_cnt     : natural range 0 to CS_HIGH_CYCLES-1;
-    signal cmd_word   : std_logic_vector(31 downto 0);
-    signal cmd_reg    : std_logic_vector(31 downto 0);
-    signal start_word : std_logic_vector(31 downto 0);
-    signal tx_shift   : std_logic_vector(31 downto 0);
-    signal rx_shift   : std_logic_vector(31 downto 0);
-    signal req        : std_logic;
-    signal hold_ok    : std_logic;
-    signal start_go   : std_logic;
+    type state_t is (IDLE, SEND, RECV);
+
+    signal state    : state_t;
+    signal req      : std_logic;
+    signal adr_reg  : std_logic_vector(XIP_ADDR_WIDTH-1 downto 0);
+    signal tx_idx   : natural range 0 to 7;
+    signal rx_idx   : natural range 0 to 7;
+    signal tx_data  : std_logic_vector(7 downto 0);
+    signal tx_valid : std_logic;
+    signal data_reg : std_logic_vector(23 downto 0);
+    signal ack      : std_logic;
+    signal err_reg  : std_logic;
 
 begin
 
-    assert CS_HIGH_CYCLES >= 2 report "XIP: CS_HIGH_CYCLES must be at least 2." severity failure;
+    req      <= cyc_i and stb_i;
+    tx_valid <= '1' when (state = IDLE and req = '1' and dis_i = '0') or state = SEND else '0';
 
-    cmd_word   <= x"03" & adr_i & "00";
-    req        <= cyc_i and stb_i;
-    hold_ok    <= '1' when hi_cnt = CS_HIGH_CYCLES-1 else '0';
-    start_word <= cmd_reg when state = START else cmd_word;
-    start_go   <= hold_ok when (state = IDLE and req = '1') or state = START else '0';
+    tx_proc: process(tx_idx, adr_reg)
+    begin
+        case tx_idx is
+            when 0      => tx_data <= CMD_READ;
+            when 1      => tx_data <= adr_reg(23 downto 16);
+            when 2      => tx_data <= adr_reg(15 downto 8);
+            when 3      => tx_data <= adr_reg(7 downto 0);
+            when others => tx_data <= (others => '0');
+        end case;
+    end process tx_proc;
 
-    xip_proc: process(clk_i)
+    ack <= '1' when state = RECV and rx_valid_i = '1' and rx_idx = 7 else '0';
+
+    ctrl_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 state    <= IDLE;
-                sck      <= '0';
-                cs_n     <= '1';
-                spi_mosi <= '0';
-                bit_cnt  <= 0;
-                div_cnt  <= 0;
-                tx_shift <= (others => '0');
-                rx_shift <= (others => '0');
+                adr_reg  <= (others => '0');
+                tx_idx   <= 0;
+                rx_idx   <= 0;
+                data_reg <= (others => '0');
+                err_reg  <= '0';
             else
+                err_reg <= '0';
                 case state is
-                    when IDLE | START =>
-                        if start_go = '1' then
-                            cs_n     <= '0';
-                            spi_mosi <= start_word(31);
-                            tx_shift <= start_word(30 downto 0) & '0';
-                            bit_cnt  <= 0;
-                            div_cnt  <= 0;
-                            state    <= SHIFT;
-                        elsif state = IDLE and req = '1' then
-                            cmd_reg  <= cmd_word;
-                            state    <= START;
-                        end if;
-
-                    when SHIFT =>
-                        if div_cnt /= SCK_DIV-1 then
-                            div_cnt <= div_cnt + 1;
-                        else
-                            div_cnt <= 0;
-                            if sck = '0' then
-                                sck      <= '1';
-                                rx_shift <= rx_shift(30 downto 0) & spi_miso;
+                    when IDLE =>
+                        if req = '1' and dis_i = '1' then
+                            err_reg <= '1';
+                        elsif req = '1' then
+                            adr_reg <= adr_i & "00";
+                            rx_idx  <= 0;
+                            state   <= SEND;
+                            if tx_ready_i = '1' then
+                                tx_idx <= 1;
                             else
-                                sck <= '0';
-                                if bit_cnt = 63 then
-                                    cs_n     <= '1';
-                                    spi_mosi <= '0';
-                                    state    <= DONE;
-                                else
-                                    spi_mosi <= tx_shift(31);
-                                    tx_shift <= tx_shift(30 downto 0) & '0';
-                                    bit_cnt  <= bit_cnt + 1;
-                                end if;
+                                tx_idx <= 0;
                             end if;
                         end if;
-
-                    when DONE =>
-                        state <= IDLE;
+                    when SEND =>
+                        if tx_ready_i = '1' then
+                            if tx_idx = 7 then
+                                state <= RECV;
+                            else
+                                tx_idx <= tx_idx + 1;
+                            end if;
+                        end if;
+                    when RECV =>
+                        if ack = '1' then
+                            state  <= IDLE;
+                            tx_idx <= 0;
+                        end if;
                 end case;
+                if rx_valid_i = '1' and state /= IDLE then
+                    if rx_idx /= 7 then
+                        rx_idx <= rx_idx + 1;
+                    end if;
+                    data_reg <= rx_data_i & data_reg(23 downto 8);
+                end if;
             end if;
         end if;
-    end process xip_proc;
+    end process ctrl_proc;
 
-    hi_cnt_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                hi_cnt <= CS_HIGH_CYCLES-1;
-            elsif cs_n = '0' then
-                hi_cnt <= 0;
-            elsif hi_cnt /= CS_HIGH_CYCLES-1 then
-                hi_cnt <= hi_cnt + 1;
-            end if;
-        end if;
-    end process hi_cnt_proc;
-
-    spi_clk  <= sck;
-    spi_cs_n <= cs_n;
-    dat_o    <= rx_shift(7 downto 0) & rx_shift(15 downto 8) & rx_shift(23 downto 16) & rx_shift(31 downto 24);
-    ack_o    <= '1' when state = DONE else '0';
+    tx_data_o  <= tx_data;
+    tx_last_o  <= '1' when tx_idx = 7 else '0';
+    tx_valid_o <= tx_valid;
+    ack_o      <= ack;
+    err_o      <= err_reg;
+    dat_o      <= rx_data_i & data_reg;
 
 end architecture rtl;

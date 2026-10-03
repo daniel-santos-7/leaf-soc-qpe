@@ -73,6 +73,7 @@ endif
 
 GHDLXOPTS += $(if $(filter 1,$(SAMPLES)),-gSAMPLES_FILE=$(WAVESDIR)/$(SAMPLES_CSV),)
 GHDLXOPTS += $(if $(filter MMIO,$(WGEN_IF)),-gWGEN_IF_COP=false,)
+GHDLXOPTS += $(if $(filter 1,$(DBG)),-gDBG_TEST=true,)
 
 $(WORKDIR) $(WAVESDIR):
 	mkdir -p $@
