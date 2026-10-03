@@ -45,6 +45,10 @@ architecture tb of leaf_soc_tb is
 
     constant DBG_HALF : natural := 5;
 
+    signal par_sel : std_logic;
+
+    constant PAR_EXT : std_logic_vector(OUT_RES_BITS-1 downto 0) := "0100100011";
+
     constant GPIO_EXT : std_logic_vector(GPIO_WIDTH-1 downto 0) := "10100101";
 
     signal clk_en : std_logic := '0';
@@ -73,6 +77,8 @@ begin
         gpio_i   => gpio_i,
         gpio_o   => gpio_o,
         gpio_oe  => gpio_oe,
+        par_i    => PAR_EXT,
+        par_sel  => par_sel,
         dbg_sck  => dbg_sck,
         dbg_cs_n => dbg_cs_n,
         dbg_mosi => dbg_mosi,
@@ -209,6 +215,7 @@ begin
         dbg_sck  <= '0';
         dbg_cs_n <= '1';
         dbg_mosi <= '0';
+        par_sel  <= '0';
         rst_n <= '0';
         rx   <= '1';
         clk_en <= '1';
@@ -237,6 +244,13 @@ begin
             leaf_soc_send_program(rx, uart_data, PROGRAM);
         end if;
 
+        par_sel <= '1';
+        wait until rising_edge(clk);
+        assert sig_i = PAR_EXT and sig_q = PAR_EXT report "parallel port not on sig_i/sig_q" severity failure;
+        par_sel <= '0';
+        wait until rising_edge(clk);
+        assert active = '1' or (sig_i = (sig_i'range => '0') and sig_q = (sig_q'range => '0')) report "pulse generator not back on sig_i/sig_q" severity failure;
+
         if DBG_TEST then
             dbg_frame(x"05" & x"00000000", dbg_rx(39 downto 0));
             assert dbg_rx(31 downto 0) = DBG_ID report "DBG: bad ID" severity failure;
@@ -255,21 +269,12 @@ begin
             dbg_read(x"80000000", dbg_data, dbg_stat);
             assert dbg_stat = x"01" report "DBG: RAM0 read faulted" severity failure;
 
-            dbg_frame(x"06" & x"01" & x"0123" & x"FF55", dbg_rx(47 downto 0));
-            dbg_wait(8);
-            assert sig_i = "0100100011" and sig_q = "1101010101" report "DBG: debug I/Q not on the outputs" severity failure;
-            dbg_cmd(x"03", x"00", dbg_stat);
-            assert dbg_stat = x"11" report "DBG: SIG bit not in status" severity failure;
-            dbg_frame(x"06" & x"00" & x"0000" & x"0000", dbg_rx(47 downto 0));
-            dbg_wait(8);
-            assert sig_i = (sig_i'range => '0') and sig_q = (sig_q'range => '0') report "DBG: QPE not back on the outputs" severity failure;
-
             dbg_cmd(x"04", x"00", dbg_stat);
             dbg_wait(512);
             uart_transmit(rx, RAM_JUMP_CMD);
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
             assert uart_data = ACK report "DBG: no ACK after release" severity failure;
-            report "DBG ok: id, RAM1 write/read, ROM err, halt, I/Q mux, release";
+            report "DBG ok: id, RAM1 write/read, ROM err, halt, release";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop

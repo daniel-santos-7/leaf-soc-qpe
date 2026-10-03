@@ -28,6 +28,8 @@ entity leaf_soc is
         gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
+        par_i    : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
+        par_sel  : in  std_logic;
         dbg_sck  : in  std_logic;
         dbg_cs_n : in  std_logic;
         dbg_mosi : in  std_logic;
@@ -149,9 +151,6 @@ architecture rtl of leaf_soc is
     signal soc_dbg_err   : std_logic;
     signal soc_dbg_stall : std_logic;
     signal soc_dbg_halt  : std_logic;
-    signal soc_dbg_src   : std_logic;
-    signal soc_dbg_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
-    signal soc_dbg_sig_q : std_logic_vector(OUT_RES_BITS-1 downto 0);
 
     signal soc_qpe_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal soc_qpe_sig_q : std_logic_vector(OUT_RES_BITS-1 downto 0);
@@ -203,14 +202,11 @@ begin
         ack_i      => soc_dbg_ack,
         err_i      => soc_dbg_err,
         stall_i    => soc_dbg_stall,
-        halt_o     => soc_dbg_halt,
-        sig_src_o  => soc_dbg_src,
-        sig_i_o    => soc_dbg_sig_i,
-        sig_q_o    => soc_dbg_sig_q
+        halt_o     => soc_dbg_halt
     );
 
-    sig_i <= soc_dbg_sig_i when soc_dbg_src = '1' else soc_qpe_sig_i;
-    sig_q <= soc_dbg_sig_q when soc_dbg_src = '1' else soc_qpe_sig_q;
+    sig_i <= par_i when par_sel = '1' else soc_qpe_sig_i;
+    sig_q <= par_i when par_sel = '1' else soc_qpe_sig_q;
 
     cop_qpe_gen: if WGEN_IF_COP generate
         soc_cpu: entity work.leaf_qpe generic map (
