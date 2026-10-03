@@ -16,7 +16,7 @@ entity spi_master is
     port (
         clk_i      : in  std_logic;
         rst_i      : in  std_logic;
-        sck_o      : out std_logic;
+        sclk_o     : out std_logic;
         cs_n_o     : out std_logic;
         mosi_o     : out std_logic;
         miso_i     : in  std_logic;
@@ -34,7 +34,7 @@ architecture rtl of spi_master is
     type state_t is (IDLE, SHIFT, WAIT_TX);
 
     signal state    : state_t;
-    signal sck      : std_logic;
+    signal sclk     : std_logic;
     signal cs_n     : std_logic;
     signal mosi     : std_logic;
     signal bit_cnt  : natural range 0 to 7;
@@ -54,7 +54,7 @@ begin
     assert CS_HIGH_CYCLES >= 2 report "SPI master: CS_HIGH_CYCLES must be at least 2." severity failure;
 
     hold_ok  <= '1' when hi_cnt = CS_HIGH_CYCLES-1 else '0';
-    fall     <= '1' when state = SHIFT and div_cnt = SCK_DIV-1 and sck = '1' else '0';
+    fall     <= '1' when state = SHIFT and div_cnt = SCK_DIV-1 and sclk = '1' else '0';
     tx_ready <= '1' when (state = IDLE and hold_ok = '1') or state = WAIT_TX or (fall = '1' and bit_cnt = 7 and last_reg = '0') else '0';
     load     <= tx_valid_i and tx_ready;
 
@@ -63,7 +63,7 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 state    <= IDLE;
-                sck      <= '0';
+                sclk     <= '0';
                 cs_n     <= '1';
                 mosi     <= '0';
                 bit_cnt  <= 0;
@@ -81,7 +81,7 @@ begin
                     last_reg <= tx_last_i;
                     bit_cnt  <= 0;
                     div_cnt  <= 0;
-                    sck      <= '0';
+                    sclk     <= '0';
                     state    <= SHIFT;
                     if fall = '1' then
                         rx_valid <= '1';
@@ -91,11 +91,11 @@ begin
                         div_cnt <= div_cnt + 1;
                     else
                         div_cnt <= 0;
-                        if sck = '0' then
-                            sck      <= '1';
+                        if sclk = '0' then
+                            sclk     <= '1';
                             rx_shift <= rx_shift(6 downto 0) & miso_i;
                         else
-                            sck <= '0';
+                            sclk <= '0';
                             if bit_cnt = 7 then
                                 rx_valid <= '1';
                                 if last_reg = '1' then
@@ -130,7 +130,7 @@ begin
         end if;
     end process hi_cnt_proc;
 
-    sck_o      <= sck;
+    sclk_o     <= sclk;
     cs_n_o     <= cs_n;
     mosi_o     <= mosi;
     tx_ready_o <= tx_ready;

@@ -21,19 +21,24 @@ entity leaf_soc is
         sig_i    : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         sig_q    : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         active   : out std_logic;
-        spi_clk  : out std_logic;
-        spi_mosi : out std_logic;
-        spi_miso : in  std_logic;
-        spi_cs_n : out std_logic;
+        sclk_i   : in  std_logic;
+        sclk_o   : out std_logic;
+        sclk_oe  : out std_logic;
+        cs_n_i   : in  std_logic;
+        cs_n_o   : out std_logic;
+        cs_n_oe  : out std_logic;
+        mosi_i   : in  std_logic;
+        mosi_o   : out std_logic;
+        mosi_oe  : out std_logic;
+        miso_i   : in  std_logic;
+        miso_o   : out std_logic;
+        miso_oe  : out std_logic;
+        dbg      : in  std_logic;
         gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
         dac_dat  : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
-        dac_sel  : in  std_logic;
-        dbg_sck  : in  std_logic;
-        dbg_cs_n : in  std_logic;
-        dbg_mosi : in  std_logic;
-        dbg_miso : out std_logic
+        dac_sel  : in  std_logic
     );
 end entity leaf_soc;
 
@@ -131,7 +136,9 @@ architecture rtl of leaf_soc is
     signal soc_gpio_irq : std_logic;
 
     signal soc_xip_ack : std_logic;
+    signal soc_xip_err : std_logic;
     signal soc_xip_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_spi_dbg : std_logic;
     signal soc_xip_tx_data  : std_logic_vector(7 downto 0);
     signal soc_xip_tx_last  : std_logic;
     signal soc_xip_tx_valid : std_logic;
@@ -173,21 +180,6 @@ begin
     );
 
     soc_cpu_rst <= soc_syscon_rst or soc_dbg_halt;
-
-    soc_dbg_spi: entity work.spi_slave port map (
-        clk_i      => soc_syscon_clk,
-        rst_i      => soc_syscon_rst,
-        sck_i      => dbg_sck,
-        cs_n_i     => dbg_cs_n,
-        mosi_i     => dbg_mosi,
-        miso_o     => dbg_miso,
-        active_o   => soc_dbg_active,
-        rx_data_o  => soc_dbg_rx_data,
-        rx_valid_o => soc_dbg_rx_valid,
-        tx_data_i  => soc_dbg_tx_data,
-        tx_valid_i => soc_dbg_tx_valid,
-        tx_ready_o => soc_dbg_tx_ready
-    );
 
     soc_dbg_ctrl: entity work.wb_dbg_ctrl port map (
         clk_i      => soc_syscon_clk,
@@ -345,6 +337,7 @@ begin
         xip_stb_o    => soc_inst_xip_stb,
         xip_adr_o    => soc_inst_xip_adr,
         xip_ack_i    => soc_xip_ack,
+        xip_err_i    => soc_xip_err,
         xip_dat_i    => soc_xip_dat,
         ram0b_cyc_o  => soc_ram0_b_cyc,
         ram0b_stb_o  => soc_ram0_b_stb,
@@ -452,7 +445,9 @@ begin
         stb_i      => soc_inst_xip_stb,
         adr_i      => soc_inst_xip_adr,
         ack_o      => soc_xip_ack,
+        err_o      => soc_xip_err,
         dat_o      => soc_xip_dat,
+        dis_i      => soc_spi_dbg,
         tx_data_o  => soc_xip_tx_data,
         tx_last_o  => soc_xip_tx_last,
         tx_valid_o => soc_xip_tx_valid,
@@ -461,22 +456,38 @@ begin
         rx_valid_i => soc_xip_rx_valid
     );
 
-    soc_xip_spi: entity work.spi_master generic map (
+    soc_spi: entity work.spi_port generic map (
         SCK_DIV        => XIP_SCK_DIV,
         CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES
     ) port map (
-        clk_i      => soc_syscon_clk,
-        rst_i      => soc_syscon_rst,
-        sck_o      => spi_clk,
-        cs_n_o     => spi_cs_n,
-        mosi_o     => spi_mosi,
-        miso_i     => spi_miso,
-        tx_data_i  => soc_xip_tx_data,
-        tx_last_i  => soc_xip_tx_last,
-        tx_valid_i => soc_xip_tx_valid,
-        tx_ready_o => soc_xip_tx_ready,
-        rx_data_o  => soc_xip_rx_data,
-        rx_valid_o => soc_xip_rx_valid
+        clk_i        => soc_syscon_clk,
+        rst_i        => soc_syscon_rst,
+        dbg_i        => dbg,
+        dbg_o        => soc_spi_dbg,
+        sclk_i       => sclk_i,
+        sclk_o       => sclk_o,
+        sclk_oe      => sclk_oe,
+        cs_n_i       => cs_n_i,
+        cs_n_o       => cs_n_o,
+        cs_n_oe      => cs_n_oe,
+        mosi_i       => mosi_i,
+        mosi_o       => mosi_o,
+        mosi_oe      => mosi_oe,
+        miso_i       => miso_i,
+        miso_o       => miso_o,
+        miso_oe      => miso_oe,
+        m_tx_data_i  => soc_xip_tx_data,
+        m_tx_last_i  => soc_xip_tx_last,
+        m_tx_valid_i => soc_xip_tx_valid,
+        m_tx_ready_o => soc_xip_tx_ready,
+        m_rx_data_o  => soc_xip_rx_data,
+        m_rx_valid_o => soc_xip_rx_valid,
+        s_active_o   => soc_dbg_active,
+        s_rx_data_o  => soc_dbg_rx_data,
+        s_rx_valid_o => soc_dbg_rx_valid,
+        s_tx_data_i  => soc_dbg_tx_data,
+        s_tx_valid_i => soc_dbg_tx_valid,
+        s_tx_ready_o => soc_dbg_tx_ready
     );
 
     soc_ram0: wb_ram_dp generic map (

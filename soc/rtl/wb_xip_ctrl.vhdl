@@ -17,7 +17,9 @@ entity wb_xip_ctrl is
         stb_i      : in  std_logic;
         adr_i      : in  std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
         ack_o      : out std_logic;
+        err_o      : out std_logic;
         dat_o      : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        dis_i      : in  std_logic;
         tx_data_o  : out std_logic_vector(7 downto 0);
         tx_last_o  : out std_logic;
         tx_valid_o : out std_logic;
@@ -42,11 +44,12 @@ architecture rtl of wb_xip_ctrl is
     signal tx_valid : std_logic;
     signal data_reg : std_logic_vector(23 downto 0);
     signal ack      : std_logic;
+    signal err_reg  : std_logic;
 
 begin
 
     req      <= cyc_i and stb_i;
-    tx_valid <= '1' when (state = IDLE and req = '1') or state = SEND else '0';
+    tx_valid <= '1' when (state = IDLE and req = '1' and dis_i = '0') or state = SEND else '0';
 
     tx_proc: process(tx_idx, adr_reg)
     begin
@@ -70,10 +73,14 @@ begin
                 tx_idx   <= 0;
                 rx_idx   <= 0;
                 data_reg <= (others => '0');
+                err_reg  <= '0';
             else
+                err_reg <= '0';
                 case state is
                     when IDLE =>
-                        if req = '1' then
+                        if req = '1' and dis_i = '1' then
+                            err_reg <= '1';
+                        elsif req = '1' then
                             adr_reg <= adr_i & "00";
                             rx_idx  <= 0;
                             state   <= SEND;
@@ -111,6 +118,7 @@ begin
     tx_last_o  <= '1' when tx_idx = 7 else '0';
     tx_valid_o <= tx_valid;
     ack_o      <= ack;
+    err_o      <= err_reg;
     dat_o      <= rx_data_i & data_reg;
 
 end architecture rtl;
