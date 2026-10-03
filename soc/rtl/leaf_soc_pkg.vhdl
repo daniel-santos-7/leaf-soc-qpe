@@ -96,19 +96,24 @@ package leaf_soc_pkg is
             sig_i    : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             sig_q    : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             active   : out std_logic;
-            spi_clk  : out std_logic;
-            spi_mosi : out std_logic;
-            spi_miso : in  std_logic;
-            spi_cs_n : out std_logic;
+            sclk_i   : in  std_logic;
+            sclk_o   : out std_logic;
+            sclk_oe  : out std_logic;
+            cs_n_i   : in  std_logic;
+            cs_n_o   : out std_logic;
+            cs_n_oe  : out std_logic;
+            mosi_i   : in  std_logic;
+            mosi_o   : out std_logic;
+            mosi_oe  : out std_logic;
+            miso_i   : in  std_logic;
+            miso_o   : out std_logic;
+            miso_oe  : out std_logic;
+            dbg      : in  std_logic;
             gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
             gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
             gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
             dac_dat  : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
-            dac_sel  : in  std_logic;
-            dbg_sck  : in  std_logic;
-            dbg_cs_n : in  std_logic;
-            dbg_mosi : in  std_logic;
-            dbg_miso : out std_logic
+            dac_sel  : in  std_logic
         );
     end component leaf_soc;
 

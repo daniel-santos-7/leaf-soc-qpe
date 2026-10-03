@@ -49,6 +49,7 @@ entity wb_intercon is
         xip_stb_o    : out std_logic;
         xip_adr_o    : out std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
         xip_ack_i    : in  std_logic;
+        xip_err_i    : in  std_logic;
         xip_dat_i    : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         ram0b_cyc_o  : out std_logic;
         ram0b_stb_o  : out std_logic;
@@ -174,7 +175,7 @@ begin
         io0_err_i   => '1',
         io1_err_i   => '1',
         io2_err_i   => '1',
-        xip_err_i   => '0',
+        xip_err_i   => xip_err_i,
         ram0_err_i  => '0',
         ram1_err_i  => '0',
         rom_dat_i   => rom_dat_i,
