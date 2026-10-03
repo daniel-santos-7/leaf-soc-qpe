@@ -14,3 +14,7 @@
 	path = ips/gpio
 	url = git@github.com:daniel-santos-7/wb-gpio.git
 	branch = main
+[submodule "ips/spi"]
+	path = ips/spi
+	url = git@github.com:daniel-santos-7/spi-dual-role.git
+	branch = main

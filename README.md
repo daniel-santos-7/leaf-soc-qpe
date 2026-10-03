@@ -51,7 +51,7 @@ Every slave also accepts a new request on every cycle, with no gating on its own
 ### XIP Controller
 `wb_xip_ctrl` turns each instruction fetch in `0x20000000`–`0x20FFFFFF` into one SPI Read (`0x03`) of four bytes: command, 24-bit address, 32 data bits, 64 SCK periods in all. It uses SPI mode 0. `CS#` falls together with the first MOSI bit, MOSI changes on SCK falling edges, and MISO is sampled in the system cycle in which SCK rises. SCK, MOSI and `CS#` all come straight from flip-flops. The pins are shared with the debug bridge (see SPI Pins below).
 
-It is two modules. `spi_master` (inside `spi_port`, see SPI Pins) drives the pins and moves bytes: a byte is taken when `tx_valid_i` and `tx_ready_o` are both high, `tx_last_i` with it marks the end of the frame (`CS#` rises after that byte), and every byte clocked in comes out on `rx_data_o` with a one-cycle `rx_valid_o`, which for the last byte falls in the cycle after `CS#` rises. `tx_ready_o` is high when the master can start a frame (idle and the `CS#` hold over), and, inside a frame, in the cycle of the falling edge that ends a byte, so a byte already offered goes out with no gap; if none is offered then, SCK stops low with `CS#` still low until one is. `spi_master` holds `SCK_DIV`, `CS_HIGH_CYCLES` and the hold counter, and knows nothing about flash commands. `wb_xip_ctrl` (`soc_xip`) is the Wishbone side: on a request it latches the address and offers `03h`, the three address bytes and four dummy bytes, the last one marked `tx_last`; it assembles the four bytes received during the dummies little-endian and drives `ACK` combinationally in the cycle the last one arrives, so the timing is the same as the single-module controller it replaced (`CS#` edges compared cycle for cycle in `xip_test` with the defaults and with `SCK_DIV = 2`, `CS_HIGH_CYCLES = 4`).
+It is two modules. `spi_master`, from the [`ips/spi`](ips/spi/) IP (inside `spi_port`, see SPI Pins), drives the pins and moves bytes through a ready/valid transmit interface with `tx_last` and a one-cycle `rx_valid` per received byte; it holds `SCK_DIV`, `CS_HIGH_CYCLES` and the hold counter, and knows nothing about flash commands (its interface is described in the IP's README). `wb_xip_ctrl` (`soc_xip`) is the Wishbone side: on a request it latches the address and offers `03h`, the three address bytes and four dummy bytes, the last one marked `tx_last`; it assembles the four bytes received during the dummies little-endian and drives `ACK` combinationally in the cycle the last one arrives, so the timing is the same as the single-module controller it replaced (`CS#` edges compared cycle for cycle in `xip_test` with the defaults and with `SCK_DIV = 2`, `CS_HIGH_CYCLES = 4`).
 
 Two generics of `spi_master` set the SPI timing, from `XIP_SCK_DIV` and `XIP_CS_HIGH_CYCLES` in `leaf_soc_pkg`:
 
@@ -140,7 +140,7 @@ RAM0's two ports share one clock, so a store on port A and an instruction fetch 
 Every other register in the SoC and in the IPs resets synchronously, so it only takes its reset value once the clock runs with `rst_o` high; the board must supply the clock while reset is held. Since the assertion is asynchronous, any pulse on the pin resets the chip, so the pin must be filtered in the pad or on the board.
 
 ### SPI Pins
-XIP and the debug bridge share one set of four SPI pins, with the SoC as master for XIP and as slave for debug. `spi_port` (`soc_spi`) holds `spi_master`, `spi_slave` and the pin logic, and the input `dbg` picks the role:
+XIP and the debug bridge share one set of four SPI pins, with the SoC as master for XIP and as slave for debug. `spi_port` (`soc_spi`), from the [`ips/spi`](ips/spi/) IP, holds `spi_master`, `spi_slave` and the pin logic, and the input `dbg` picks the role:
 
 | `dbg` | Role | SCK, `CS#`, MOSI | MISO |
 |-----------|------|------------------|------|
@@ -154,7 +154,7 @@ There is no tri-state inside the SoC: each pin leaves `leaf_soc` as `_i`, `_o` a
 ### Debug Bridge
 The debug bridge is an SPI slave on the same four pins as XIP (see SPI Pins) that turns SPI frames into Wishbone transfers on the data channel. It needs nothing from the core: it can read and write every slave the data master reaches (UART, IO1, GPIO, RAM0 and RAM1 through port A) while a program runs, and it can hold the CPU in reset to load a program. It cannot see the CPU's registers or PC, nor set breakpoints, since the core has no debug port.
 
-It is two modules: `spi_slave` (inside `spi_port`) and `wb_dbg_ctrl` (`soc_dbg_ctrl`). `spi_slave` handles the pins only: it synchronises them, shifts bits and offers a byte interface plus `active_o` while `CS#` is low.
+It is two modules: `spi_slave`, from the [`ips/spi`](ips/spi/) IP (inside `spi_port`), and `wb_dbg_ctrl` (`soc_dbg_ctrl`). `spi_slave` handles the pins only: it synchronises them, shifts bits and offers a byte interface plus `active_o` while `CS#` is low.
 
 - **Receive:** `rx_data_o` with a one-cycle `rx_valid_o` per received byte. There is no `ready`, because SPI cannot be held back: the consumer must take the byte in that cycle.
 - **Transmit:** ready/valid. A byte moves when `tx_valid_i` and `tx_ready_o` are both high; `tx_data_i` must stay stable while `tx_valid_i` waits. The slave has a one-byte buffer and `tx_ready_o` is high while it is empty. On the falling edge that ends a byte the buffer goes to the shift register and empties (a byte offered in that very cycle to an empty buffer goes straight to the shift register). If nothing was offered by then, the next byte on MISO is `0x00`, which is what the command byte of every frame carries. Raising `CS#` empties the buffer.
@@ -236,6 +236,7 @@ The repository is organized into the following main directories:
   - [`uart/`](ips/uart/): UART controller with Wishbone interface.
   - [`wgen/`](ips/wgen/): DDS-based signal generator.
   - [`gpio/`](ips/gpio/): GPIO with Wishbone interface.
+  - [`spi/`](ips/spi/): Dual-role SPI (master and slave on shared pins).
 - [`soc/`](soc/): SoC-level RTL implementation and top-level testbenches.
 - [`sw/`](sw/): RISC-V software, including bootloaders, libraries, and C/Assembly examples.
 - [`waves/`](waves/): Output directory for simulation waveforms (generated at runtime).
