@@ -103,6 +103,8 @@ package leaf_soc_pkg is
             gpio_i   : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
             gpio_o   : out std_logic_vector(GPIO_WIDTH-1 downto 0);
             gpio_oe  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
+            par_i    : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
+            par_sel  : in  std_logic;
             dbg_sck  : in  std_logic;
             dbg_cs_n : in  std_logic;
             dbg_mosi : in  std_logic;
