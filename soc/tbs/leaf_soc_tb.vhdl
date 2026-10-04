@@ -236,6 +236,14 @@ begin
             dbg_word(x"00000003", stat);
         end procedure dbg_read;
 
+        procedure dbg_empty is
+        begin
+            dbg_cs_n <= '0';
+            dbg_wait(2*DBG_HALF);
+            dbg_cs_n <= '1';
+            dbg_wait(2*DBG_HALF);
+        end procedure dbg_empty;
+
         procedure dbg_status(variable stat : out std_logic_vector(31 downto 0)) is
         begin
             dbg_cmd(x"00000003");
@@ -299,6 +307,12 @@ begin
             dbg_word(x"00000003", dbg_data);
             assert dbg_data = x"DEADBEEF" report "DBG: short frame did not cancel the pending write" severity failure;
 
+            dbg_cmd(x"90000005");
+            dbg_empty;
+            dbg_cmd(x"90000000");
+            dbg_word(x"00000003", dbg_data);
+            assert dbg_data = x"DEADBEEF" report "DBG: empty frame did not cancel the pending write" severity failure;
+
             dbg_read(x"00001000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"00000002" report "DBG: ROM read did not fault" severity failure;
 
@@ -315,7 +329,7 @@ begin
             uart_transmit(rx, RAM_JUMP_CMD);
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
             assert uart_data = ACK report "DBG: no ACK after release" severity failure;
-            report "DBG ok: id, RAM1 write/read, short frame, ROM err, halt, release";
+            report "DBG ok: id, RAM1 write/read, short and empty frames, ROM err, halt, release";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop
