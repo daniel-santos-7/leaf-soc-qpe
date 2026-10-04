@@ -146,12 +146,10 @@ architecture rtl of leaf_soc is
     signal soc_xip_rx_valid : std_logic;
 
     signal soc_spi_dbg      : std_logic;
-    signal soc_dbg_active   : std_logic;
-    signal soc_dbg_rx_data  : std_logic_vector(7 downto 0);
+    signal soc_dbg_rx_data  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_dbg_rx_bits  : std_logic_vector(DBG_CNT_BITS-1 downto 0);
     signal soc_dbg_rx_valid : std_logic;
-    signal soc_dbg_tx_data  : std_logic_vector(7 downto 0);
-    signal soc_dbg_tx_valid : std_logic;
-    signal soc_dbg_tx_ready : std_logic;
+    signal soc_dbg_tx_data  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_dbg_cyc   : std_logic;
     signal soc_dbg_stb   : std_logic;
@@ -436,7 +434,9 @@ begin
 
     soc_spi: entity work.spi_port generic map (
         SCK_DIV        => XIP_SCK_DIV,
-        CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES
+        CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES,
+        S_WIDTH        => SOC_DATA_WIDTH,
+        S_CNT_BITS     => DBG_CNT_BITS
     ) port map (
         clk_i        => soc_syscon_clk,
         rst_i        => soc_syscon_rst,
@@ -460,23 +460,19 @@ begin
         m_tx_ready_o => soc_xip_tx_ready,
         m_rx_data_o  => soc_xip_rx_data,
         m_rx_valid_o => soc_xip_rx_valid,
-        s_active_o   => soc_dbg_active,
         s_rx_data_o  => soc_dbg_rx_data,
+        s_rx_bits_o  => soc_dbg_rx_bits,
         s_rx_valid_o => soc_dbg_rx_valid,
-        s_tx_data_i  => soc_dbg_tx_data,
-        s_tx_valid_i => soc_dbg_tx_valid,
-        s_tx_ready_o => soc_dbg_tx_ready
+        s_tx_data_i  => soc_dbg_tx_data
     );
 
     soc_dbg_ctrl: entity work.wb_dbg_ctrl port map (
         clk_i      => soc_syscon_clk,
         rst_i      => soc_syscon_rst,
-        active_i   => soc_dbg_active,
         rx_data_i  => soc_dbg_rx_data,
+        rx_bits_i  => soc_dbg_rx_bits,
         rx_valid_i => soc_dbg_rx_valid,
         tx_data_o  => soc_dbg_tx_data,
-        tx_valid_o => soc_dbg_tx_valid,
-        tx_ready_i => soc_dbg_tx_ready,
         cyc_o      => soc_dbg_cyc,
         stb_o      => soc_dbg_stb,
         we_o       => soc_dbg_we,
