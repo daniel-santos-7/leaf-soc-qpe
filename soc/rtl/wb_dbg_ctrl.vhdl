@@ -14,12 +14,10 @@ entity wb_dbg_ctrl is
     port (
         clk_i      : in  std_logic;
         rst_i      : in  std_logic;
-        active_i   : in  std_logic;
-        rx_data_i  : in  std_logic_vector(7 downto 0);
+        rx_data_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        rx_bits_i  : in  std_logic_vector(DBG_CNT_BITS-1 downto 0);
         rx_valid_i : in  std_logic;
-        tx_data_o  : out std_logic_vector(7 downto 0);
-        tx_valid_o : out std_logic;
-        tx_ready_i : in  std_logic;
+        tx_data_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         cyc_o      : out std_logic;
         stb_o      : out std_logic;
         we_o       : out std_logic;
@@ -36,107 +34,73 @@ end entity wb_dbg_ctrl;
 
 architecture rtl of wb_dbg_ctrl is
 
-    constant CMD_WRITE  : std_logic_vector(7 downto 0) := x"01";
-    constant CMD_READ   : std_logic_vector(7 downto 0) := x"02";
-    constant CMD_STATUS : std_logic_vector(7 downto 0) := x"03";
-    constant CMD_CTRL   : std_logic_vector(7 downto 0) := x"04";
-    constant CMD_ID     : std_logic_vector(7 downto 0) := x"05";
+    constant OP_READ  : std_logic_vector(1 downto 0) := "00";
+    constant OP_WRITE : std_logic_vector(1 downto 0) := "01";
+    constant OP_CTRL  : std_logic_vector(1 downto 0) := "10";
+    constant OP_INFO  : std_logic_vector(1 downto 0) := "11";
 
     type bus_state_t is (B_IDLE, B_REQ, B_WAIT);
+
     signal bus_state : bus_state_t;
-
-    signal byte_cnt : unsigned(3 downto 0);
-    signal tx_byte  : std_logic_vector(7 downto 0);
-    signal tx_valid : std_logic;
-
-    signal cmd_reg   : std_logic_vector(7 downto 0);
-    signal addr_reg  : std_logic_vector(SOC_ADDR_WIDTH-1 downto 0);
-    signal wdata_reg : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal rdata_reg : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal we_reg    : std_logic;
-
-    signal halt_reg : std_logic;
-    signal err_reg  : std_logic;
-    signal ovr_reg  : std_logic;
-    signal busy     : std_logic;
-    signal status   : std_logic_vector(7 downto 0);
-
+    signal word      : std_logic;
+    signal cmd       : std_logic;
+    signal op        : std_logic_vector(1 downto 0);
     signal start_wr  : std_logic;
     signal start_rd  : std_logic;
     signal status_rd : std_logic;
+    signal id_rd     : std_logic;
+    signal busy      : std_logic;
+    signal status    : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+
+    signal wr_pend   : std_logic;
+    signal addr_reg  : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+    signal wdata_reg : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal resp_reg  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal we_reg    : std_logic;
+    signal halt_reg  : std_logic;
+    signal err_reg   : std_logic;
+    signal ovr_reg   : std_logic;
 
 begin
 
-    start_wr  <= '1' when rx_valid_i = '1' and cmd_reg = CMD_WRITE and byte_cnt = 8 else '0';
-    start_rd  <= '1' when rx_valid_i = '1' and cmd_reg = CMD_READ and byte_cnt = 4 else '0';
-    status_rd <= '1' when tx_valid = '1' and tx_ready_i = '1' and cmd_reg = CMD_STATUS and byte_cnt = 1 else '0';
+    word      <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = SOC_DATA_WIDTH else '0';
+    cmd       <= word and not wr_pend;
+    op        <= rx_data_i(1 downto 0);
+    start_wr  <= word and wr_pend;
+    start_rd  <= '1' when cmd = '1' and op = OP_READ else '0';
+    status_rd <= '1' when cmd = '1' and op = OP_INFO and rx_data_i(2) = '0' else '0';
+    id_rd     <= '1' when cmd = '1' and op = OP_INFO and rx_data_i(2) = '1' else '0';
+    busy      <= '0' when bus_state = B_IDLE else '1';
+    status    <= (SOC_DATA_WIDTH-1 downto 4 => '0') & ovr_reg & busy & err_reg & halt_reg;
 
     frame_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                byte_cnt  <= (others => '0');
-                tx_valid  <= '0';
-                cmd_reg   <= (others => '0');
+                wr_pend   <= '0';
                 addr_reg  <= (others => '0');
                 wdata_reg <= (others => '0');
                 halt_reg  <= '0';
-            elsif active_i = '0' then
-                byte_cnt <= (others => '0');
-                tx_valid <= '0';
-                cmd_reg  <= (others => '0');
             elsif rx_valid_i = '1' then
-                tx_valid <= '1';
-                if byte_cnt /= 15 then
-                    byte_cnt <= byte_cnt + 1;
+                wr_pend <= '0';
+                if start_wr = '1' then
+                    wdata_reg <= rx_data_i;
+                elsif cmd = '1' then
+                    case op is
+                        when OP_READ =>
+                            addr_reg <= rx_data_i(SOC_ADDR_WIDTH-1 downto 2);
+                        when OP_WRITE =>
+                            addr_reg <= rx_data_i(SOC_ADDR_WIDTH-1 downto 2);
+                            wr_pend  <= '1';
+                        when OP_CTRL =>
+                            halt_reg <= rx_data_i(2);
+                        when others =>
+                            null;
+                    end case;
                 end if;
-                if byte_cnt = 0 then
-                    cmd_reg <= rx_data_i;
-                end if;
-                if (cmd_reg = CMD_WRITE or cmd_reg = CMD_READ) and byte_cnt >= 1 and byte_cnt <= 4 then
-                    addr_reg <= addr_reg(SOC_ADDR_WIDTH-9 downto 0) & rx_data_i;
-                end if;
-                if cmd_reg = CMD_WRITE and byte_cnt >= 5 and byte_cnt <= 8 then
-                    wdata_reg <= wdata_reg(SOC_DATA_WIDTH-9 downto 0) & rx_data_i;
-                end if;
-                if cmd_reg = CMD_CTRL and byte_cnt = 1 then
-                    halt_reg <= rx_data_i(0);
-                end if;
-            elsif tx_ready_i = '1' then
-                tx_valid <= '0';
             end if;
         end if;
     end process frame_proc;
-
-    busy   <= '0' when bus_state = B_IDLE else '1';
-    status <= "0000" & ovr_reg & busy & err_reg & halt_reg;
-
-    tx_proc: process(cmd_reg, byte_cnt, rdata_reg, status)
-    begin
-        tx_byte <= (others => '0');
-        if cmd_reg = CMD_READ then
-            case to_integer(byte_cnt) is
-                when 6      => tx_byte <= rdata_reg(31 downto 24);
-                when 7      => tx_byte <= rdata_reg(23 downto 16);
-                when 8      => tx_byte <= rdata_reg(15 downto 8);
-                when 9      => tx_byte <= rdata_reg(7 downto 0);
-                when 10     => tx_byte <= status;
-                when others => tx_byte <= (others => '0');
-            end case;
-        elsif cmd_reg = CMD_STATUS then
-            if byte_cnt = 1 then
-                tx_byte <= status;
-            end if;
-        elsif cmd_reg = CMD_ID then
-            case to_integer(byte_cnt) is
-                when 1      => tx_byte <= DBG_ID(31 downto 24);
-                when 2      => tx_byte <= DBG_ID(23 downto 16);
-                when 3      => tx_byte <= DBG_ID(15 downto 8);
-                when 4      => tx_byte <= DBG_ID(7 downto 0);
-                when others => tx_byte <= (others => '0');
-            end case;
-        end if;
-    end process tx_proc;
 
     bus_proc: process(clk_i)
     begin
@@ -144,7 +108,7 @@ begin
             if rst_i = '1' then
                 bus_state <= B_IDLE;
                 we_reg    <= '0';
-                rdata_reg <= (others => '0');
+                resp_reg  <= (others => '0');
                 err_reg   <= '0';
                 ovr_reg   <= '0';
             else
@@ -164,13 +128,18 @@ begin
                             err_reg   <= err_i and not ack_i;
                             if we_reg = '0' then
                                 if ack_i = '1' then
-                                    rdata_reg <= dat_i;
+                                    resp_reg <= dat_i;
                                 else
-                                    rdata_reg <= (others => '0');
+                                    resp_reg <= (others => '0');
                                 end if;
                             end if;
                         end if;
                 end case;
+                if status_rd = '1' then
+                    resp_reg <= status;
+                elsif id_rd = '1' then
+                    resp_reg <= DBG_ID;
+                end if;
                 if (start_wr or start_rd) = '1' and bus_state /= B_IDLE then
                     ovr_reg <= '1';
                 elsif status_rd = '1' then
@@ -180,15 +149,13 @@ begin
         end if;
     end process bus_proc;
 
-    tx_data_o  <= tx_byte;
-    tx_valid_o <= tx_valid;
-
-    cyc_o  <= busy;
-    stb_o  <= '1' when bus_state = B_REQ else '0';
-    we_o   <= we_reg;
-    sel_o  <= (others => '1');
-    adr_o  <= addr_reg(SOC_ADDR_WIDTH-1 downto 2);
-    dat_o  <= wdata_reg;
-    halt_o <= halt_reg;
+    tx_data_o <= resp_reg;
+    cyc_o     <= busy;
+    stb_o     <= '1' when bus_state = B_REQ else '0';
+    we_o      <= we_reg;
+    sel_o     <= (others => '1');
+    adr_o     <= addr_reg;
+    dat_o     <= wdata_reg;
+    halt_o    <= halt_reg;
 
 end architecture rtl;
