@@ -109,7 +109,6 @@ begin
                 bus_state <= B_IDLE;
                 we_reg    <= '0';
                 err_reg   <= '0';
-                ovr_reg   <= '0';
             else
                 case bus_state is
                     when B_IDLE =>
@@ -127,14 +126,22 @@ begin
                             err_reg   <= err_i and not ack_i;
                         end if;
                 end case;
-                if (start_wr or start_rd) = '1' and bus_state /= B_IDLE then
-                    ovr_reg <= '1';
-                elsif status_rd = '1' then
-                    ovr_reg <= '0';
-                end if;
             end if;
         end if;
     end process bus_proc;
+
+    ovr_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                ovr_reg <= '0';
+            elsif (start_wr or start_rd) = '1' and bus_state /= B_IDLE then
+                ovr_reg <= '1';
+            elsif status_rd = '1' then
+                ovr_reg <= '0';
+            end if;
+        end if;
+    end process ovr_proc;
 
     resp_proc: process(clk_i)
     begin
