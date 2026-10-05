@@ -108,7 +108,6 @@ begin
             if rst_i = '1' then
                 bus_state <= B_IDLE;
                 we_reg    <= '0';
-                resp_reg  <= (others => '0');
                 err_reg   <= '0';
                 ovr_reg   <= '0';
             else
@@ -126,20 +125,8 @@ begin
                         if (ack_i or err_i) = '1' then
                             bus_state <= B_IDLE;
                             err_reg   <= err_i and not ack_i;
-                            if we_reg = '0' then
-                                if ack_i = '1' then
-                                    resp_reg <= dat_i;
-                                else
-                                    resp_reg <= (others => '0');
-                                end if;
-                            end if;
                         end if;
                 end case;
-                if status_rd = '1' then
-                    resp_reg <= status;
-                elsif id_rd = '1' then
-                    resp_reg <= DBG_ID;
-                end if;
                 if (start_wr or start_rd) = '1' and bus_state /= B_IDLE then
                     ovr_reg <= '1';
                 elsif status_rd = '1' then
@@ -148,6 +135,23 @@ begin
             end if;
         end if;
     end process bus_proc;
+
+    resp_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                resp_reg <= (others => '0');
+            elsif status_rd = '1' then
+                resp_reg <= status;
+            elsif id_rd = '1' then
+                resp_reg <= DBG_ID;
+            elsif bus_state = B_WAIT and ack_i = '1' and we_reg = '0' then
+                resp_reg <= dat_i;
+            elsif bus_state = B_WAIT and err_i = '1' and we_reg = '0' then
+                resp_reg <= (others => '0');
+            end if;
+        end if;
+    end process resp_proc;
 
     tx_data_o <= resp_reg;
     cyc_o     <= busy;
