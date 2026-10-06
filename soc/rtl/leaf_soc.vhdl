@@ -145,10 +145,10 @@ architecture rtl of leaf_soc is
     signal soc_xip_rx_valid : std_logic;
 
     signal soc_spi_dbg      : std_logic;
-    signal soc_dbg_rx_data  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_dbg_rx_data  : std_logic_vector(DBG_FRAME_BITS-1 downto 0);
     signal soc_dbg_rx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_dbg_rx_valid : std_logic;
-    signal soc_dbg_tx_data  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_dbg_tx_data  : std_logic_vector(DBG_FRAME_BITS-1 downto 0);
 
     signal soc_dbg_cyc   : std_logic;
     signal soc_dbg_stb   : std_logic;
@@ -436,7 +436,7 @@ begin
         WIDTH          => SPI_WIDTH,
         CNT_BITS       => SPI_CNT_BITS,
         M_WIDTH        => XIP_FRAME_BITS,
-        S_WIDTH        => SOC_DATA_WIDTH
+        S_WIDTH        => DBG_FRAME_BITS
     ) port map (
         clk_i        => soc_syscon_clk,
         rst_i        => soc_syscon_rst,
