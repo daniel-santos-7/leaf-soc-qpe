@@ -15,7 +15,7 @@ entity wb_dbg_ctrl is
         clk_i      : in  std_logic;
         rst_i      : in  std_logic;
         rx_data_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        rx_bits_i  : in  std_logic_vector(DBG_CNT_BITS-1 downto 0);
+        rx_bits_i  : in  std_logic_vector(SPI_CNT_BITS-1 downto 0);
         rx_valid_i : in  std_logic;
         tx_data_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         cyc_o      : out std_logic;
