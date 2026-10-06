@@ -140,15 +140,15 @@ architecture rtl of leaf_soc is
     signal soc_xip_dat      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_xip_start    : std_logic;
     signal soc_xip_ready    : std_logic;
-    signal soc_xip_tx_data  : std_logic_vector(XIP_FRAME_BITS-1 downto 0);
-    signal soc_xip_rx_data  : std_logic_vector(XIP_FRAME_BITS-1 downto 0);
+    signal soc_xip_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
+    signal soc_xip_rx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_xip_rx_valid : std_logic;
 
     signal soc_spi_dbg      : std_logic;
-    signal soc_dbg_rx_data  : std_logic_vector(DBG_FRAME_BITS-1 downto 0);
+    signal soc_dbg_rx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_dbg_rx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_dbg_rx_valid : std_logic;
-    signal soc_dbg_tx_data  : std_logic_vector(DBG_FRAME_BITS-1 downto 0);
+    signal soc_dbg_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
 
     signal soc_dbg_cyc   : std_logic;
     signal soc_dbg_stb   : std_logic;
@@ -434,9 +434,7 @@ begin
         SCK_DIV        => XIP_SCK_DIV,
         CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES,
         WIDTH          => SPI_WIDTH,
-        CNT_BITS       => SPI_CNT_BITS,
-        M_WIDTH        => XIP_FRAME_BITS,
-        S_WIDTH        => DBG_FRAME_BITS
+        CNT_BITS       => SPI_CNT_BITS
     ) port map (
         clk_i        => soc_syscon_clk,
         rst_i        => soc_syscon_rst,
