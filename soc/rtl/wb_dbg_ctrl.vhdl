@@ -14,10 +14,10 @@ entity wb_dbg_ctrl is
     port (
         clk_i      : in  std_logic;
         rst_i      : in  std_logic;
-        rx_data_i  : in  std_logic_vector(DBG_FRAME_BITS-1 downto 0);
+        rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
         rx_bits_i  : in  std_logic_vector(SPI_CNT_BITS-1 downto 0);
         rx_valid_i : in  std_logic;
-        tx_data_o  : out std_logic_vector(DBG_FRAME_BITS-1 downto 0);
+        tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
         cyc_o      : out std_logic;
         stb_o      : out std_logic;
         we_o       : out std_logic;
@@ -62,8 +62,8 @@ architecture rtl of wb_dbg_ctrl is
 
 begin
 
-    cmd_word <= rx_data_i(DBG_FRAME_BITS-1 downto SOC_DATA_WIDTH);
-    frame    <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = DBG_FRAME_BITS else '0';
+    cmd_word <= rx_data_i(SPI_WIDTH-1 downto SOC_DATA_WIDTH);
+    frame    <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = SPI_WIDTH else '0';
     op       <= cmd_word(1 downto 0);
     start_wr <= '1' when frame = '1' and op = OP_WRITE else '0';
     start_rd <= '1' when frame = '1' and op = OP_READ else '0';

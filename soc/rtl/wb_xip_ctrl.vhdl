@@ -22,8 +22,8 @@ entity wb_xip_ctrl is
         dis_i      : in  std_logic;
         start_o    : out std_logic;
         ready_i    : in  std_logic;
-        tx_data_o  : out std_logic_vector(XIP_FRAME_BITS-1 downto 0);
-        rx_data_i  : in  std_logic_vector(XIP_FRAME_BITS-1 downto 0);
+        tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
+        rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
         rx_valid_i : in  std_logic
     );
 end entity wb_xip_ctrl;
