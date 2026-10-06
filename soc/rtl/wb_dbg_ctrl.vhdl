@@ -14,10 +14,10 @@ entity wb_dbg_ctrl is
     port (
         clk_i      : in  std_logic;
         rst_i      : in  std_logic;
-        rx_data_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        rx_data_i  : in  std_logic_vector(DBG_FRAME_BITS-1 downto 0);
         rx_bits_i  : in  std_logic_vector(SPI_CNT_BITS-1 downto 0);
         rx_valid_i : in  std_logic;
-        tx_data_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        tx_data_o  : out std_logic_vector(DBG_FRAME_BITS-1 downto 0);
         cyc_o      : out std_logic;
         stb_o      : out std_logic;
         we_o       : out std_logic;
@@ -41,21 +41,15 @@ architecture rtl of wb_dbg_ctrl is
 
     type bus_state_t is (B_IDLE, B_REQ, B_WAIT);
 
-    signal word      : std_logic;
-    signal cmd       : std_logic;
+    signal cmd_word  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal frame     : std_logic;
     signal op        : std_logic_vector(1 downto 0);
     signal start_wr  : std_logic;
     signal start_rd  : std_logic;
     signal ctrl_wr   : std_logic;
-    signal status_rd : std_logic;
     signal id_rd     : std_logic;
 
-    signal wr_pend   : std_logic;
-    signal addr_reg  : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
-    signal wdata_reg : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-
     signal bus_state : bus_state_t;
-    signal we_reg    : std_logic;
     signal busy      : std_logic;
     signal done      : std_logic;
 
@@ -68,37 +62,13 @@ architecture rtl of wb_dbg_ctrl is
 
 begin
 
-    word      <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = SOC_DATA_WIDTH else '0';
-    cmd       <= word and not wr_pend;
-    op        <= rx_data_i(1 downto 0);
-    start_wr  <= word and wr_pend;
-    start_rd  <= '1' when cmd = '1' and op = OP_READ else '0';
-    ctrl_wr   <= '1' when cmd = '1' and op = OP_CTRL else '0';
-    status_rd <= '1' when cmd = '1' and op = OP_INFO and rx_data_i(2) = '0' else '0';
-    id_rd     <= '1' when cmd = '1' and op = OP_INFO and rx_data_i(2) = '1' else '0';
-
-    frame_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                wr_pend   <= '0';
-                addr_reg  <= (others => '0');
-                wdata_reg <= (others => '0');
-            elsif rx_valid_i = '1' then
-                if start_wr = '1' then
-                    wr_pend   <= '0';
-                    wdata_reg <= rx_data_i;
-                elsif cmd = '1' and op = OP_READ then
-                    addr_reg <= rx_data_i(SOC_ADDR_WIDTH-1 downto 2);
-                elsif cmd = '1' and op = OP_WRITE then
-                    wr_pend  <= '1';
-                    addr_reg <= rx_data_i(SOC_ADDR_WIDTH-1 downto 2);
-                elsif word = '0' then
-                    wr_pend <= '0';
-                end if;
-            end if;
-        end if;
-    end process frame_proc;
+    cmd_word <= rx_data_i(DBG_FRAME_BITS-1 downto SOC_DATA_WIDTH);
+    frame    <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = DBG_FRAME_BITS else '0';
+    op       <= cmd_word(1 downto 0);
+    start_wr <= '1' when frame = '1' and op = OP_WRITE else '0';
+    start_rd <= '1' when frame = '1' and op = OP_READ else '0';
+    ctrl_wr  <= '1' when frame = '1' and op = OP_CTRL else '0';
+    id_rd    <= '1' when frame = '1' and op = OP_INFO and cmd_word(2) = '1' else '0';
 
     busy <= '0' when bus_state = B_IDLE else '1';
     done <= '1' when bus_state = B_WAIT and (ack_i or err_i) = '1' else '0';
@@ -108,13 +78,11 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 bus_state <= B_IDLE;
-                we_reg    <= '0';
             else
                 case bus_state is
                     when B_IDLE =>
                         if (start_wr or start_rd) = '1' then
                             bus_state <= B_REQ;
-                            we_reg    <= start_wr;
                         end if;
                     when B_REQ =>
                         if stall_i = '0' then
@@ -135,7 +103,7 @@ begin
             if rst_i = '1' then
                 halt_reg <= '0';
             elsif ctrl_wr = '1' then
-                halt_reg <= rx_data_i(2);
+                halt_reg <= cmd_word(2);
             end if;
         end if;
     end process halt_proc;
@@ -158,7 +126,7 @@ begin
                 ovr_reg <= '0';
             elsif (start_wr or start_rd) = '1' and busy = '1' then
                 ovr_reg <= '1';
-            elsif status_rd = '1' then
+            elsif rx_valid_i = '1' then
                 ovr_reg <= '0';
             end if;
         end if;
@@ -171,27 +139,23 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 resp_reg <= (others => '0');
-            elsif status_rd = '1' then
-                resp_reg <= status;
             elsif id_rd = '1' then
                 resp_reg <= DBG_ID;
-            elsif done = '1' and we_reg = '0' then
-                if ack_i = '1' then
-                    resp_reg <= dat_i;
-                else
-                    resp_reg <= (others => '0');
-                end if;
+            elsif done = '1' and ack_i = '1' and op = OP_READ then
+                resp_reg <= dat_i;
+            elsif done = '1' and op = OP_READ then
+                resp_reg <= (others => '0');
             end if;
         end if;
     end process resp_proc;
 
-    tx_data_o <= resp_reg;
+    tx_data_o <= resp_reg & status;
     cyc_o     <= busy;
     stb_o     <= '1' when bus_state = B_REQ else '0';
-    we_o      <= we_reg;
+    we_o      <= '1' when op = OP_WRITE else '0';
     sel_o     <= (others => '1');
-    adr_o     <= addr_reg;
-    dat_o     <= wdata_reg;
+    adr_o     <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
+    dat_o     <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
     halt_o    <= halt_reg;
 
 end architecture rtl;

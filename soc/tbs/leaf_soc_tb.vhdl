@@ -55,6 +55,7 @@ architecture tb of leaf_soc_tb is
     signal dbg_mosi : std_logic;
 
     constant DBG_HALF : natural := 5;
+    constant DBG_NOP  : std_logic_vector(31 downto 0) := x"00000003";
 
     signal dac_sel : std_logic;
 
@@ -183,6 +184,7 @@ begin
     test: process
         variable dbg_data : std_logic_vector(31 downto 0);
         variable dbg_stat : std_logic_vector(31 downto 0);
+        variable dbg_junk : std_logic_vector(31 downto 0);
 
         procedure dbg_wait(constant n : in natural) is
         begin
@@ -212,28 +214,30 @@ begin
             rx_bits := r;
         end procedure dbg_frame;
 
-        procedure dbg_word(constant w_tx : in std_logic_vector(31 downto 0); variable w_rx : out std_logic_vector(31 downto 0)) is
+        procedure dbg_xfer(constant cmd : in std_logic_vector(31 downto 0); constant data : in std_logic_vector(31 downto 0);
+                           variable res : out std_logic_vector(31 downto 0); variable stat : out std_logic_vector(31 downto 0)) is
+            variable r : std_logic_vector(63 downto 0);
         begin
-            dbg_frame(w_tx, w_rx);
-        end procedure dbg_word;
+            dbg_frame(cmd & data, r);
+            res  := r(63 downto 32);
+            stat := r(31 downto 0);
+        end procedure dbg_xfer;
 
-        procedure dbg_cmd(constant w_tx : in std_logic_vector(31 downto 0)) is
-            variable r : std_logic_vector(31 downto 0);
+        procedure dbg_cmd(constant cmd : in std_logic_vector(31 downto 0); constant data : in std_logic_vector(31 downto 0)) is
+            variable r : std_logic_vector(63 downto 0);
         begin
-            dbg_frame(w_tx, r);
+            dbg_frame(cmd & data, r);
         end procedure dbg_cmd;
 
         procedure dbg_write(constant addr : in std_logic_vector(31 downto 0); constant data : in std_logic_vector(31 downto 0)) is
         begin
-            dbg_cmd(addr(31 downto 2) & "01");
-            dbg_cmd(data);
+            dbg_cmd(addr(31 downto 2) & "01", data);
         end procedure dbg_write;
 
         procedure dbg_read(constant addr : in std_logic_vector(31 downto 0); variable data : out std_logic_vector(31 downto 0); variable stat : out std_logic_vector(31 downto 0)) is
         begin
-            dbg_cmd(addr(31 downto 2) & "00");
-            dbg_word(x"00000003", data);
-            dbg_word(x"00000003", stat);
+            dbg_cmd(addr(31 downto 2) & "00", x"00000000");
+            dbg_xfer(DBG_NOP, x"00000000", data, stat);
         end procedure dbg_read;
 
         procedure dbg_empty is
@@ -243,12 +247,6 @@ begin
             dbg_cs_n <= '1';
             dbg_wait(2*DBG_HALF);
         end procedure dbg_empty;
-
-        procedure dbg_status(variable stat : out std_logic_vector(31 downto 0)) is
-        begin
-            dbg_cmd(x"00000003");
-            dbg_word(x"00000003", stat);
-        end procedure dbg_status;
     begin
         dbg_sclk <= '0';
         dbg_cs_n <= '1';
@@ -293,37 +291,33 @@ begin
         if DBG_TEST then
             dbg <= '1';
             dbg_wait(4);
-            dbg_cmd(x"00000007");
-            dbg_word(x"00000003", dbg_data);
+            dbg_cmd(x"00000007", x"00000000");
+            dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = DBG_ID report "DBG: bad ID" severity failure;
 
             dbg_write(x"90000000", x"DEADBEEF");
             dbg_read(x"90000000", dbg_data, dbg_stat);
             assert dbg_data = x"DEADBEEF" and dbg_stat = x"00000000" report "DBG: RAM1 read mismatch" severity failure;
 
-            dbg_cmd(x"90000005");
-            dbg_frame(x"00", dbg_data(7 downto 0));
-            dbg_cmd(x"90000000");
-            dbg_word(x"00000003", dbg_data);
-            assert dbg_data = x"DEADBEEF" report "DBG: short frame did not cancel the pending write" severity failure;
+            dbg_frame(x"90000001", dbg_junk);
+            dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"00000000" report "DBG: short frame was not ignored" severity failure;
 
-            dbg_cmd(x"90000005");
             dbg_empty;
-            dbg_cmd(x"90000000");
-            dbg_word(x"00000003", dbg_data);
-            assert dbg_data = x"DEADBEEF" report "DBG: empty frame did not cancel the pending write" severity failure;
+            dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"00000000" report "DBG: empty frame was not ignored" severity failure;
 
             dbg_read(x"00001000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"00000002" report "DBG: ROM read did not fault" severity failure;
 
-            dbg_cmd(x"00000006");
-            dbg_status(dbg_stat);
+            dbg_cmd(x"00000006", x"00000000");
+            dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_stat = x"00000003" report "DBG: bad status after halt" severity failure;
 
             dbg_read(x"80000000", dbg_data, dbg_stat);
             assert dbg_stat = x"00000001" report "DBG: RAM0 read faulted" severity failure;
 
-            dbg_cmd(x"00000002");
+            dbg_cmd(x"00000002", x"00000000");
             dbg <= '0';
             dbg_wait(512);
             uart_transmit(rx, RAM_JUMP_CMD);
