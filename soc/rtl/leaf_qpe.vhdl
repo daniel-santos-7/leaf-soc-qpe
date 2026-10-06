@@ -15,11 +15,11 @@ entity leaf_qpe is
         RESET_ADDR : std_logic_vector(XLEN-1 downto 0) := (others => '0')
     );
     port (
-        clk_i     : in  std_logic;
-        rst_i     : in  std_logic;
-        ex_irq_i  : in  std_logic;
-        sw_irq_i  : in  std_logic;
-        tm_irq_i  : in  std_logic;
+        clk_i    : in  std_logic;
+        rst_i    : in  std_logic;
+        ex_irq_i : in  std_logic;
+        sw_irq_i : in  std_logic;
+        tm_irq_i : in  std_logic;
 
         inst_cyc_o   : out std_logic;
         inst_stb_o   : out std_logic;
@@ -40,9 +40,9 @@ entity leaf_qpe is
         data_err_i   : in  std_logic;
         data_stall_i : in  std_logic;
 
-        sig_i_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
-        sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
-        active_o  : out std_logic
+        sig_i_o  : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+        sig_q_o  : out std_logic_vector(OUT_RES_BITS-1 downto 0);
+        active_o : out std_logic
     );
 end entity leaf_qpe;
 
@@ -71,15 +71,15 @@ begin
     u_cpu: entity work.leaf generic map (
         RESET_ADDR => RESET_ADDR
     ) port map (
-        clk_i     => clk_i,
-        rst_i     => rst_i,
-        ex_irq_i  => ex_irq_i,
-        sw_irq_i  => sw_irq_i,
-        tm_irq_i  => tm_irq_i,
-        cop_dat_i => csr_rdata,
-        cop_adr_o => csr_addr,
-        cop_dat_o => csr_wdata,
-        cop_we_o  => csr_we,
+        clk_i        => clk_i,
+        rst_i        => rst_i,
+        ex_irq_i     => ex_irq_i,
+        sw_irq_i     => sw_irq_i,
+        tm_irq_i     => tm_irq_i,
+        cop_dat_i    => csr_rdata,
+        cop_adr_o    => csr_addr,
+        cop_dat_o    => csr_wdata,
+        cop_we_o     => csr_we,
         rf_wr_en_o   => rf_wr_en,
         rf_wr_addr_o => rf_wr_addr,
         rf_wr_data_o => rf_wr_data,
@@ -103,39 +103,39 @@ begin
     );
 
     u_csrs: entity work.qpe_csrs port map (
-        clk_i   => clk_i,
-        rst_i   => rst_i,
-        addr_i  => csr_addr,
-        wdata_i => csr_wdata,
-        we_i    => csr_we,
-        rdata_o => csr_rdata,
+        clk_i        => clk_i,
+        rst_i        => rst_i,
+        addr_i       => csr_addr,
+        wdata_i      => csr_wdata,
+        we_i         => csr_we,
+        rdata_o      => csr_rdata,
         rf_we_i      => rf_wr_en,
         rf_wr_addr_i => rf_wr_addr,
         rf_wr_data_i => rf_wr_data,
-        ftw_o   => wgen_ftw,
-        pow_o   => wgen_pow,
-        amp_o   => wgen_amp,
-        env_o   => wgen_env,
-        drag_o  => wgen_drag,
-        valid_o => wgen_valid,
-        delay_o => wgen_delay,
-        ready_i => wgen_ready
+        ftw_o        => wgen_ftw,
+        pow_o        => wgen_pow,
+        amp_o        => wgen_amp,
+        env_o        => wgen_env,
+        drag_o       => wgen_drag,
+        valid_o      => wgen_valid,
+        delay_o      => wgen_delay,
+        ready_i      => wgen_ready
     );
 
     u_wgen: entity work.sig_gen port map (
-        clk_i        => clk_i,
-        rst_i        => rst_i,
-        ftw_i        => wgen_ftw,
-        pow_i        => wgen_pow,
-        amp_i        => wgen_amp,
-        env_i        => wgen_env,
-        drag_i       => wgen_drag,
-        valid_i      => wgen_valid,
-        delay_i      => wgen_delay,
-        ready_o      => wgen_ready,
-        sig_i_o      => sig_i_o,
-        sig_q_o      => sig_q_o,
-        active_o     => active_o
+        clk_i    => clk_i,
+        rst_i    => rst_i,
+        ftw_i    => wgen_ftw,
+        pow_i    => wgen_pow,
+        amp_i    => wgen_amp,
+        env_i    => wgen_env,
+        drag_i   => wgen_drag,
+        valid_i  => wgen_valid,
+        delay_i  => wgen_delay,
+        ready_o  => wgen_ready,
+        sig_i_o  => sig_i_o,
+        sig_q_o  => sig_q_o,
+        active_o => active_o
     );
 
 end architecture rtl;
