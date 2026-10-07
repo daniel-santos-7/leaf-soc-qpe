@@ -168,7 +168,7 @@ A frame is a command word (bits 63–32) followed by a data word (bits 31–0). 
 | `x` & `0` & `11` | NOP | — | nothing; fetches the reply |
 | `x` & `1` & `11` | ID | — | the reply carries `0x4C454146` (`DBG_ID` in `leaf_soc_pkg`) |
 
-The bus address and write data come straight from the received frame (`rx_data`), which the slave holds until the next frame starts; the transfer is over long before that.
+The bus address, write data and `WE` are registered when the transfer starts, like `CYC` and `STB`, so every Wishbone output of the bridge comes straight from a flip-flop and a new frame cannot disturb a transfer still in progress. `WE` drops again when the transfer ends.
 
 The reply is 64 bits: the result word (bits 63–32), a register that READ and ID overwrite and the other commands leave alone, and the status word (bits 31–0), taken live when `CS#` falls. Every frame shifts out the reply as it is when its `CS#` falls, so reading is pipelined: the frame after a READ or ID carries the answer while the host already sends the next command, the way JTAG/SWD debug ports work, and NOP is the filler when there is nothing else to send. A read with its status is two frames: READ `addr`, then any command (the reply has the data and the status). Every reply carries the status, so there is no separate status command.
 
