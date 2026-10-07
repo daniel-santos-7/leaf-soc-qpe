@@ -9,7 +9,7 @@
 
 // Memory sizes
 .equ ROM_SIZE,      0x200
-.equ RAM0_SIZE,     0x8000       // 32 KB
+.equ RAM0_SIZE,     0x2000       // 8 KB
 .equ RAM1_SIZE,     0x400        // 1 KB
 .equ XIP_SIZE,      0x1000000    // 16 MB
 

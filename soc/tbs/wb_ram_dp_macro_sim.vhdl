@@ -10,7 +10,7 @@ use IEEE.std_logic_1164.all;
 
 entity wb_ram_dp_macro_sim is
     generic (
-        BITS : natural := 15
+        BITS : natural := 13
     );
     port (
         clk_i   : in  std_logic;
@@ -34,8 +34,8 @@ end entity wb_ram_dp_macro_sim;
 architecture sim of wb_ram_dp_macro_sim is
 begin
 
-    assert BITS = 15
-        report "wb_ram_dp_macro_sim: wb_ram_dp_macro_preloaded preloads exactly four 2048-word banks"
+    assert BITS = 13
+        report "wb_ram_dp_macro_sim: wb_ram_dp_macro_preloaded preloads exactly one 2048-word bank"
         severity failure;
 
     ram: configuration work.wb_ram_dp_macro_preloaded

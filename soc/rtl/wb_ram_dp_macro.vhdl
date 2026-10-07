@@ -12,7 +12,7 @@ use work.leaf_soc_pkg.all;
 
 entity wb_ram_dp_macro is
     generic (
-        BITS            : natural := 15;
+        BITS            : natural := 13;
         MACRO_ADDR_BITS : natural := 11
     );
     port (
