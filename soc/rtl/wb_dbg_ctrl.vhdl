@@ -39,8 +39,6 @@ architecture rtl of wb_dbg_ctrl is
     constant OP_CTRL  : std_logic_vector(1 downto 0) := "10";
     constant OP_INFO  : std_logic_vector(1 downto 0) := "11";
 
-    type bus_state_t is (B_IDLE, B_REQ, B_WAIT);
-
     signal cmd_word  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal frame     : std_logic;
     signal op        : std_logic_vector(1 downto 0);
@@ -48,8 +46,8 @@ architecture rtl of wb_dbg_ctrl is
     signal start_rd  : std_logic;
     signal ctrl_wr   : std_logic;
     signal id_rd     : std_logic;
+    signal start     : std_logic;
 
-    signal bus_state : bus_state_t;
     signal busy_reg  : std_logic;
     signal stb_reg   : std_logic;
     signal we_reg    : std_logic;
@@ -72,38 +70,15 @@ begin
     ctrl_wr  <= '1' when frame = '1' and op = OP_CTRL else '0';
     id_rd    <= '1' when frame = '1' and op = OP_INFO and cmd_word(2) = '1' else '0';
 
-    done <= '1' when bus_state = B_WAIT and (ack_i or err_i) = '1' else '0';
-
-    bus_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                bus_state <= B_IDLE;
-            else
-                case bus_state is
-                    when B_IDLE =>
-                        if (start_wr or start_rd) = '1' then
-                            bus_state <= B_REQ;
-                        end if;
-                    when B_REQ =>
-                        if stall_i = '0' then
-                            bus_state <= B_WAIT;
-                        end if;
-                    when B_WAIT =>
-                        if done = '1' then
-                            bus_state <= B_IDLE;
-                        end if;
-                end case;
-            end if;
-        end if;
-    end process bus_proc;
+    start <= (start_wr or start_rd) and not busy_reg;
+    done  <= busy_reg and not stb_reg and (ack_i or err_i);
 
     busy_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 busy_reg <= '0';
-            elsif bus_state = B_IDLE and (start_wr or start_rd) = '1' then
+            elsif start = '1' then
                 busy_reg <= '1';
             elsif done = '1' then
                 busy_reg <= '0';
@@ -116,7 +91,7 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 stb_reg <= '0';
-            elsif bus_state = B_IDLE and (start_wr or start_rd) = '1' then
+            elsif start = '1' then
                 stb_reg <= '1';
             elsif stall_i = '0' then
                 stb_reg <= '0';
@@ -129,8 +104,10 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 we_reg <= '0';
-            elsif bus_state = B_IDLE and (start_wr or start_rd) = '1' then
+            elsif start = '1' then
                 we_reg <= start_wr;
+            elsif done = '1' then
+                we_reg <= '0';
             end if;
         end if;
     end process we_proc;
