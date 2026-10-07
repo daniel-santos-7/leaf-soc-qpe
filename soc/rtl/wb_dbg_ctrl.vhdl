@@ -42,8 +42,8 @@ architecture rtl of wb_dbg_ctrl is
     signal cmd_word  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal frame     : std_logic;
     signal op        : std_logic_vector(1 downto 0);
+    signal req       : std_logic;
     signal start_wr  : std_logic;
-    signal start_rd  : std_logic;
     signal ctrl_wr   : std_logic;
     signal id_rd     : std_logic;
     signal start     : std_logic;
@@ -67,74 +67,39 @@ begin
     cmd_word <= rx_data_i(SPI_WIDTH-1 downto SOC_DATA_WIDTH);
     frame    <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = SPI_WIDTH else '0';
     op       <= cmd_word(1 downto 0);
+    req      <= '1' when frame = '1' and (op = OP_READ or op = OP_WRITE) else '0';
     start_wr <= '1' when frame = '1' and op = OP_WRITE else '0';
-    start_rd <= '1' when frame = '1' and op = OP_READ else '0';
     ctrl_wr  <= '1' when frame = '1' and op = OP_CTRL else '0';
     id_rd    <= '1' when frame = '1' and op = OP_INFO and cmd_word(2) = '1' else '0';
 
-    start <= (start_wr or start_rd) and not cyc_reg;
+    start <= req and not cyc_reg;
     done  <= cyc_reg and not stb_reg and (ack_i or err_i);
 
-    cyc_proc: process(clk_i)
+    bus_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 cyc_reg <= '0';
+                stb_reg <= '0';
+                we_reg  <= '0';
+                adr_reg <= (others => '0');
+                dat_reg <= (others => '0');
+                err_reg <= '0';
             elsif start = '1' then
                 cyc_reg <= '1';
+                stb_reg <= '1';
+                we_reg  <= start_wr;
+                adr_reg <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
+                dat_reg <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
             elsif done = '1' then
                 cyc_reg <= '0';
-            end if;
-        end if;
-    end process cyc_proc;
-
-    stb_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                stb_reg <= '0';
-            elsif start = '1' then
-                stb_reg <= '1';
+                we_reg  <= '0';
+                err_reg <= err_i and not ack_i;
             elsif stall_i = '0' then
                 stb_reg <= '0';
             end if;
         end if;
-    end process stb_proc;
-
-    we_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                we_reg <= '0';
-            elsif start = '1' then
-                we_reg <= start_wr;
-            elsif done = '1' then
-                we_reg <= '0';
-            end if;
-        end if;
-    end process we_proc;
-
-    adr_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                adr_reg <= (others => '0');
-            elsif start = '1' then
-                adr_reg <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
-            end if;
-        end if;
-    end process adr_proc;
-
-    dat_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                dat_reg <= (others => '0');
-            elsif start = '1' then
-                dat_reg <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
-            end if;
-        end if;
-    end process dat_proc;
+    end process bus_proc;
 
     halt_proc: process(clk_i)
     begin
@@ -147,23 +112,12 @@ begin
         end if;
     end process halt_proc;
 
-    err_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                err_reg <= '0';
-            elsif done = '1' then
-                err_reg <= err_i and not ack_i;
-            end if;
-        end if;
-    end process err_proc;
-
     ovr_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 ovr_reg <= '0';
-            elsif (start_wr or start_rd) = '1' and cyc_reg = '1' then
+            elsif req = '1' and cyc_reg = '1' then
                 ovr_reg <= '1';
             elsif rx_valid_i = '1' then
                 ovr_reg <= '0';
