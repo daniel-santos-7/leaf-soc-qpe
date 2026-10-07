@@ -46,7 +46,6 @@ architecture rtl of wb_dbg_ctrl is
     signal start_wr  : std_logic;
     signal ctrl_wr   : std_logic;
     signal id_rd     : std_logic;
-    signal start     : std_logic;
 
     signal cyc_reg   : std_logic;
     signal stb_reg   : std_logic;
@@ -72,8 +71,7 @@ begin
     ctrl_wr  <= '1' when frame = '1' and op = OP_CTRL else '0';
     id_rd    <= '1' when frame = '1' and op = OP_INFO and cmd_word(2) = '1' else '0';
 
-    start <= req and not cyc_reg;
-    done  <= cyc_reg and not stb_reg and (ack_i or err_i);
+    done <= cyc_reg and not stb_reg and (ack_i or err_i);
 
     bus_proc: process(clk_i)
     begin
@@ -85,18 +83,24 @@ begin
                 adr_reg <= (others => '0');
                 dat_reg <= (others => '0');
                 err_reg <= '0';
-            elsif start = '1' then
-                cyc_reg <= '1';
-                stb_reg <= '1';
-                we_reg  <= start_wr;
-                adr_reg <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
-                dat_reg <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
-            elsif done = '1' then
-                cyc_reg <= '0';
-                we_reg  <= '0';
-                err_reg <= err_i and not ack_i;
-            elsif stall_i = '0' then
-                stb_reg <= '0';
+            elsif cyc_reg = '0' then
+                if req = '1' then
+                    cyc_reg <= '1';
+                    stb_reg <= '1';
+                    we_reg  <= start_wr;
+                    adr_reg <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
+                    dat_reg <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
+                end if;
+            else
+                if stb_reg = '1' then
+                    if stall_i = '0' then
+                        stb_reg <= '0';
+                    end if;
+                elsif (ack_i or err_i) = '1' then
+                    cyc_reg <= '0';
+                    we_reg  <= '0';
+                    err_reg <= err_i and not ack_i;
+                end if;
             end if;
         end if;
     end process bus_proc;
