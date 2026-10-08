@@ -43,9 +43,6 @@ architecture rtl of wb_dbg_ctrl is
     signal frame     : std_logic;
     signal op        : std_logic_vector(1 downto 0);
     signal req       : std_logic;
-    signal start_wr  : std_logic;
-    signal ctrl_wr   : std_logic;
-    signal id_rd     : std_logic;
 
     signal cyc_reg   : std_logic;
     signal stb_reg   : std_logic;
@@ -67,9 +64,6 @@ begin
     frame    <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = SPI_WIDTH else '0';
     op       <= cmd_word(1 downto 0);
     req      <= '1' when frame = '1' and (op = OP_READ or op = OP_WRITE) else '0';
-    start_wr <= '1' when frame = '1' and op = OP_WRITE else '0';
-    ctrl_wr  <= '1' when frame = '1' and op = OP_CTRL else '0';
-    id_rd    <= '1' when frame = '1' and op = OP_INFO and cmd_word(2) = '1' else '0';
 
     done <= cyc_reg and not stb_reg and (ack_i or err_i);
 
@@ -87,9 +81,13 @@ begin
                 if req = '1' then
                     cyc_reg <= '1';
                     stb_reg <= '1';
-                    we_reg  <= start_wr;
                     adr_reg <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
                     dat_reg <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
+                    if op = OP_WRITE then
+                        we_reg <= '1';
+                    else
+                        we_reg <= '0';
+                    end if;
                 end if;
             else
                 if stb_reg = '1' then
@@ -110,7 +108,7 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 halt_reg <= '0';
-            elsif ctrl_wr = '1' then
+            elsif frame = '1' and op = OP_CTRL then
                 halt_reg <= cmd_word(2);
             end if;
         end if;
@@ -136,7 +134,7 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 resp_reg <= (others => '0');
-            elsif id_rd = '1' then
+            elsif frame = '1' and op = OP_INFO and cmd_word(2) = '1' then
                 resp_reg <= DBG_ID;
             elsif done = '1' and ack_i = '1' and we_reg = '0' then
                 resp_reg <= dat_i;
