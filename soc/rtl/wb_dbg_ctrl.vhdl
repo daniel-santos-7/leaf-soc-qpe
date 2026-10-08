@@ -49,7 +49,6 @@ architecture rtl of wb_dbg_ctrl is
     signal we_reg    : std_logic;
     signal adr_reg   : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
     signal dat_reg   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal done      : std_logic;
 
     signal halt_reg  : std_logic;
     signal err_reg   : std_logic;
@@ -64,8 +63,6 @@ begin
     frame    <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = SPI_WIDTH else '0';
     op       <= cmd_word(1 downto 0);
     req      <= '1' when frame = '1' and (op = OP_READ or op = OP_WRITE) else '0';
-
-    done <= cyc_reg and not stb_reg and (ack_i or err_i);
 
     bus_proc: process(clk_i)
     begin
@@ -136,10 +133,12 @@ begin
                 resp_reg <= (others => '0');
             elsif frame = '1' and op = OP_INFO and cmd_word(2) = '1' then
                 resp_reg <= DBG_ID;
-            elsif done = '1' and ack_i = '1' and we_reg = '0' then
-                resp_reg <= dat_i;
-            elsif done = '1' and we_reg = '0' then
-                resp_reg <= (others => '0');
+            elsif cyc_reg = '1' and stb_reg = '0' and we_reg = '0' then
+                if ack_i = '1' then
+                    resp_reg <= dat_i;
+                elsif err_i = '1' then
+                    resp_reg <= (others => '0');
+                end if;
             end if;
         end if;
     end process resp_proc;
