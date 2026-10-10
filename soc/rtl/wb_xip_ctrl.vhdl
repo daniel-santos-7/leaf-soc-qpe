@@ -10,6 +10,9 @@ use IEEE.std_logic_1164.all;
 use work.leaf_soc_pkg.all;
 
 entity wb_xip_ctrl is
+    generic (
+        CS_HIGH_CYCLES : positive := 2
+    );
     port (
         clk_i      : in  std_logic;
         rst_i      : in  std_logic;
@@ -39,13 +42,19 @@ architecture rtl of wb_xip_ctrl is
     signal fetch   : std_logic;
     signal adr     : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
     signal adr_reg : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-    signal err_reg : std_logic;
+    signal err_reg  : std_logic;
+    signal hold_cnt : natural range 0 to CS_HIGH_CYCLES-2;
+    signal hold_ok  : std_logic;
 
 begin
+
+    assert CS_HIGH_CYCLES >= 2 report "XIP: CS_HIGH_CYCLES must be at least 2." severity failure;
 
     req   <= cyc_i and stb_i;
     fetch <= '1' when state = IDLE and req = '1' and dis_i = '0' else '0';
     adr   <= adr_i when state = IDLE else adr_reg;
+
+    hold_ok <= '1' when hold_cnt = CS_HIGH_CYCLES-2 else '0';
 
     fsm_proc: process(clk_i)
     begin
@@ -53,18 +62,31 @@ begin
             if rst_i = '1' then
                 state   <= IDLE;
                 adr_reg <= (others => '0');
-            elsif fetch = '1' and ready_i = '1' then
+            elsif fetch = '1' and ready_i = '1' and hold_ok = '1' then
                 state <= BUSY;
             elsif fetch = '1' then
                 state   <= PEND;
                 adr_reg <= adr_i;
-            elsif state = PEND and ready_i = '1' then
+            elsif state = PEND and ready_i = '1' and hold_ok = '1' then
                 state <= BUSY;
             elsif state = BUSY and rx_valid_i = '1' then
                 state <= IDLE;
             end if;
         end if;
     end process fsm_proc;
+
+    hold_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                hold_cnt <= CS_HIGH_CYCLES-2;
+            elsif rx_valid_i = '1' then
+                hold_cnt <= 0;
+            elsif hold_cnt /= CS_HIGH_CYCLES-2 then
+                hold_cnt <= hold_cnt + 1;
+            end if;
+        end if;
+    end process hold_proc;
 
     err_proc: process(clk_i)
     begin
@@ -79,7 +101,7 @@ begin
         end if;
     end process err_proc;
 
-    start_o   <= '1' when fetch = '1' or state = PEND else '0';
+    start_o   <= '1' when (fetch = '1' or state = PEND) and hold_ok = '1' else '0';
     tx_data_o <= CMD_READ & adr & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
     ack_o     <= '1' when state = BUSY and rx_valid_i = '1' else '0';
     err_o     <= err_reg;
