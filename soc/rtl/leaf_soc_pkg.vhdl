@@ -36,8 +36,8 @@ package leaf_soc_pkg is
     constant XIP_SCK_DIV        : positive := 1;
     constant XIP_CS_HIGH_CYCLES : positive := 2;
 
-    constant SPI_WIDTH    : positive := 64;
-    constant SPI_CNT_BITS : positive := 7;
+    constant SPI_WIDTH    : positive := 32;
+    constant SPI_CNT_BITS : positive := 6;
 
     constant DBG_ID : std_logic_vector(SOC_DATA_WIDTH-1 downto 0) := x"4C454146";
 
