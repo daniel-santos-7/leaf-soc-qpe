@@ -7,6 +7,7 @@
 
 library IEEE;
 use IEEE.std_logic_1164.all;
+use IEEE.numeric_std.all;
 use work.leaf_soc_pkg.all;
 
 entity wb_xip_ctrl is
@@ -26,6 +27,7 @@ entity wb_xip_ctrl is
         tx_valid_o : out std_logic;
         tx_ready_i : in  std_logic;
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
+        tx_bits_o  : out std_logic_vector(SPI_CNT_BITS-1 downto 0);
         rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
         rx_valid_i : in  std_logic
     );
@@ -103,6 +105,7 @@ begin
 
     tx_valid_o <= '1' when (fetch = '1' or state = PEND) and hold_ok = '1' else '0';
     tx_data_o  <= CMD_READ & adr & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
+    tx_bits_o  <= std_logic_vector(to_unsigned(SPI_WIDTH, SPI_CNT_BITS));
     ack_o      <= '1' when state = BUSY and rx_valid_i = '1' else '0';
     err_o      <= err_reg;
     dat_o      <= rx_data_i(7 downto 0) & rx_data_i(15 downto 8) & rx_data_i(23 downto 16) & rx_data_i(31 downto 24);
