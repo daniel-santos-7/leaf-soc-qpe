@@ -138,8 +138,8 @@ architecture rtl of leaf_soc is
     signal soc_xip_ack      : std_logic;
     signal soc_xip_err      : std_logic;
     signal soc_xip_dat      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal soc_xip_start    : std_logic;
-    signal soc_xip_ready    : std_logic;
+    signal soc_xip_tx_valid : std_logic;
+    signal soc_xip_tx_ready : std_logic;
     signal soc_xip_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_xip_rx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_xip_rx_valid : std_logic;
@@ -425,8 +425,8 @@ begin
         err_o      => soc_xip_err,
         dat_o      => soc_xip_dat,
         dis_i      => soc_spi_dbg,
-        start_o    => soc_xip_start,
-        ready_i    => soc_xip_ready,
+        tx_valid_o => soc_xip_tx_valid,
+        tx_ready_i => soc_xip_tx_ready,
         tx_data_o  => soc_xip_tx_data,
         rx_data_i  => soc_xip_rx_data,
         rx_valid_i => soc_xip_rx_valid
@@ -453,8 +453,8 @@ begin
         miso_i       => miso_i,
         miso_o       => miso_o,
         miso_oe      => miso_oe,
-        m_start_i    => soc_xip_start,
-        m_ready_o    => soc_xip_ready,
+        m_tx_valid_i => soc_xip_tx_valid,
+        m_tx_ready_o => soc_xip_tx_ready,
         m_tx_data_i  => soc_xip_tx_data,
         m_rx_data_o  => soc_xip_rx_data,
         m_rx_valid_o => soc_xip_rx_valid,
