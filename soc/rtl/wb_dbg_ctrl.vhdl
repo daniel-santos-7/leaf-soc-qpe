@@ -17,6 +17,8 @@ entity wb_dbg_ctrl is
         rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
         rx_bits_i  : in  std_logic_vector(SPI_CNT_BITS-1 downto 0);
         rx_valid_i : in  std_logic;
+        tx_valid_o : out std_logic;
+        tx_ready_i : in  std_logic;
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
         cyc_o      : out std_logic;
         stb_o      : out std_logic;
@@ -56,6 +58,8 @@ architecture rtl of wb_dbg_ctrl is
     signal status    : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal resp_reg  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal pend_reg  : std_logic;
+    signal tx_valid  : std_logic;
 
 begin
 
@@ -143,13 +147,29 @@ begin
         end if;
     end process resp_proc;
 
-    tx_data_o <= resp_reg & status;
-    cyc_o     <= cyc_reg;
-    stb_o     <= stb_reg;
-    we_o      <= we_reg;
-    sel_o     <= (others => '1');
-    adr_o     <= adr_reg;
-    dat_o     <= dat_reg;
-    halt_o    <= halt_reg;
+    tx_valid <= pend_reg and not cyc_reg and not rx_valid_i;
+
+    pend_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                pend_reg <= '1';
+            elsif rx_valid_i = '1' then
+                pend_reg <= '1';
+            elsif tx_valid = '1' and tx_ready_i = '1' then
+                pend_reg <= '0';
+            end if;
+        end if;
+    end process pend_proc;
+
+    tx_valid_o <= tx_valid;
+    tx_data_o  <= resp_reg & status;
+    cyc_o      <= cyc_reg;
+    stb_o      <= stb_reg;
+    we_o       <= we_reg;
+    sel_o      <= (others => '1');
+    adr_o      <= adr_reg;
+    dat_o      <= dat_reg;
+    halt_o     <= halt_reg;
 
 end architecture rtl;
