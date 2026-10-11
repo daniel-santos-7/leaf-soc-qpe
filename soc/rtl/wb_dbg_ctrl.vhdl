@@ -16,6 +16,7 @@ entity wb_dbg_ctrl is
         rst_i      : in  std_logic;
         rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
         rx_bits_i  : in  std_logic_vector(SPI_CNT_BITS-1 downto 0);
+        rx_last_i  : in  std_logic;
         rx_valid_i : in  std_logic;
         tx_valid_o : out std_logic;
         tx_ready_i : in  std_logic;
@@ -41,6 +42,10 @@ architecture rtl of wb_dbg_ctrl is
     constant OP_CTRL  : std_logic_vector(1 downto 0) := "10";
     constant OP_INFO  : std_logic_vector(1 downto 0) := "11";
 
+    type tx_state_t is (TX_IDLE, TX_RESP, TX_STAT);
+
+    signal rx_word   : natural range 0 to 2;
+    signal cmd_reg   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal cmd_word  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal frame     : std_logic;
     signal op        : std_logic_vector(1 downto 0);
@@ -58,15 +63,34 @@ architecture rtl of wb_dbg_ctrl is
     signal status    : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal resp_reg  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal pend_reg  : std_logic;
+    signal tx_state  : tx_state_t;
     signal tx_valid  : std_logic;
 
 begin
 
-    cmd_word <= rx_data_i(SPI_WIDTH-1 downto SOC_DATA_WIDTH);
-    frame    <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = SPI_WIDTH else '0';
+    cmd_word <= cmd_reg;
+    frame    <= '1' when rx_valid_i = '1' and rx_last_i = '1' and rx_word = 1 and unsigned(rx_bits_i) = SPI_WIDTH else '0';
     op       <= cmd_word(1 downto 0);
     req      <= '1' when frame = '1' and (op = OP_READ or op = OP_WRITE) else '0';
+
+    word_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                rx_word <= 0;
+                cmd_reg <= (others => '0');
+            elsif rx_valid_i = '1' then
+                if rx_last_i = '1' then
+                    rx_word <= 0;
+                elsif rx_word = 0 then
+                    rx_word <= 1;
+                    cmd_reg <= rx_data_i;
+                else
+                    rx_word <= 2;
+                end if;
+            end if;
+        end if;
+    end process word_proc;
 
     bus_proc: process(clk_i)
     begin
@@ -83,7 +107,7 @@ begin
                     cyc_reg <= '1';
                     stb_reg <= '1';
                     adr_reg <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
-                    dat_reg <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
+                    dat_reg <= rx_data_i;
                     if op = OP_WRITE then
                         we_reg <= '1';
                     else
@@ -122,7 +146,7 @@ begin
                 ovr_reg <= '0';
             elsif req = '1' and cyc_reg = '1' then
                 ovr_reg <= '1';
-            elsif rx_valid_i = '1' then
+            elsif rx_valid_i = '1' and rx_last_i = '1' then
                 ovr_reg <= '0';
             end if;
         end if;
@@ -147,23 +171,34 @@ begin
         end if;
     end process resp_proc;
 
-    tx_valid <= pend_reg and not cyc_reg and not rx_valid_i;
+    tx_valid <= '1' when (tx_state = TX_RESP and cyc_reg = '0' and rx_valid_i = '0') or tx_state = TX_STAT else '0';
 
-    pend_proc: process(clk_i)
+    tx_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                pend_reg <= '1';
-            elsif rx_valid_i = '1' then
-                pend_reg <= '1';
-            elsif tx_valid = '1' and tx_ready_i = '1' then
-                pend_reg <= '0';
+                tx_state <= TX_RESP;
+            else
+                case tx_state is
+                    when TX_IDLE =>
+                        if rx_valid_i = '1' and rx_last_i = '1' then
+                            tx_state <= TX_RESP;
+                        end if;
+                    when TX_RESP =>
+                        if tx_valid = '1' and tx_ready_i = '1' then
+                            tx_state <= TX_STAT;
+                        end if;
+                    when TX_STAT =>
+                        if tx_ready_i = '1' then
+                            tx_state <= TX_IDLE;
+                        end if;
+                end case;
             end if;
         end if;
-    end process pend_proc;
+    end process tx_proc;
 
     tx_valid_o <= tx_valid;
-    tx_data_o  <= resp_reg & status;
+    tx_data_o  <= resp_reg when tx_state = TX_RESP else status;
     cyc_o      <= cyc_reg;
     stb_o      <= stb_reg;
     we_o       <= we_reg;

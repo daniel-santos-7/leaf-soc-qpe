@@ -143,11 +143,13 @@ architecture rtl of leaf_soc is
     signal soc_xip_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_xip_tx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_xip_rx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
+    signal soc_xip_rx_last  : std_logic;
     signal soc_xip_rx_valid : std_logic;
 
     signal soc_spi_dbg      : std_logic;
     signal soc_dbg_rx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_dbg_rx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
+    signal soc_dbg_rx_last  : std_logic;
     signal soc_dbg_rx_valid : std_logic;
     signal soc_dbg_tx_valid : std_logic;
     signal soc_dbg_tx_ready : std_logic;
@@ -433,6 +435,7 @@ begin
         tx_data_o  => soc_xip_tx_data,
         tx_bits_o  => soc_xip_tx_bits,
         rx_data_i  => soc_xip_rx_data,
+        rx_last_i  => soc_xip_rx_last,
         rx_valid_i => soc_xip_rx_valid
     );
 
@@ -463,6 +466,7 @@ begin
         m_tx_bits_i  => soc_xip_tx_bits,
         m_rx_ready_i => '1',
         m_rx_data_o  => soc_xip_rx_data,
+        m_rx_last_o  => soc_xip_rx_last,
         m_rx_valid_o => soc_xip_rx_valid,
         s_tx_valid_i => soc_dbg_tx_valid,
         s_tx_ready_o => soc_dbg_tx_ready,
@@ -470,6 +474,7 @@ begin
         s_rx_ready_i => '1',
         s_rx_data_o  => soc_dbg_rx_data,
         s_rx_bits_o  => soc_dbg_rx_bits,
+        s_rx_last_o  => soc_dbg_rx_last,
         s_rx_valid_o => soc_dbg_rx_valid
     );
 
@@ -478,6 +483,7 @@ begin
         rst_i      => soc_syscon_rst,
         rx_data_i  => soc_dbg_rx_data,
         rx_bits_i  => soc_dbg_rx_bits,
+        rx_last_i  => soc_dbg_rx_last,
         rx_valid_i => soc_dbg_rx_valid,
         tx_valid_o => soc_dbg_tx_valid,
         tx_ready_i => soc_dbg_tx_ready,
