@@ -23,8 +23,8 @@ entity wb_xip_ctrl is
         err_o      : out std_logic;
         dat_o      : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         dis_i      : in  std_logic;
-        start_o    : out std_logic;
-        ready_i    : in  std_logic;
+        tx_valid_o : out std_logic;
+        tx_ready_i : in  std_logic;
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
         rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
         rx_valid_i : in  std_logic
@@ -62,12 +62,12 @@ begin
             if rst_i = '1' then
                 state   <= IDLE;
                 adr_reg <= (others => '0');
-            elsif fetch = '1' and ready_i = '1' and hold_ok = '1' then
+            elsif fetch = '1' and tx_ready_i = '1' and hold_ok = '1' then
                 state <= BUSY;
             elsif fetch = '1' then
                 state   <= PEND;
                 adr_reg <= adr_i;
-            elsif state = PEND and ready_i = '1' and hold_ok = '1' then
+            elsif state = PEND and tx_ready_i = '1' and hold_ok = '1' then
                 state <= BUSY;
             elsif state = BUSY and rx_valid_i = '1' then
                 state <= IDLE;
@@ -101,10 +101,10 @@ begin
         end if;
     end process err_proc;
 
-    start_o   <= '1' when (fetch = '1' or state = PEND) and hold_ok = '1' else '0';
-    tx_data_o <= CMD_READ & adr & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
-    ack_o     <= '1' when state = BUSY and rx_valid_i = '1' else '0';
-    err_o     <= err_reg;
-    dat_o     <= rx_data_i(7 downto 0) & rx_data_i(15 downto 8) & rx_data_i(23 downto 16) & rx_data_i(31 downto 24);
+    tx_valid_o <= '1' when (fetch = '1' or state = PEND) and hold_ok = '1' else '0';
+    tx_data_o  <= CMD_READ & adr & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
+    ack_o      <= '1' when state = BUSY and rx_valid_i = '1' else '0';
+    err_o      <= err_reg;
+    dat_o      <= rx_data_i(7 downto 0) & rx_data_i(15 downto 8) & rx_data_i(23 downto 16) & rx_data_i(31 downto 24);
 
 end architecture rtl;
