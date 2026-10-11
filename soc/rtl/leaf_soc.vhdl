@@ -459,11 +459,13 @@ begin
         m_tx_ready_o => soc_xip_tx_ready,
         m_tx_data_i  => soc_xip_tx_data,
         m_tx_bits_i  => soc_xip_tx_bits,
+        m_rx_ready_i => '1',
         m_rx_data_o  => soc_xip_rx_data,
         m_rx_valid_o => soc_xip_rx_valid,
         s_tx_valid_i => '1',
         s_tx_ready_o => open,
         s_tx_data_i  => soc_dbg_tx_data,
+        s_rx_ready_i => '1',
         s_rx_data_o  => soc_dbg_rx_data,
         s_rx_bits_o  => soc_dbg_rx_bits,
         s_rx_valid_o => soc_dbg_rx_valid
