@@ -140,6 +140,7 @@ architecture rtl of leaf_soc is
 
     signal soc_xip_ack      : std_logic;
     signal soc_xip_err      : std_logic;
+    signal soc_xip_stall    : std_logic;
     signal soc_xip_dat      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_xip_tx_valid : std_logic;
     signal soc_xip_tx_ready : std_logic;
@@ -327,6 +328,7 @@ begin
         xip_adr_o    => soc_inst_xip_adr,
         xip_ack_i    => soc_xip_ack,
         xip_err_i    => soc_xip_err,
+        xip_stall_i  => soc_xip_stall,
         xip_dat_i    => soc_xip_dat,
         ram0b_cyc_o  => soc_ram0_b_cyc,
         ram0b_stb_o  => soc_ram0_b_stb,
@@ -440,6 +442,7 @@ begin
         adr_i      => soc_inst_xip_adr,
         ack_o      => soc_xip_ack,
         err_o      => soc_xip_err,
+        stall_o    => soc_xip_stall,
         dat_o      => soc_xip_dat,
         dis_i      => soc_xip_dis,
         tx_valid_o => soc_xip_tx_valid,
