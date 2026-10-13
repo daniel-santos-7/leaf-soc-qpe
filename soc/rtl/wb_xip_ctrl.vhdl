@@ -29,7 +29,6 @@ entity wb_xip_ctrl is
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
         tx_bits_o  : out std_logic_vector(SPI_CNT_BITS-1 downto 0);
         rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
-        rx_last_i  : in  std_logic;
         rx_valid_i : in  std_logic
     );
 end entity wb_xip_ctrl;
@@ -38,7 +37,7 @@ architecture rtl of wb_xip_ctrl is
 
     constant CMD_READ : std_logic_vector(7 downto 0) := x"03";
 
-    type state_t is (IDLE, PEND, ADDR, DATA);
+    type state_t is (IDLE, PEND, BUSY);
 
     signal state   : state_t;
     signal req     : std_logic;
@@ -66,15 +65,13 @@ begin
                 state   <= IDLE;
                 adr_reg <= (others => '0');
             elsif fetch = '1' and tx_ready_i = '1' and hold_ok = '1' then
-                state <= ADDR;
+                state <= BUSY;
             elsif fetch = '1' then
                 state   <= PEND;
                 adr_reg <= adr_i;
             elsif state = PEND and tx_ready_i = '1' and hold_ok = '1' then
-                state <= ADDR;
-            elsif state = ADDR and tx_ready_i = '1' then
-                state <= DATA;
-            elsif state = DATA and rx_valid_i = '1' and rx_last_i = '1' then
+                state <= BUSY;
+            elsif state = BUSY and rx_valid_i = '1' then
                 state <= IDLE;
             end if;
         end if;
@@ -85,7 +82,7 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 hold_cnt <= CS_HIGH_CYCLES-2;
-            elsif rx_valid_i = '1' and rx_last_i = '1' then
+            elsif rx_valid_i = '1' then
                 hold_cnt <= 0;
             elsif hold_cnt /= CS_HIGH_CYCLES-2 then
                 hold_cnt <= hold_cnt + 1;
@@ -106,10 +103,10 @@ begin
         end if;
     end process err_proc;
 
-    tx_valid_o <= '1' when ((fetch = '1' or state = PEND) and hold_ok = '1') or state = ADDR else '0';
-    tx_data_o  <= (others => '0') when state = ADDR else CMD_READ & adr & "00";
+    tx_valid_o <= '1' when (fetch = '1' or state = PEND) and hold_ok = '1' else '0';
+    tx_data_o  <= CMD_READ & adr & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
     tx_bits_o  <= std_logic_vector(to_unsigned(SPI_WIDTH, SPI_CNT_BITS));
-    ack_o      <= '1' when state = DATA and rx_valid_i = '1' and rx_last_i = '1' else '0';
+    ack_o      <= '1' when state = BUSY and rx_valid_i = '1' else '0';
     err_o      <= err_reg;
     dat_o      <= rx_data_i(7 downto 0) & rx_data_i(15 downto 8) & rx_data_i(23 downto 16) & rx_data_i(31 downto 24);
 
