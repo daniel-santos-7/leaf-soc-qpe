@@ -123,15 +123,18 @@ architecture rtl of leaf_soc is
     signal soc_rom_ack : std_logic;
     signal soc_rom_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
-    signal soc_io0_ack : std_logic;
-    signal soc_io0_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_io0_ack   : std_logic;
+    signal soc_io0_stall : std_logic;
+    signal soc_io0_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
-    signal soc_io1_ack : std_logic;
-    signal soc_io1_err : std_logic;
-    signal soc_io1_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_io1_ack   : std_logic;
+    signal soc_io1_err   : std_logic;
+    signal soc_io1_stall : std_logic;
+    signal soc_io1_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
-    signal soc_io2_ack : std_logic;
-    signal soc_io2_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_io2_ack   : std_logic;
+    signal soc_io2_stall : std_logic;
+    signal soc_io2_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_gpio_irq : std_logic;
 
@@ -219,9 +222,10 @@ begin
             active_o     => active
         );
 
-        soc_io1_ack <= '0';
-        soc_io1_err <= '1';
-        soc_io1_dat <= (others => '0');
+        soc_io1_ack   <= '0';
+        soc_io1_err   <= '1';
+        soc_io1_stall <= '0';
+        soc_io1_dat   <= (others => '0');
     end generate;
 
     mmio_qpe_gen: if not WGEN_IF_COP generate
@@ -272,7 +276,7 @@ begin
             sel_i    => soc_data_io1_sel,
             dat_i    => soc_data_io1_dat,
             ack_o    => soc_io1_ack,
-            stall_o  => open,
+            stall_o  => soc_io1_stall,
             dat_o    => soc_io1_dat,
             sig_i_o  => soc_qpe_sig_i,
             sig_q_o  => soc_qpe_sig_q,
@@ -341,6 +345,7 @@ begin
         io0_adr_o    => soc_data_io0_adr,
         io0_dat_o    => soc_data_io0_dat,
         io0_ack_i    => soc_io0_ack,
+        io0_stall_i  => soc_io0_stall,
         io0_dat_i    => soc_io0_dat,
         io1_cyc_o    => soc_data_io1_cyc,
         io1_stb_o    => soc_data_io1_stb,
@@ -350,6 +355,7 @@ begin
         io1_dat_o    => soc_data_io1_dat,
         io1_ack_i    => soc_io1_ack,
         io1_err_i    => soc_io1_err,
+        io1_stall_i  => soc_io1_stall,
         io1_dat_i    => soc_io1_dat,
         io2_cyc_o    => soc_data_io2_cyc,
         io2_stb_o    => soc_data_io2_stb,
@@ -358,6 +364,7 @@ begin
         io2_adr_o    => soc_data_io2_adr,
         io2_dat_o    => soc_data_io2_dat,
         io2_ack_i    => soc_io2_ack,
+        io2_stall_i  => soc_io2_stall,
         io2_dat_i    => soc_io2_dat,
         ram0a_cyc_o  => soc_ram0_a_cyc,
         ram0a_stb_o  => soc_ram0_a_stb,
@@ -398,7 +405,7 @@ begin
         adr_i   => soc_data_io0_adr,
         rx_i    => rx,
         ack_o   => soc_io0_ack,
-        stall_o => open,
+        stall_o => soc_io0_stall,
         dat_o   => soc_io0_dat,
         tx_o    => tx
     );
@@ -416,7 +423,7 @@ begin
         wb_dat_i   => soc_data_io2_dat,
         wb_dat_o   => soc_io2_dat,
         wb_ack_o   => soc_io2_ack,
-        wb_stall_o => open,
+        wb_stall_o => soc_io2_stall,
         irq_o      => soc_gpio_irq,
         gpio_i     => gpio_i,
         gpio_o     => gpio_o,
