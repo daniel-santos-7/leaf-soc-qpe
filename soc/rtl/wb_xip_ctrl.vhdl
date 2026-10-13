@@ -37,42 +37,71 @@ architecture rtl of wb_xip_ctrl is
 
     constant CMD_READ : std_logic_vector(7 downto 0) := x"03";
 
-    type state_t is (IDLE, PEND, BUSY);
+    type state_t is (IDLE, HOLD, SEND, BUSY);
 
-    signal state   : state_t;
-    signal req     : std_logic;
-    signal fetch   : std_logic;
-    signal adr     : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-    signal adr_reg : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-    signal err_reg  : std_logic;
-    signal hold_cnt : natural range 0 to CS_HIGH_CYCLES-2;
-    signal hold_ok  : std_logic;
+    signal state_reg    : state_t;
+    signal adr_reg      : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+    signal ack_reg      : std_logic;
+    signal err_reg      : std_logic;
+    signal hold_cnt_reg : natural range 0 to CS_HIGH_CYCLES-2;
+    signal tx_valid_reg : std_logic;
+
+    signal req          : std_logic;
+    signal hold_ok      : std_logic;
 
 begin
 
     assert CS_HIGH_CYCLES >= 2 report "XIP: CS_HIGH_CYCLES must be at least 2." severity failure;
 
-    req   <= cyc_i and stb_i;
-    fetch <= '1' when state = IDLE and req = '1' and dis_i = '0' else '0';
-    adr   <= adr_i when state = IDLE else adr_reg;
+    req <= cyc_i and stb_i;
 
-    hold_ok <= '1' when hold_cnt = CS_HIGH_CYCLES-2 else '0';
+    hold_ok <= '1' when hold_cnt_reg = CS_HIGH_CYCLES-2 else '0';
 
     fsm_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                state   <= IDLE;
-                adr_reg <= (others => '0');
-            elsif fetch = '1' and tx_ready_i = '1' and hold_ok = '1' then
-                state <= BUSY;
-            elsif fetch = '1' then
-                state   <= PEND;
-                adr_reg <= adr_i;
-            elsif state = PEND and tx_ready_i = '1' and hold_ok = '1' then
-                state <= BUSY;
-            elsif state = BUSY and rx_valid_i = '1' then
-                state <= IDLE;
+                state_reg    <= IDLE;
+                adr_reg      <= (others => '0');
+                ack_reg      <= '0';
+                err_reg      <= '0';
+                tx_valid_reg <= '0';
+            else
+                case state_reg is
+                    when IDLE =>
+                        ack_reg <= '0';
+                        if req = '1' then
+                            if dis_i = '0' then
+                                adr_reg <= adr_i;
+                                err_reg <= '0';
+                                if hold_ok = '1' then
+                                    state_reg    <= SEND;
+                                    tx_valid_reg <= '1';
+                                else
+                                    state_reg <= HOLD;
+                                end if;
+                            else
+                                err_reg <= '1';
+                            end if;
+                        else
+                            err_reg <= '0';
+                        end if;
+                    when HOLD =>
+                        if hold_ok = '1' then
+                            state_reg    <= SEND;
+                            tx_valid_reg <= '1';
+                        end if;
+                    when SEND =>
+                        if tx_ready_i = '1' then
+                            state_reg    <= BUSY;
+                            tx_valid_reg <= '0';
+                        end if;
+                    when BUSY =>
+                        if rx_valid_i = '1' then
+                            state_reg <= IDLE;
+                            ack_reg   <= '1';
+                        end if;
+                end case;
             end if;
         end if;
     end process fsm_proc;
@@ -81,32 +110,19 @@ begin
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                hold_cnt <= CS_HIGH_CYCLES-2;
+                hold_cnt_reg <= CS_HIGH_CYCLES-2;
             elsif rx_valid_i = '1' then
-                hold_cnt <= 0;
-            elsif hold_cnt /= CS_HIGH_CYCLES-2 then
-                hold_cnt <= hold_cnt + 1;
+                hold_cnt_reg <= 0;
+            elsif hold_cnt_reg /= CS_HIGH_CYCLES-2 then
+                hold_cnt_reg <= hold_cnt_reg + 1;
             end if;
         end if;
     end process hold_proc;
 
-    err_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                err_reg <= '0';
-            elsif state = IDLE and req = '1' and dis_i = '1' then
-                err_reg <= '1';
-            else
-                err_reg <= '0';
-            end if;
-        end if;
-    end process err_proc;
-
-    tx_valid_o <= '1' when (fetch = '1' or state = PEND) and hold_ok = '1' else '0';
-    tx_data_o  <= CMD_READ & adr & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
+    tx_valid_o <= tx_valid_reg;
+    tx_data_o  <= CMD_READ & adr_reg & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
     tx_bits_o  <= std_logic_vector(to_unsigned(SPI_WIDTH, SPI_CNT_BITS));
-    ack_o      <= '1' when state = BUSY and rx_valid_i = '1' else '0';
+    ack_o      <= ack_reg;
     err_o      <= err_reg;
     dat_o      <= rx_data_i(7 downto 0) & rx_data_i(15 downto 8) & rx_data_i(23 downto 16) & rx_data_i(31 downto 24);
 
