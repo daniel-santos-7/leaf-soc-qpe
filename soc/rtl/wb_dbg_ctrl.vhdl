@@ -41,7 +41,7 @@ architecture rtl of wb_dbg_ctrl is
     constant OP_CTRL  : std_logic_vector(1 downto 0) := "10";
     constant OP_INFO  : std_logic_vector(1 downto 0) := "11";
 
-    type state_t is (IDLE, SEND, BUSY, RESP);
+    type state_t is (IDLE, READ, WRITE, BUSY, RESP);
 
     signal state_reg    : state_t;
     signal cyc_reg      : std_logic;
@@ -83,27 +83,42 @@ begin
                 tx_valid_reg <= '1';
             else
                 case state_reg is
-                    when IDLE | RESP =>
+                    when IDLE =>
                         if req = '1' then
-                            state_reg    <= SEND;
+                            cyc_reg      <= '1';
+                            stb_reg      <= '1';
+                            adr_reg      <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
+                            dat_reg      <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
+                            if op = OP_WRITE then
+                                state_reg <= WRITE;
+                                we_reg    <= '1';
+                            else
+                                state_reg <= READ;
+                                we_reg    <= '0';
+                            end if;
+                        elsif rx_valid_i = '1' then
+                            state_reg    <= RESP;
+                            tx_valid_reg <= '1';
+                        end if;
+                    when RESP =>
+                        if req = '1' then
                             cyc_reg      <= '1';
                             stb_reg      <= '1';
                             adr_reg      <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
                             dat_reg      <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
                             tx_valid_reg <= '0';
                             if op = OP_WRITE then
-                                we_reg <= '1';
+                                state_reg <= WRITE;
+                                we_reg    <= '1';
                             else
-                                we_reg <= '0';
+                                state_reg <= READ;
+                                we_reg    <= '0';
                             end if;
-                        elsif rx_valid_i = '1' then
-                            state_reg    <= RESP;
-                            tx_valid_reg <= '1';
-                        elsif state_reg = RESP and tx_ready_i = '1' then
+                        elsif rx_valid_i = '0' and tx_ready_i = '1' then
                             state_reg    <= IDLE;
                             tx_valid_reg <= '0';
                         end if;
-                    when SEND =>
+                    when READ | WRITE =>
                         if stall_i = '0' then
                             state_reg <= BUSY;
                             stb_reg   <= '0';
