@@ -41,118 +41,145 @@ architecture rtl of wb_dbg_ctrl is
     constant OP_CTRL  : std_logic_vector(1 downto 0) := "10";
     constant OP_INFO  : std_logic_vector(1 downto 0) := "11";
 
-    type state_t is (IDLE, READ, WRITE, BUSY, RESP);
+    type spi_state_t is (S_IDLE, S_EXEC, S_RESP);
+    type bus_state_t is (B_IDLE, B_SEND, B_BUSY);
 
-    signal state_reg    : state_t;
-    signal cyc_reg      : std_logic;
-    signal stb_reg      : std_logic;
-    signal we_reg       : std_logic;
-    signal adr_reg      : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
-    signal dat_reg      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal err_reg      : std_logic;
-    signal tx_valid_reg : std_logic;
+    signal spi_state_reg : spi_state_t;
+    signal tx_valid_reg  : std_logic;
+    signal halt_reg      : std_logic;
 
-    signal halt_reg     : std_logic;
-    signal ovr_reg      : std_logic;
-    signal resp_reg     : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal bus_state_reg : bus_state_t;
+    signal cyc_reg       : std_logic;
+    signal stb_reg       : std_logic;
+    signal we_reg        : std_logic;
+    signal adr_reg       : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+    signal dat_reg       : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal err_reg       : std_logic;
 
-    signal cmd_word     : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal frame        : std_logic;
-    signal op           : std_logic_vector(1 downto 0);
-    signal req          : std_logic;
-    signal status       : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal ovr_reg       : std_logic;
+    signal resp_reg      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+
+    signal cmd_word      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal op            : std_logic_vector(1 downto 0);
+    signal rx_full       : std_logic;
+    signal rd_req        : std_logic;
+    signal wr_req        : std_logic;
+    signal bus_done      : std_logic;
+    signal status        : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
 begin
 
     cmd_word <= rx_data_i(SPI_WIDTH-1 downto SOC_DATA_WIDTH);
-    frame    <= '1' when rx_valid_i = '1' and unsigned(rx_bits_i) = SPI_WIDTH else '0';
     op       <= cmd_word(1 downto 0);
-    req      <= '1' when frame = '1' and (op = OP_READ or op = OP_WRITE) else '0';
+    rx_full  <= '1' when unsigned(rx_bits_i) = SPI_WIDTH else '0';
 
-    fsm_proc: process(clk_i)
+    rd_req   <= '1' when (spi_state_reg = S_IDLE or spi_state_reg = S_RESP) and rx_valid_i = '1' and rx_full = '1' and op = OP_READ else '0';
+    wr_req   <= '1' when (spi_state_reg = S_IDLE or spi_state_reg = S_RESP) and rx_valid_i = '1' and rx_full = '1' and op = OP_WRITE else '0';
+    bus_done <= '1' when bus_state_reg = B_BUSY and (ack_i or err_i) = '1' else '0';
+
+    spi_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                state_reg    <= RESP;
-                cyc_reg      <= '0';
-                stb_reg      <= '0';
-                we_reg       <= '0';
-                adr_reg      <= (others => '0');
-                dat_reg      <= (others => '0');
-                err_reg      <= '0';
-                tx_valid_reg <= '1';
+                spi_state_reg <= S_RESP;
+                tx_valid_reg  <= '1';
+                halt_reg      <= '0';
             else
-                case state_reg is
-                    when IDLE =>
-                        if req = '1' then
-                            cyc_reg      <= '1';
-                            stb_reg      <= '1';
-                            adr_reg      <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
-                            dat_reg      <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
-                            if op = OP_WRITE then
-                                state_reg <= WRITE;
-                                we_reg    <= '1';
+                case spi_state_reg is
+                    when S_IDLE =>
+                        if rx_valid_i = '1' then
+                            if rx_full = '1' then
+                                case op is
+                                    when OP_READ | OP_WRITE =>
+                                        spi_state_reg <= S_EXEC;
+                                    when OP_CTRL =>
+                                        spi_state_reg <= S_RESP;
+                                        tx_valid_reg  <= '1';
+                                        halt_reg      <= cmd_word(2);
+                                    when others =>
+                                        spi_state_reg <= S_RESP;
+                                        tx_valid_reg  <= '1';
+                                end case;
                             else
-                                state_reg <= READ;
-                                we_reg    <= '0';
+                                spi_state_reg <= S_RESP;
+                                tx_valid_reg  <= '1';
                             end if;
-                        elsif rx_valid_i = '1' then
-                            state_reg    <= RESP;
-                            tx_valid_reg <= '1';
                         end if;
-                    when RESP =>
-                        if req = '1' then
-                            cyc_reg      <= '1';
-                            stb_reg      <= '1';
-                            adr_reg      <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
-                            dat_reg      <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
-                            tx_valid_reg <= '0';
-                            if op = OP_WRITE then
-                                state_reg <= WRITE;
-                                we_reg    <= '1';
-                            else
-                                state_reg <= READ;
-                                we_reg    <= '0';
+                    when S_EXEC =>
+                        if rx_valid_i = '1' and rx_full = '1' and op = OP_CTRL then
+                            halt_reg <= cmd_word(2);
+                        end if;
+                        if bus_done = '1' then
+                            spi_state_reg <= S_RESP;
+                            tx_valid_reg  <= '1';
+                        end if;
+                    when S_RESP =>
+                        if rx_valid_i = '1' then
+                            if rx_full = '1' then
+                                case op is
+                                    when OP_READ | OP_WRITE =>
+                                        spi_state_reg <= S_EXEC;
+                                        tx_valid_reg  <= '0';
+                                    when OP_CTRL =>
+                                        halt_reg <= cmd_word(2);
+                                    when others =>
+                                        null;
+                                end case;
                             end if;
-                        elsif rx_valid_i = '0' and tx_ready_i = '1' then
-                            state_reg    <= IDLE;
-                            tx_valid_reg <= '0';
-                        end if;
-                    when READ | WRITE =>
-                        if stall_i = '0' then
-                            state_reg <= BUSY;
-                            stb_reg   <= '0';
-                        end if;
-                    when BUSY =>
-                        if (ack_i or err_i) = '1' then
-                            state_reg    <= RESP;
-                            cyc_reg      <= '0';
-                            we_reg       <= '0';
-                            err_reg      <= err_i and not ack_i;
-                            tx_valid_reg <= '1';
+                        elsif tx_ready_i = '1' then
+                            spi_state_reg <= S_IDLE;
+                            tx_valid_reg  <= '0';
                         end if;
                 end case;
             end if;
         end if;
-    end process fsm_proc;
+    end process spi_proc;
 
-    halt_proc: process(clk_i)
+    bus_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                halt_reg <= '0';
-            elsif frame = '1' and op = OP_CTRL then
-                halt_reg <= cmd_word(2);
+                bus_state_reg <= B_IDLE;
+                cyc_reg       <= '0';
+                stb_reg       <= '0';
+                we_reg        <= '0';
+                adr_reg       <= (others => '0');
+                dat_reg       <= (others => '0');
+                err_reg       <= '0';
+            else
+                case bus_state_reg is
+                    when B_IDLE =>
+                        if (rd_req or wr_req) = '1' then
+                            bus_state_reg <= B_SEND;
+                            cyc_reg       <= '1';
+                            stb_reg       <= '1';
+                            we_reg        <= wr_req;
+                            adr_reg       <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
+                            dat_reg       <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
+                        end if;
+                    when B_SEND =>
+                        if stall_i = '0' then
+                            bus_state_reg <= B_BUSY;
+                            stb_reg       <= '0';
+                        end if;
+                    when B_BUSY =>
+                        if (ack_i or err_i) = '1' then
+                            bus_state_reg <= B_IDLE;
+                            cyc_reg       <= '0';
+                            we_reg        <= '0';
+                            err_reg       <= err_i and not ack_i;
+                        end if;
+                end case;
             end if;
         end if;
-    end process halt_proc;
+    end process bus_proc;
 
     ovr_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 ovr_reg <= '0';
-            elsif req = '1' and cyc_reg = '1' then
+            elsif rx_valid_i = '1' and rx_full = '1' and (op = OP_READ or op = OP_WRITE) and cyc_reg = '1' then
                 ovr_reg <= '1';
             elsif rx_valid_i = '1' then
                 ovr_reg <= '0';
@@ -165,9 +192,9 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 resp_reg <= (others => '0');
-            elsif frame = '1' and op = OP_INFO and cmd_word(2) = '1' then
+            elsif rx_valid_i = '1' and rx_full = '1' and op = OP_INFO and cmd_word(2) = '1' then
                 resp_reg <= DBG_ID;
-            elsif state_reg = BUSY and we_reg = '0' then
+            elsif bus_state_reg = B_BUSY and we_reg = '0' then
                 if ack_i = '1' then
                     resp_reg <= dat_i;
                 elsif err_i = '1' then
