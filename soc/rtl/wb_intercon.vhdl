@@ -45,13 +45,13 @@ entity wb_intercon is
         rom_adr_o    : out std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
         rom_ack_i    : in  std_logic;
         rom_dat_i    : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        xip_cyc_o    : out std_logic;
-        xip_stb_o    : out std_logic;
-        xip_adr_o    : out std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-        xip_ack_i    : in  std_logic;
-        xip_err_i    : in  std_logic;
-        xip_stall_i  : in  std_logic;
-        xip_dat_i    : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        xipb_cyc_o   : out std_logic;
+        xipb_stb_o   : out std_logic;
+        xipb_adr_o   : out std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+        xipb_ack_i   : in  std_logic;
+        xipb_err_i   : in  std_logic;
+        xipb_stall_i : in  std_logic;
+        xipb_dat_i   : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         ram0b_cyc_o  : out std_logic;
         ram0b_stb_o  : out std_logic;
         ram0b_adr_o  : out std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
@@ -90,6 +90,16 @@ entity wb_intercon is
         io2_ack_i    : in  std_logic;
         io2_stall_i  : in  std_logic;
         io2_dat_i    : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        xipa_cyc_o   : out std_logic;
+        xipa_stb_o   : out std_logic;
+        xipa_we_o    : out std_logic;
+        xipa_sel_o   : out std_logic_vector(3 downto 0);
+        xipa_adr_o   : out std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+        xipa_dat_o   : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        xipa_ack_i   : in  std_logic;
+        xipa_err_i   : in  std_logic;
+        xipa_stall_i : in  std_logic;
+        xipa_dat_i   : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         ram0a_cyc_o  : out std_logic;
         ram0a_stb_o  : out std_logic;
         ram0a_we_o   : out std_logic;
@@ -172,28 +182,28 @@ begin
         io0_ack_i    => '0',
         io1_ack_i    => '0',
         io2_ack_i    => '0',
-        xip_ack_i    => xip_ack_i,
+        xip_ack_i    => xipb_ack_i,
         ram0_ack_i   => ram0b_ack_i,
         ram1_ack_i   => ram1b_ack_i,
         rom_err_i    => '0',
         io0_err_i    => '1',
         io1_err_i    => '1',
         io2_err_i    => '1',
-        xip_err_i    => xip_err_i,
+        xip_err_i    => xipb_err_i,
         ram0_err_i   => '0',
         ram1_err_i   => '0',
         rom_stall_i  => '0',
         io0_stall_i  => '0',
         io1_stall_i  => '0',
         io2_stall_i  => '0',
-        xip_stall_i  => xip_stall_i,
+        xip_stall_i  => xipb_stall_i,
         ram0_stall_i => '0',
         ram1_stall_i => '0',
         rom_dat_i    => rom_dat_i,
         io0_dat_i    => (others => '0'),
         io1_dat_i    => (others => '0'),
         io2_dat_i    => (others => '0'),
-        xip_dat_i    => xip_dat_i,
+        xip_dat_i    => xipb_dat_i,
         ram0_dat_i   => ram0b_dat_i,
         ram1_dat_i   => ram1b_dat_i,
         cpu_ack_o    => inst_ack_o,
@@ -203,14 +213,14 @@ begin
         io0_cyc_o    => open,
         io1_cyc_o    => open,
         io2_cyc_o    => open,
-        xip_cyc_o    => xip_cyc_o,
+        xip_cyc_o    => xipb_cyc_o,
         ram0_cyc_o   => ram0b_cyc_o,
         ram1_cyc_o   => ram1b_cyc_o,
         rom_stb_o    => rom_stb_o,
         io0_stb_o    => open,
         io1_stb_o    => open,
         io2_stb_o    => open,
-        xip_stb_o    => xip_stb_o,
+        xip_stb_o    => xipb_stb_o,
         ram0_stb_o   => ram0b_stb_o,
         ram1_stb_o   => ram1b_stb_o,
         io0_we_o     => open,
@@ -229,7 +239,7 @@ begin
         io0_adr_o    => open,
         io1_adr_o    => open,
         io2_adr_o    => open,
-        xip_adr_o    => xip_adr_o,
+        xip_adr_o    => xipb_adr_o,
         ram0_adr_o   => ram0b_adr_o,
         ram1_adr_o   => ram1b_adr_o,
         cpu_dat_o    => inst_dat_o,
@@ -254,28 +264,28 @@ begin
         io0_ack_i    => io0_ack_i,
         io1_ack_i    => io1_ack_i,
         io2_ack_i    => io2_ack_i,
-        xip_ack_i    => '0',
+        xip_ack_i    => xipa_ack_i,
         ram0_ack_i   => ram0a_ack_i,
         ram1_ack_i   => ram1a_ack_i,
         rom_err_i    => '1',
         io0_err_i    => '0',
         io1_err_i    => io1_err_i,
         io2_err_i    => '0',
-        xip_err_i    => '1',
+        xip_err_i    => xipa_err_i,
         ram0_err_i   => '0',
         ram1_err_i   => '0',
         rom_stall_i  => '0',
         io0_stall_i  => io0_stall_i,
         io1_stall_i  => io1_stall_i,
         io2_stall_i  => io2_stall_i,
-        xip_stall_i  => '0',
+        xip_stall_i  => xipa_stall_i,
         ram0_stall_i => '0',
         ram1_stall_i => '0',
         rom_dat_i    => (others => '0'),
         io0_dat_i    => io0_dat_i,
         io1_dat_i    => io1_dat_i,
         io2_dat_i    => io2_dat_i,
-        xip_dat_i    => (others => '0'),
+        xip_dat_i    => xipa_dat_i,
         ram0_dat_i   => ram0a_dat_i,
         ram1_dat_i   => ram1a_dat_i,
         cpu_ack_o    => dch_ack,
@@ -285,40 +295,40 @@ begin
         io0_cyc_o    => io0_cyc_o,
         io1_cyc_o    => io1_cyc_o,
         io2_cyc_o    => io2_cyc_o,
-        xip_cyc_o    => open,
+        xip_cyc_o    => xipa_cyc_o,
         ram0_cyc_o   => ram0a_cyc_o,
         ram1_cyc_o   => ram1a_cyc_o,
         rom_stb_o    => open,
         io0_stb_o    => io0_stb_o,
         io1_stb_o    => io1_stb_o,
         io2_stb_o    => io2_stb_o,
-        xip_stb_o    => open,
+        xip_stb_o    => xipa_stb_o,
         ram0_stb_o   => ram0a_stb_o,
         ram1_stb_o   => ram1a_stb_o,
         io0_we_o     => io0_we_o,
         io1_we_o     => io1_we_o,
         io2_we_o     => io2_we_o,
-        xip_we_o     => open,
+        xip_we_o     => xipa_we_o,
         ram0_we_o    => ram0a_we_o,
         ram1_we_o    => ram1a_we_o,
         io0_sel_o    => io0_sel_o,
         io1_sel_o    => io1_sel_o,
         io2_sel_o    => io2_sel_o,
-        xip_sel_o    => open,
+        xip_sel_o    => xipa_sel_o,
         ram0_sel_o   => ram0a_sel_o,
         ram1_sel_o   => ram1a_sel_o,
         rom_adr_o    => open,
         io0_adr_o    => io0_adr_o,
         io1_adr_o    => io1_adr_o,
         io2_adr_o    => io2_adr_o,
-        xip_adr_o    => open,
+        xip_adr_o    => xipa_adr_o,
         ram0_adr_o   => ram0a_adr_o,
         ram1_adr_o   => ram1a_adr_o,
         cpu_dat_o    => dch_dat_r,
         io0_dat_o    => io0_dat_o,
         io1_dat_o    => io1_dat_o,
         io2_dat_o    => io2_dat_o,
-        xip_dat_o    => open,
+        xip_dat_o    => xipa_dat_o,
         ram0_dat_o   => ram0a_dat_o,
         ram1_dat_o   => ram1a_dat_o
     );
