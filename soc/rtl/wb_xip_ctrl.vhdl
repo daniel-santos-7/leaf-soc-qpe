@@ -65,6 +65,7 @@ architecture rtl of wb_xip_ctrl is
     signal req_a        : std_logic;
     signal hit_a        : std_logic;
     signal req_b        : std_logic;
+    signal hold_end     : std_logic;
 
 begin
 
@@ -73,6 +74,8 @@ begin
     req_a <= cyc_a_i and stb_a_i;
     hit_a <= '1' when adr_a_i = (XIP_ADDR_WIDTH-1 downto 2 => '1') else '0';
     req_b <= cyc_b_i and stb_b_i;
+
+    hold_end <= '1' when hold_cnt_reg >= cs_high_reg else '0';
 
     cfg_proc: process(clk_i)
     begin
@@ -143,7 +146,7 @@ begin
                         end if;
                     when HOLD =>
                         ack_b_reg <= '0';
-                        if hold_cnt_reg >= cs_high_reg then
+                        if hold_end = '1' then
                             state_reg   <= IDLE;
                             stall_b_reg <= '0';
                         end if;
