@@ -103,6 +103,16 @@ architecture rtl of leaf_soc is
     signal soc_data_io2_sel  : std_logic_vector(3 downto 0);
     signal soc_data_io2_adr  : std_logic_vector(IO2_ADDR_WIDTH-1 downto 2);
     signal soc_data_io2_dat  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_xip_a_cyc     : std_logic;
+    signal soc_xip_a_stb     : std_logic;
+    signal soc_xip_a_we      : std_logic;
+    signal soc_xip_a_sel     : std_logic_vector(3 downto 0);
+    signal soc_xip_a_adr     : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+    signal soc_xip_a_dat_wr  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_xip_a_dat_rd  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal soc_xip_a_ack     : std_logic;
+    signal soc_xip_a_err     : std_logic;
+    signal soc_xip_a_stall   : std_logic;
     signal soc_ram0_a_cyc    : std_logic;
     signal soc_ram0_a_stb    : std_logic;
     signal soc_ram0_a_we     : std_logic;
@@ -323,13 +333,13 @@ begin
         rom_adr_o    => soc_inst_rom_adr,
         rom_ack_i    => soc_rom_ack,
         rom_dat_i    => soc_rom_dat,
-        xip_cyc_o    => soc_inst_xip_cyc,
-        xip_stb_o    => soc_inst_xip_stb,
-        xip_adr_o    => soc_inst_xip_adr,
-        xip_ack_i    => soc_xip_ack,
-        xip_err_i    => soc_xip_err,
-        xip_stall_i  => soc_xip_stall,
-        xip_dat_i    => soc_xip_dat,
+        xipb_cyc_o   => soc_inst_xip_cyc,
+        xipb_stb_o   => soc_inst_xip_stb,
+        xipb_adr_o   => soc_inst_xip_adr,
+        xipb_ack_i   => soc_xip_ack,
+        xipb_err_i   => soc_xip_err,
+        xipb_stall_i => soc_xip_stall,
+        xipb_dat_i   => soc_xip_dat,
         ram0b_cyc_o  => soc_ram0_b_cyc,
         ram0b_stb_o  => soc_ram0_b_stb,
         ram0b_adr_o  => soc_ram0_b_adr,
@@ -368,6 +378,16 @@ begin
         io2_ack_i    => soc_io2_ack,
         io2_stall_i  => soc_io2_stall,
         io2_dat_i    => soc_io2_dat,
+        xipa_cyc_o   => soc_xip_a_cyc,
+        xipa_stb_o   => soc_xip_a_stb,
+        xipa_we_o    => soc_xip_a_we,
+        xipa_sel_o   => soc_xip_a_sel,
+        xipa_adr_o   => soc_xip_a_adr,
+        xipa_dat_o   => soc_xip_a_dat_wr,
+        xipa_ack_i   => soc_xip_a_ack,
+        xipa_err_i   => soc_xip_a_err,
+        xipa_stall_i => soc_xip_a_stall,
+        xipa_dat_i   => soc_xip_a_dat_rd,
         ram0a_cyc_o  => soc_ram0_a_cyc,
         ram0a_stb_o  => soc_ram0_a_stb,
         ram0a_we_o   => soc_ram0_a_we,
@@ -437,13 +457,23 @@ begin
     ) port map (
         clk_i      => soc_syscon_clk,
         rst_i      => soc_syscon_rst,
-        cyc_i      => soc_inst_xip_cyc,
-        stb_i      => soc_inst_xip_stb,
-        adr_i      => soc_inst_xip_adr,
-        ack_o      => soc_xip_ack,
-        err_o      => soc_xip_err,
-        stall_o    => soc_xip_stall,
-        dat_o      => soc_xip_dat,
+        cyc_a_i    => soc_xip_a_cyc,
+        stb_a_i    => soc_xip_a_stb,
+        we_a_i     => soc_xip_a_we,
+        sel_a_i    => soc_xip_a_sel,
+        adr_a_i    => soc_xip_a_adr,
+        dat_a_i    => soc_xip_a_dat_wr,
+        ack_a_o    => soc_xip_a_ack,
+        err_a_o    => soc_xip_a_err,
+        stall_a_o  => soc_xip_a_stall,
+        dat_a_o    => soc_xip_a_dat_rd,
+        cyc_b_i    => soc_inst_xip_cyc,
+        stb_b_i    => soc_inst_xip_stb,
+        adr_b_i    => soc_inst_xip_adr,
+        ack_b_o    => soc_xip_ack,
+        err_b_o    => soc_xip_err,
+        stall_b_o  => soc_xip_stall,
+        dat_b_o    => soc_xip_dat,
         dis_i      => soc_xip_dis,
         tx_valid_o => soc_xip_tx_valid,
         tx_ready_i => soc_xip_tx_ready,
