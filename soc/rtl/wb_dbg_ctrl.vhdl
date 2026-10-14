@@ -41,25 +41,26 @@ architecture rtl of wb_dbg_ctrl is
     constant OP_CTRL  : std_logic_vector(1 downto 0) := "10";
     constant OP_INFO  : std_logic_vector(1 downto 0) := "11";
 
-    signal cmd_word  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal frame     : std_logic;
-    signal op        : std_logic_vector(1 downto 0);
-    signal req       : std_logic;
+    type state_t is (IDLE, SEND, BUSY, RESP);
 
-    signal cyc_reg   : std_logic;
-    signal stb_reg   : std_logic;
-    signal we_reg    : std_logic;
-    signal adr_reg   : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
-    signal dat_reg   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal state_reg    : state_t;
+    signal cyc_reg      : std_logic;
+    signal stb_reg      : std_logic;
+    signal we_reg       : std_logic;
+    signal adr_reg      : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
+    signal dat_reg      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal err_reg      : std_logic;
+    signal tx_valid_reg : std_logic;
 
-    signal halt_reg  : std_logic;
-    signal err_reg   : std_logic;
-    signal ovr_reg   : std_logic;
-    signal status    : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal halt_reg     : std_logic;
+    signal ovr_reg      : std_logic;
+    signal resp_reg     : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
-    signal resp_reg  : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal pend_reg  : std_logic;
-    signal tx_valid  : std_logic;
+    signal cmd_word     : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal frame        : std_logic;
+    signal op           : std_logic_vector(1 downto 0);
+    signal req          : std_logic;
+    signal status       : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
 begin
 
@@ -68,41 +69,57 @@ begin
     op       <= cmd_word(1 downto 0);
     req      <= '1' when frame = '1' and (op = OP_READ or op = OP_WRITE) else '0';
 
-    bus_proc: process(clk_i)
+    fsm_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                cyc_reg <= '0';
-                stb_reg <= '0';
-                we_reg  <= '0';
-                adr_reg <= (others => '0');
-                dat_reg <= (others => '0');
-                err_reg <= '0';
-            elsif cyc_reg = '0' then
-                if req = '1' then
-                    cyc_reg <= '1';
-                    stb_reg <= '1';
-                    adr_reg <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
-                    dat_reg <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
-                    if op = OP_WRITE then
-                        we_reg <= '1';
-                    else
-                        we_reg <= '0';
-                    end if;
-                end if;
+                state_reg    <= RESP;
+                cyc_reg      <= '0';
+                stb_reg      <= '0';
+                we_reg       <= '0';
+                adr_reg      <= (others => '0');
+                dat_reg      <= (others => '0');
+                err_reg      <= '0';
+                tx_valid_reg <= '1';
             else
-                if stb_reg = '1' then
-                    if stall_i = '0' then
-                        stb_reg <= '0';
-                    end if;
-                elsif (ack_i or err_i) = '1' then
-                    cyc_reg <= '0';
-                    we_reg  <= '0';
-                    err_reg <= err_i and not ack_i;
-                end if;
+                case state_reg is
+                    when IDLE | RESP =>
+                        if req = '1' then
+                            state_reg    <= SEND;
+                            cyc_reg      <= '1';
+                            stb_reg      <= '1';
+                            adr_reg      <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
+                            dat_reg      <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
+                            tx_valid_reg <= '0';
+                            if op = OP_WRITE then
+                                we_reg <= '1';
+                            else
+                                we_reg <= '0';
+                            end if;
+                        elsif rx_valid_i = '1' then
+                            state_reg    <= RESP;
+                            tx_valid_reg <= '1';
+                        elsif state_reg = RESP and tx_ready_i = '1' then
+                            state_reg    <= IDLE;
+                            tx_valid_reg <= '0';
+                        end if;
+                    when SEND =>
+                        if stall_i = '0' then
+                            state_reg <= BUSY;
+                            stb_reg   <= '0';
+                        end if;
+                    when BUSY =>
+                        if (ack_i or err_i) = '1' then
+                            state_reg    <= RESP;
+                            cyc_reg      <= '0';
+                            we_reg       <= '0';
+                            err_reg      <= err_i and not ack_i;
+                            tx_valid_reg <= '1';
+                        end if;
+                end case;
             end if;
         end if;
-    end process bus_proc;
+    end process fsm_proc;
 
     halt_proc: process(clk_i)
     begin
@@ -128,8 +145,6 @@ begin
         end if;
     end process ovr_proc;
 
-    status <= (SOC_DATA_WIDTH-1 downto 4 => '0') & ovr_reg & cyc_reg & err_reg & halt_reg;
-
     resp_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
@@ -137,7 +152,7 @@ begin
                 resp_reg <= (others => '0');
             elsif frame = '1' and op = OP_INFO and cmd_word(2) = '1' then
                 resp_reg <= DBG_ID;
-            elsif cyc_reg = '1' and stb_reg = '0' and we_reg = '0' then
+            elsif state_reg = BUSY and we_reg = '0' then
                 if ack_i = '1' then
                     resp_reg <= dat_i;
                 elsif err_i = '1' then
@@ -147,22 +162,9 @@ begin
         end if;
     end process resp_proc;
 
-    tx_valid <= pend_reg and not cyc_reg and not rx_valid_i;
+    status <= (SOC_DATA_WIDTH-1 downto 4 => '0') & ovr_reg & cyc_reg & err_reg & halt_reg;
 
-    pend_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                pend_reg <= '1';
-            elsif rx_valid_i = '1' then
-                pend_reg <= '1';
-            elsif tx_valid = '1' and tx_ready_i = '1' then
-                pend_reg <= '0';
-            end if;
-        end if;
-    end process pend_proc;
-
-    tx_valid_o <= tx_valid;
+    tx_valid_o <= tx_valid_reg and not rx_valid_i;
     tx_data_o  <= resp_reg & status;
     cyc_o      <= cyc_reg;
     stb_o      <= stb_reg;
