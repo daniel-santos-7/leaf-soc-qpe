@@ -59,6 +59,7 @@ architecture rtl of wb_dbg_ctrl is
     signal we_reg        : std_logic;
     signal adr_reg       : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
     signal dat_reg       : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+    signal ack_reg       : std_logic;
     signal err_reg       : std_logic;
 
 
@@ -147,6 +148,7 @@ begin
                 we_reg        <= '0';
                 adr_reg       <= (others => '0');
                 dat_reg       <= (others => '0');
+                ack_reg       <= '0';
                 err_reg       <= '0';
             else
                 case bus_state_reg is
@@ -169,6 +171,7 @@ begin
                             bus_state_reg <= B_IDLE;
                             cyc_reg       <= '0';
                             we_reg        <= '0';
+                            ack_reg       <= ack_i;
                             err_reg       <= err_i and not ack_i;
                         end if;
                 end case;
@@ -176,7 +179,7 @@ begin
         end if;
     end process bus_proc;
 
-    status <= ready_reg & cyc_reg & err_reg & halt_reg & (SOC_DATA_WIDTH-5 downto 0 => '0');
+    status <= ready_reg & ack_reg & err_reg & halt_reg & (SOC_DATA_WIDTH-5 downto 0 => '0');
 
     tx_valid_o <= '1';
     tx_data_o  <= status & resp_reg;
