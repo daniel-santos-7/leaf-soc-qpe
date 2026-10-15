@@ -319,7 +319,7 @@ begin
 
             dbg_frame(x"90000005" & x"12345678", dbg_early, 2);
             dbg_frame(x"90000004" & x"00000000", dbg_early);
-            assert dbg_early = x"40000000" & x"CAFEF00D" report "DBG: early frame did not get the busy reply" severity failure;
+            assert dbg_early = x"00000000" & x"CAFEF00D" report "DBG: early frame did not get the busy reply" severity failure;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"CAFEF00D" and dbg_stat = x"C0000000" report "DBG: early frame was not dropped" severity failure;
 

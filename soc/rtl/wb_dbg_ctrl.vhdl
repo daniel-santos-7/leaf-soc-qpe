@@ -102,8 +102,6 @@ begin
                                 when OP_CTRL =>
                                     spi_state_reg <= S_CTRL;
                                     ready_reg     <= '0';
-                                when OP_NOP =>
-                                    null;
                                 when others =>
                                     null;
                             end case;
@@ -160,6 +158,8 @@ begin
                             we_reg        <= wr_req;
                             adr_reg       <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
                             dat_reg       <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
+                            ack_reg       <= '0';
+                            err_reg       <= '0';
                         end if;
                     when B_SEND =>
                         if stall_i = '0' then
@@ -172,7 +172,7 @@ begin
                             cyc_reg       <= '0';
                             we_reg        <= '0';
                             ack_reg       <= ack_i;
-                            err_reg       <= err_i and not ack_i;
+                            err_reg       <= err_i;
                         end if;
                 end case;
             end if;
