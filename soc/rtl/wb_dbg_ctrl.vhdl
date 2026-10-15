@@ -46,6 +46,7 @@ architecture rtl of wb_dbg_ctrl is
 
     signal spi_state_reg : spi_state_t;
     signal tx_valid_reg  : std_logic;
+    signal ready_reg     : std_logic;
     signal halt_reg      : std_logic;
 
     signal bus_state_reg : bus_state_t;
@@ -64,7 +65,6 @@ architecture rtl of wb_dbg_ctrl is
     signal rd_req        : std_logic;
     signal wr_req        : std_logic;
     signal bus_done      : std_logic;
-    signal ready         : std_logic;
     signal status        : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
 begin
@@ -83,6 +83,7 @@ begin
             if rst_i = '1' then
                 spi_state_reg <= S_RESP;
                 tx_valid_reg  <= '1';
+                ready_reg     <= '1';
                 halt_reg      <= '0';
             else
                 case spi_state_reg is
@@ -93,6 +94,7 @@ begin
                                     when OP_READ | OP_WRITE =>
                                         spi_state_reg <= S_EXEC;
                                         tx_valid_reg  <= '1';
+                                        ready_reg     <= '0';
                                     when OP_CTRL =>
                                         spi_state_reg <= S_RESP;
                                         tx_valid_reg  <= '1';
@@ -111,6 +113,7 @@ begin
                     when S_EXEC =>
                         if bus_done = '1' then
                             spi_state_reg <= S_RESP;
+                            ready_reg     <= '1';
                         end if;
                     when S_RESP =>
                         if tx_ready_i = '1' then
@@ -178,8 +181,7 @@ begin
         end if;
     end process resp_proc;
 
-    ready  <= '1' when spi_state_reg = S_RESP else '0';
-    status <= ready & cyc_reg & err_reg & halt_reg & (SOC_DATA_WIDTH-5 downto 0 => '0');
+    status <= ready_reg & cyc_reg & err_reg & halt_reg & (SOC_DATA_WIDTH-5 downto 0 => '0');
 
     tx_valid_o <= tx_valid_reg;
     tx_data_o  <= status & resp_reg;
