@@ -298,19 +298,19 @@ begin
 
             dbg_write(x"90000000", x"DEADBEEF");
             dbg_read(x"90000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"80000000" report "DBG: RAM1 read mismatch" severity failure;
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"C0000000" report "DBG: RAM1 read mismatch" severity failure;
 
             dbg_frame(x"90000001", dbg_junk);
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"80000000" report "DBG: short frame was not ignored" severity failure;
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"C0000000" report "DBG: short frame was not ignored" severity failure;
 
             dbg_empty;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"80000000" report "DBG: empty frame was not ignored" severity failure;
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"C0000000" report "DBG: empty frame was not ignored" severity failure;
 
             dbg_write(x"90000000", x"DEADBEEF");
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"00000000" and dbg_stat = x"80000000" report "DBG: WRITE did not clear the result" severity failure;
+            assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: WRITE did not clear the result" severity failure;
 
             dbg_empty(1);
             dbg_frame(x"90000009" & x"CAFEF00D", dbg_early);
@@ -321,7 +321,7 @@ begin
             dbg_frame(x"90000004" & x"00000000", dbg_early);
             assert dbg_early = x"40000000" & x"CAFEF00D" report "DBG: early frame did not get the busy reply" severity failure;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"CAFEF00D" and dbg_stat = x"80000000" report "DBG: early frame was not dropped" severity failure;
+            assert dbg_data = x"CAFEF00D" and dbg_stat = x"C0000000" report "DBG: early frame was not dropped" severity failure;
 
             dbg_frame(x"9000000D" & x"11111111", dbg_early, 1);
             dbg_frame(x"9000000C" & x"00000000", dbg_early);
@@ -337,7 +337,7 @@ begin
             assert dbg_stat = x"B0000000" report "DBG: bad status after halt" severity failure;
 
             dbg_read(x"80000000", dbg_data, dbg_stat);
-            assert dbg_stat = x"90000000" report "DBG: RAM0 read faulted" severity failure;
+            assert dbg_stat = x"D0000000" report "DBG: RAM0 read faulted" severity failure;
 
             dbg_cmd(x"00000002", x"00000000");
             dbg <= '0';
