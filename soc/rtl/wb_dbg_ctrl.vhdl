@@ -100,6 +100,7 @@ begin
                                     ready_reg     <= '0';
                                 when OP_CTRL =>
                                     spi_state_reg <= S_CTRL;
+                                    ready_reg     <= '0';
                                 when OP_NOP =>
                                     null;
                                 when others =>
@@ -118,6 +119,7 @@ begin
                         end if;
                     when S_CTRL =>
                         spi_state_reg <= S_IDLE;
+                        ready_reg     <= '1';
                         case sub is
                             when SUB_RUN =>
                                 halt_reg <= '0';
