@@ -62,6 +62,7 @@ architecture rtl of wb_dbg_ctrl is
     signal cmd_word      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal op            : std_logic_vector(1 downto 0);
     signal rx_full       : std_logic;
+    signal rx_empty      : std_logic;
     signal rd_req        : std_logic;
     signal wr_req        : std_logic;
     signal bus_done      : std_logic;
@@ -72,6 +73,7 @@ begin
     cmd_word <= rx_data_i(SPI_WIDTH-1 downto SOC_DATA_WIDTH);
     op       <= cmd_word(1 downto 0);
     rx_full  <= '1' when unsigned(rx_bits_i) = SPI_WIDTH else '0';
+    rx_empty <= '1' when unsigned(rx_bits_i) = 0 else '0';
 
     rd_req   <= '1' when spi_state_reg = S_IDLE and rx_valid_i = '1' and rx_full = '1' and op = OP_READ else '0';
     wr_req   <= '1' when spi_state_reg = S_IDLE and rx_valid_i = '1' and rx_full = '1' and op = OP_WRITE else '0';
@@ -105,7 +107,7 @@ begin
                                     when others =>
                                         null;
                                 end case;
-                            else
+                            elsif rx_empty = '0' then
                                 spi_state_reg <= S_RESP;
                                 tx_valid_reg  <= '1';
                             end if;

@@ -241,12 +241,12 @@ begin
             dbg_xfer(DBG_NOP, x"00000000", data, stat);
         end procedure dbg_read;
 
-        procedure dbg_empty is
+        procedure dbg_empty(constant gap : in natural := 2*DBG_HALF) is
         begin
             dbg_cs_n <= '0';
             dbg_wait(2*DBG_HALF);
             dbg_cs_n <= '1';
-            dbg_wait(2*DBG_HALF);
+            dbg_wait(gap);
         end procedure dbg_empty;
     begin
         dbg_sclk <= '0';
@@ -308,11 +308,16 @@ begin
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"DEADBEEF" and dbg_stat = x"80000000" report "DBG: empty frame was not ignored" severity failure;
 
+            dbg_empty(1);
+            dbg_frame(x"90000009" & x"CAFEF00D", dbg_early);
+            dbg_read(x"90000008", dbg_data, dbg_stat);
+            assert dbg_early(63) = '1' and dbg_data = x"CAFEF00D" report "DBG: command right after an empty frame was dropped" severity failure;
+
             dbg_frame(x"90000005" & x"12345678", dbg_early, 2);
             dbg_frame(x"90000004" & x"00000000", dbg_early);
-            assert dbg_early = x"40000000" & x"DEADBEEF" report "DBG: early frame did not get the busy reply" severity failure;
+            assert dbg_early = x"40000000" & x"CAFEF00D" report "DBG: early frame did not get the busy reply" severity failure;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"80000000" report "DBG: early frame was not dropped" severity failure;
+            assert dbg_data = x"CAFEF00D" and dbg_stat = x"80000000" report "DBG: early frame was not dropped" severity failure;
 
             dbg_read(x"00001000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"A0000000" report "DBG: ROM read did not fault" severity failure;
@@ -330,7 +335,7 @@ begin
             uart_transmit(rx, RAM_JUMP_CMD);
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
             assert uart_data = ACK report "DBG: no ACK after release" severity failure;
-            report "DBG ok: id, RAM1 write/read, short and empty frames, early frame, ROM err, halt, release";
+            report "DBG ok: id, RAM1 write/read, short and empty frames, frame right after an empty one, early frame, ROM err, halt, release";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop
