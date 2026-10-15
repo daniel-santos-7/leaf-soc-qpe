@@ -96,9 +96,11 @@ begin
                                         spi_state_reg <= S_RESP;
                                         tx_valid_reg  <= '1';
                                         halt_reg      <= cmd_word(2);
-                                    when others =>
+                                    when OP_INFO =>
                                         spi_state_reg <= S_RESP;
                                         tx_valid_reg  <= '1';
+                                    when others =>
+                                        null;
                                 end case;
                             else
                                 spi_state_reg <= S_RESP;
@@ -106,9 +108,6 @@ begin
                             end if;
                         end if;
                     when S_EXEC =>
-                        if rx_valid_i = '1' and rx_full = '1' and op = OP_CTRL then
-                            halt_reg <= cmd_word(2);
-                        end if;
                         if bus_done = '1' then
                             spi_state_reg <= S_RESP;
                             tx_valid_reg  <= '1';
@@ -122,6 +121,8 @@ begin
                                         tx_valid_reg  <= '0';
                                     when OP_CTRL =>
                                         halt_reg <= cmd_word(2);
+                                    when OP_INFO =>
+                                        null;
                                     when others =>
                                         null;
                                 end case;
@@ -179,7 +180,7 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 ovr_reg <= '0';
-            elsif rx_valid_i = '1' and rx_full = '1' and (op = OP_READ or op = OP_WRITE) and cyc_reg = '1' then
+            elsif spi_state_reg = S_EXEC and rx_valid_i = '1' and rx_full = '1' then
                 ovr_reg <= '1';
             elsif rx_valid_i = '1' then
                 ovr_reg <= '0';
@@ -192,7 +193,7 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 resp_reg <= (others => '0');
-            elsif rx_valid_i = '1' and rx_full = '1' and op = OP_INFO and cmd_word(2) = '1' then
+            elsif spi_state_reg /= S_EXEC and rx_valid_i = '1' and rx_full = '1' and op = OP_INFO and cmd_word(2) = '1' then
                 resp_reg <= DBG_ID;
             elsif bus_state_reg = B_BUSY and we_reg = '0' then
                 if ack_i = '1' then
