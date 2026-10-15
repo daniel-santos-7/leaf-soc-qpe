@@ -47,7 +47,6 @@ architecture rtl of wb_dbg_ctrl is
     signal spi_state_reg : spi_state_t;
     signal tx_valid_reg  : std_logic;
     signal halt_reg      : std_logic;
-    signal ovr_reg       : std_logic;
 
     signal bus_state_reg : bus_state_t;
     signal cyc_reg       : std_logic;
@@ -65,6 +64,7 @@ architecture rtl of wb_dbg_ctrl is
     signal rd_req        : std_logic;
     signal wr_req        : std_logic;
     signal bus_done      : std_logic;
+    signal ready         : std_logic;
     signal status        : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
 begin
@@ -92,6 +92,7 @@ begin
                                 case op is
                                     when OP_READ | OP_WRITE =>
                                         spi_state_reg <= S_EXEC;
+                                        tx_valid_reg  <= '1';
                                     when OP_CTRL =>
                                         spi_state_reg <= S_RESP;
                                         tx_valid_reg  <= '1';
@@ -110,10 +111,9 @@ begin
                     when S_EXEC =>
                         if bus_done = '1' then
                             spi_state_reg <= S_RESP;
-                            tx_valid_reg  <= '1';
                         end if;
                     when S_RESP =>
-                        if rx_valid_i = '0' and tx_ready_i = '1' then
+                        if tx_ready_i = '1' then
                             spi_state_reg <= S_IDLE;
                             tx_valid_reg  <= '0';
                         end if;
@@ -161,19 +161,6 @@ begin
         end if;
     end process bus_proc;
 
-    ovr_proc: process(clk_i)
-    begin
-        if rising_edge(clk_i) then
-            if rst_i = '1' then
-                ovr_reg <= '0';
-            elsif spi_state_reg /= S_IDLE and rx_valid_i = '1' and rx_full = '1' then
-                ovr_reg <= '1';
-            elsif rx_valid_i = '1' then
-                ovr_reg <= '0';
-            end if;
-        end if;
-    end process ovr_proc;
-
     resp_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
@@ -191,10 +178,11 @@ begin
         end if;
     end process resp_proc;
 
-    status <= (SOC_DATA_WIDTH-1 downto 4 => '0') & ovr_reg & cyc_reg & err_reg & halt_reg;
+    ready  <= '1' when spi_state_reg = S_RESP else '0';
+    status <= ready & cyc_reg & err_reg & halt_reg & (SOC_DATA_WIDTH-5 downto 0 => '0');
 
-    tx_valid_o <= tx_valid_reg and not rx_valid_i;
-    tx_data_o  <= resp_reg & status;
+    tx_valid_o <= tx_valid_reg;
+    tx_data_o  <= status & resp_reg;
     cyc_o      <= cyc_reg;
     stb_o      <= stb_reg;
     we_o       <= we_reg;

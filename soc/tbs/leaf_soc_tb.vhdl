@@ -185,6 +185,7 @@ begin
         variable dbg_data : std_logic_vector(31 downto 0);
         variable dbg_stat : std_logic_vector(31 downto 0);
         variable dbg_junk : std_logic_vector(31 downto 0);
+        variable dbg_early : std_logic_vector(63 downto 0);
 
         procedure dbg_wait(constant n : in natural) is
         begin
@@ -193,7 +194,7 @@ begin
             end loop;
         end procedure dbg_wait;
 
-        procedure dbg_frame(constant tx_bits : in std_logic_vector; variable rx_bits : out std_logic_vector) is
+        procedure dbg_frame(constant tx_bits : in std_logic_vector; variable rx_bits : out std_logic_vector; constant gap : in natural := 2*DBG_HALF) is
             variable t : std_logic_vector(tx_bits'length-1 downto 0);
             variable r : std_logic_vector(tx_bits'length-1 downto 0);
         begin
@@ -210,7 +211,7 @@ begin
             end loop;
             dbg_wait(DBG_HALF);
             dbg_cs_n <= '1';
-            dbg_wait(2*DBG_HALF);
+            dbg_wait(gap);
             rx_bits := r;
         end procedure dbg_frame;
 
@@ -219,8 +220,8 @@ begin
             variable r : std_logic_vector(63 downto 0);
         begin
             dbg_frame(cmd & data, r);
-            res  := r(63 downto 32);
-            stat := r(31 downto 0);
+            stat := r(63 downto 32);
+            res  := r(31 downto 0);
         end procedure dbg_xfer;
 
         procedure dbg_cmd(constant cmd : in std_logic_vector(31 downto 0); constant data : in std_logic_vector(31 downto 0)) is
@@ -297,25 +298,31 @@ begin
 
             dbg_write(x"90000000", x"DEADBEEF");
             dbg_read(x"90000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"00000000" report "DBG: RAM1 read mismatch" severity failure;
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"80000000" report "DBG: RAM1 read mismatch" severity failure;
 
             dbg_frame(x"90000001", dbg_junk);
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"00000000" report "DBG: short frame was not ignored" severity failure;
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"80000000" report "DBG: short frame was not ignored" severity failure;
 
             dbg_empty;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"00000000" report "DBG: empty frame was not ignored" severity failure;
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"80000000" report "DBG: empty frame was not ignored" severity failure;
+
+            dbg_frame(x"90000005" & x"12345678", dbg_early, 2);
+            dbg_frame(x"90000004" & x"00000000", dbg_early);
+            assert dbg_early = x"40000000" & x"DEADBEEF" report "DBG: early frame did not get the busy reply" severity failure;
+            dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"80000000" report "DBG: early frame was not dropped" severity failure;
 
             dbg_read(x"00001000", dbg_data, dbg_stat);
-            assert dbg_data = x"00000000" and dbg_stat = x"00000002" report "DBG: ROM read did not fault" severity failure;
+            assert dbg_data = x"00000000" and dbg_stat = x"A0000000" report "DBG: ROM read did not fault" severity failure;
 
             dbg_cmd(x"00000006", x"00000000");
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_stat = x"00000003" report "DBG: bad status after halt" severity failure;
+            assert dbg_stat = x"B0000000" report "DBG: bad status after halt" severity failure;
 
             dbg_read(x"80000000", dbg_data, dbg_stat);
-            assert dbg_stat = x"00000001" report "DBG: RAM0 read faulted" severity failure;
+            assert dbg_stat = x"90000000" report "DBG: RAM0 read faulted" severity failure;
 
             dbg_cmd(x"00000002", x"00000000");
             dbg <= '0';
@@ -323,7 +330,7 @@ begin
             uart_transmit(rx, RAM_JUMP_CMD);
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
             assert uart_data = ACK report "DBG: no ACK after release" severity failure;
-            report "DBG ok: id, RAM1 write/read, short and empty frames, ROM err, halt, release";
+            report "DBG ok: id, RAM1 write/read, short and empty frames, early frame, ROM err, halt, release";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop
