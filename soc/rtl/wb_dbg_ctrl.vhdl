@@ -45,12 +45,14 @@ architecture rtl of wb_dbg_ctrl is
     constant SUB_HALT : std_logic_vector(1 downto 0) := "01";
     constant SUB_ID   : std_logic_vector(1 downto 0) := "10";
 
-    type spi_state_t is (S_IDLE, S_EXEC, S_CTRL);
+    type spi_state_t is (S_IDLE, S_READ, S_WRITE, S_CTRL);
     type bus_state_t is (B_IDLE, B_SEND, B_BUSY);
 
     signal spi_state_reg : spi_state_t;
     signal ready_reg     : std_logic;
     signal halt_reg      : std_logic;
+    signal ack_reg       : std_logic;
+    signal err_reg       : std_logic;
     signal resp_reg      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal bus_state_reg : bus_state_t;
@@ -59,8 +61,6 @@ architecture rtl of wb_dbg_ctrl is
     signal we_reg        : std_logic;
     signal adr_reg       : std_logic_vector(SOC_ADDR_WIDTH-1 downto 2);
     signal dat_reg       : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-    signal ack_reg       : std_logic;
-    signal err_reg       : std_logic;
 
 
     signal cmd_word      : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
@@ -90,35 +90,57 @@ begin
                 spi_state_reg <= S_IDLE;
                 ready_reg     <= '1';
                 halt_reg      <= '0';
+                ack_reg       <= '0';
+                err_reg       <= '0';
                 resp_reg      <= (others => '0');
             else
                 case spi_state_reg is
                     when S_IDLE =>
                         if rx_valid_i = '1' and rx_full = '1' then
                             case op is
-                                when OP_READ | OP_WRITE =>
-                                    spi_state_reg <= S_EXEC;
+                                when OP_READ =>
+                                    spi_state_reg <= S_READ;
                                     ready_reg     <= '0';
+                                    ack_reg       <= '0';
+                                    err_reg       <= '0';
+                                when OP_WRITE =>
+                                    spi_state_reg <= S_WRITE;
+                                    ready_reg     <= '0';
+                                    ack_reg       <= '0';
+                                    err_reg       <= '0';
                                 when OP_CTRL =>
                                     spi_state_reg <= S_CTRL;
                                     ready_reg     <= '0';
+                                    ack_reg       <= '0';
+                                    err_reg       <= '0';
                                 when others =>
                                     null;
                             end case;
                         end if;
-                    when S_EXEC =>
+                    when S_READ =>
                         if bus_done = '1' then
                             spi_state_reg <= S_IDLE;
                             ready_reg     <= '1';
-                            if we_reg = '0' and ack_i = '1' then
+                            ack_reg       <= ack_i;
+                            err_reg       <= err_i;
+                            if ack_i = '1' then
                                 resp_reg <= dat_i;
                             else
                                 resp_reg <= (others => '0');
                             end if;
                         end if;
+                    when S_WRITE =>
+                        if bus_done = '1' then
+                            spi_state_reg <= S_IDLE;
+                            ready_reg     <= '1';
+                            ack_reg       <= ack_i;
+                            err_reg       <= err_i;
+                            resp_reg      <= (others => '0');
+                        end if;
                     when S_CTRL =>
                         spi_state_reg <= S_IDLE;
                         ready_reg     <= '1';
+                        ack_reg       <= '1';
                         case sub is
                             when SUB_RUN =>
                                 halt_reg <= '0';
@@ -146,8 +168,6 @@ begin
                 we_reg        <= '0';
                 adr_reg       <= (others => '0');
                 dat_reg       <= (others => '0');
-                ack_reg       <= '0';
-                err_reg       <= '0';
             else
                 case bus_state_reg is
                     when B_IDLE =>
@@ -158,8 +178,6 @@ begin
                             we_reg        <= wr_req;
                             adr_reg       <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
                             dat_reg       <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
-                            ack_reg       <= '0';
-                            err_reg       <= '0';
                         end if;
                     when B_SEND =>
                         if stall_i = '0' then
@@ -171,8 +189,6 @@ begin
                             bus_state_reg <= B_IDLE;
                             cyc_reg       <= '0';
                             we_reg        <= '0';
-                            ack_reg       <= ack_i;
-                            err_reg       <= err_i;
                         end if;
                 end case;
             end if;

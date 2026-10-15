@@ -334,7 +334,7 @@ begin
 
             dbg_cmd(x"00000006", x"00000000");
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_stat = x"B0000000" report "DBG: bad status after halt" severity failure;
+            assert dbg_stat = x"D0000000" report "DBG: bad status after halt" severity failure;
 
             dbg_read(x"80000000", dbg_data, dbg_stat);
             assert dbg_stat = x"D0000000" report "DBG: RAM0 read faulted" severity failure;
