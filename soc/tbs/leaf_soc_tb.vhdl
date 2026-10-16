@@ -302,11 +302,11 @@ begin
 
             dbg_frame(x"90000001", dbg_junk);
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"C0000000" report "DBG: short frame was not ignored" severity failure;
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"A0000000" report "DBG: short frame did not report ERR" severity failure;
 
             dbg_empty;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"C0000000" report "DBG: empty frame was not ignored" severity failure;
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"A0000000" report "DBG: empty frame was not ignored" severity failure;
 
             dbg_write(x"90000000", x"DEADBEEF");
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
