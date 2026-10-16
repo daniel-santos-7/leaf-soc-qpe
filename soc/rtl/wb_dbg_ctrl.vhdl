@@ -163,18 +163,20 @@ begin
                     when S_CTRL =>
                         state_reg <= S_RESP;
                         ready_reg <= '1';
-                        ack_reg   <= '1';
                         case sub is
                             when SUB_RUN =>
+                                ack_reg  <= '1';
                                 halt_reg <= '0';
                                 resp_reg <= (others => '0');
                             when SUB_HALT =>
+                                ack_reg  <= '1';
                                 halt_reg <= '1';
                                 resp_reg <= (others => '0');
                             when SUB_ID =>
+                                ack_reg  <= '1';
                                 resp_reg <= DBG_ID;
                             when others =>
-                                null;
+                                err_reg  <= '1';
                         end case;
                     when S_RESP =>
                         if tx_ready_i = '1' then
