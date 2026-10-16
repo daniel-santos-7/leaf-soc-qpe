@@ -312,6 +312,10 @@ begin
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: WRITE did not clear the result" severity failure;
 
+            dbg_cmd(x"0000000E", x"00000000");
+            dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
+            assert dbg_data = x"00000000" and dbg_stat = x"A0000000" report "DBG: reserved CTRL subcommand did not report ERR" severity failure;
+
             dbg_empty(1);
             dbg_frame(x"90000009" & x"CAFEF00D", dbg_early);
             dbg_read(x"90000008", dbg_data, dbg_stat);
@@ -345,7 +349,7 @@ begin
             uart_transmit(rx, RAM_JUMP_CMD);
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
             assert uart_data = ACK report "DBG: no ACK after release" severity failure;
-            report "DBG ok: id, RAM1 write/read, short and empty frames, frame right after an empty one, early frame, ROM err, halt, release";
+            report "DBG ok: id, RAM1 write/read, short and empty frames, reserved CTRL, frame right after an empty one, early frame, ROM err, halt, release";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop
