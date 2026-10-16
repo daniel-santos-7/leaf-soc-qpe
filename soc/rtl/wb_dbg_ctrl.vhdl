@@ -45,7 +45,7 @@ architecture rtl of wb_dbg_ctrl is
     constant SUB_HALT : std_logic_vector(1 downto 0) := "01";
     constant SUB_ID   : std_logic_vector(1 downto 0) := "10";
 
-    type state_t is (S_IDLE, S_READ, S_RD_SEND, S_RD_BUSY, S_WRITE, S_WR_SEND, S_WR_BUSY, S_CTRL);
+    type state_t is (S_IDLE, S_READ, S_WRITE, S_SEND, S_BUSY, S_CTRL);
 
     signal state_reg : state_t;
     signal ready_reg : std_logic;
@@ -112,41 +112,23 @@ begin
                             end case;
                         end if;
                     when S_READ =>
-                        state_reg <= S_RD_SEND;
+                        state_reg <= S_SEND;
                         cyc_reg   <= '1';
                         stb_reg   <= '1';
                         adr_reg   <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
-                    when S_RD_SEND =>
-                        if stall_i = '0' then
-                            state_reg <= S_RD_BUSY;
-                            stb_reg   <= '0';
-                        end if;
-                    when S_RD_BUSY =>
-                        if (ack_i or err_i) = '1' then
-                            state_reg <= S_IDLE;
-                            ready_reg <= '1';
-                            ack_reg   <= ack_i;
-                            err_reg   <= err_i;
-                            cyc_reg   <= '0';
-                            if ack_i = '1' then
-                                resp_reg <= dat_i;
-                            else
-                                resp_reg <= (others => '0');
-                            end if;
-                        end if;
                     when S_WRITE =>
-                        state_reg <= S_WR_SEND;
+                        state_reg <= S_SEND;
                         cyc_reg   <= '1';
                         stb_reg   <= '1';
                         we_reg    <= '1';
                         adr_reg   <= cmd_word(SOC_ADDR_WIDTH-1 downto 2);
                         dat_reg   <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
-                    when S_WR_SEND =>
+                    when S_SEND =>
                         if stall_i = '0' then
-                            state_reg <= S_WR_BUSY;
+                            state_reg <= S_BUSY;
                             stb_reg   <= '0';
                         end if;
-                    when S_WR_BUSY =>
+                    when S_BUSY =>
                         if (ack_i or err_i) = '1' then
                             state_reg <= S_IDLE;
                             ready_reg <= '1';
@@ -154,7 +136,11 @@ begin
                             err_reg   <= err_i;
                             cyc_reg   <= '0';
                             we_reg    <= '0';
-                            resp_reg  <= (others => '0');
+                            if we_reg = '0' and ack_i = '1' then
+                                resp_reg <= dat_i;
+                            else
+                                resp_reg <= (others => '0');
+                            end if;
                         end if;
                     when S_CTRL =>
                         state_reg <= S_IDLE;
