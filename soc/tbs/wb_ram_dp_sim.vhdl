@@ -94,6 +94,12 @@ begin
                 end if;
             end if;
 
+            if ram_req_a = '1' and we_a_i = '1' and ram_req_b = '1' and addr_a = addr_b then
+                report "wb_ram_dp_sim: store on port A and fetch on port B of word offset " &
+                       integer'image(4*addr_a) & " in the same cycle (the macro RAM reads X here)"
+                    severity warning;
+            end if;
+
             -- Leitura contínua de ambas as portas
             dat_reg_a <= mem3(addr_a) & mem2(addr_a) & mem1(addr_a) & mem0(addr_a);
             dat_reg_b <= mem3(addr_b) & mem2(addr_b) & mem1(addr_b) & mem0(addr_b);

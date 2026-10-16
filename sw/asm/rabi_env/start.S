@@ -12,7 +12,7 @@
 .equ DRAG_ZERO, 0
 .equ REPEAT,    3
 
-.include "../common/qp.inc"
+.include "../common/qpe.inc"
 
 .section .text
 .globl _start
@@ -20,15 +20,16 @@
 _start:
     li   sp, RAM_TOP
 
+    qpe.ftw   9
+    qpe.pow   0
+    qpe.amp   18
+    qpe.drag  0
+    qpe.env   19
+    qpe.delay 0
+
     li   s1, FTW_PI
     li   s3, ENV_START
     li   s2, AMP_HALF
-
-    qp.ftw  s1
-    qp.pow  x0
-    qp.amp  s2
-    qp.drag x0
-    qp.delay x0
 
     li   s4, REPEAT
     li   s5, ENV_STEP
@@ -38,9 +39,8 @@ repeat_loop:
     li   s3, ENV_START
 
 pulse_loop:
-    qp.env  s3
-    qp.wait
-    qp.trigger
+    qpe.wait
+    qpe.trigger
 
     add  s3, s3, s5
     li   t0, ENV_END

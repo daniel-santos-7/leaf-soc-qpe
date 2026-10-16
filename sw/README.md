@@ -9,11 +9,9 @@ Diretório   					| Descrição
 [array_sort](/sw/array_sort/)  	| Algoritmo básico para ordenar um vetor
 [boot](/sw/asm/boot/)        	| Simples bootloader
 [coremak](/sw/coremark/)     	| Benchmark coremark
-[data_io](/sw/data_io/)   		| Teste de entrada e saída de dados
 [factorial](/sw/factorial)   	| Algoritmo para o cálculo de 10!
 [fibonacci](/sw/fibonacci/)   	| Algoritmo para gerar primeiros termos da serie de Fibonacci
 [tests_asm](/sw/tests_asm/)   	| Testes em assembly
-[tests_c](/sw/tests_c/)   		| Testes em linguagem c
 
 ## Desenvolvimento de um programa em C
 

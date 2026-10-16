@@ -16,12 +16,13 @@ UART_TBS = $(wildcard ./ips/uart/tbs/*.vhdl)
 WGEN_RTL = $(wildcard ./ips/wgen/rtl/*.vhd)
 WGEN_TBS = $(wildcard ./ips/wgen/tbs/*.vhd)
 GPIO_RTL = $(wildcard ./ips/gpio/rtl/*.vhd)
+SPI_RTL  = $(wildcard ./ips/spi/rtl/*.vhdl)
 SOC_RTL  = $(wildcard ./soc/rtl/*.vhdl)
 SOC_TBS  = $(wildcard ./soc/tbs/*.vhdl)
 TECH_DIR ?= ./tech
 TECH_SRC = $(wildcard $(TECH_DIR)/*.vhdl)
 
-RTL_SRC  = $(CPU_RTL) $(UART_RTL) $(WGEN_RTL) $(GPIO_RTL) $(SOC_RTL)
+RTL_SRC  = $(CPU_RTL) $(UART_RTL) $(WGEN_RTL) $(GPIO_RTL) $(SPI_RTL) $(SOC_RTL)
 TBS_SRC  = $(UART_TBS) $(WGEN_TBS) $(SOC_TBS) $(TECH_SRC)
 
 RTL_TECH  = $(if $(filter TECH,$(RAM)),$(addprefix $(TECH_DIR)/,$(shell cat $(TECH_DIR)/syn.f 2>/dev/null)))
@@ -73,6 +74,7 @@ endif
 
 GHDLXOPTS += $(if $(filter 1,$(SAMPLES)),-gSAMPLES_FILE=$(WAVESDIR)/$(SAMPLES_CSV),)
 GHDLXOPTS += $(if $(filter MMIO,$(WGEN_IF)),-gWGEN_IF_COP=false,)
+GHDLXOPTS += $(if $(filter 1,$(DBG)),-gDBG_TEST=true,)
 
 $(WORKDIR) $(WAVESDIR):
 	mkdir -p $@

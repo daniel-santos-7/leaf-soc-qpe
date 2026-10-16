@@ -14,7 +14,7 @@ entity spi_flash_model is
         INIT_FILE : string := ""
     );
     port (
-        spi_clk  : in  std_logic;
+        spi_sclk : in  std_logic;
         spi_mosi : in  std_logic;
         spi_miso : out std_logic;
         spi_cs_n : in  std_logic
@@ -59,12 +59,12 @@ begin
         wait;
     end process init_proc;
 
-    rise_proc: process(spi_clk, spi_cs_n)
+    rise_proc: process(spi_sclk, spi_cs_n)
     begin
         if spi_cs_n = '1' then
             state   <= CMD;
             bit_cnt <= 0;
-        elsif rising_edge(spi_clk) then
+        elsif rising_edge(spi_sclk) then
             case state is
                 when CMD =>
                     cmd_reg <= cmd_reg(5 downto 0) & spi_mosi;
@@ -94,14 +94,14 @@ begin
         end if;
     end process rise_proc;
 
-    fall_proc: process(spi_clk, spi_cs_n)
+    fall_proc: process(spi_sclk, spi_cs_n)
         variable byte : std_logic_vector(7 downto 0);
     begin
         if spi_cs_n = '1' then
             spi_miso <= 'Z';
             out_bit  <= 0;
             out_byte <= (others => '0');
-        elsif falling_edge(spi_clk) then
+        elsif falling_edge(spi_sclk) then
             if state = DATA then
                 byte     := memory(to_integer(base + out_byte));
                 spi_miso <= byte(7 - out_bit);

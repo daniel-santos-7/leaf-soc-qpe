@@ -61,19 +61,19 @@ begin
         severity failure;
 
     mem_proc: process(clk_a, clk_b)
-        variable mem      : mem_t := init_mem;
-        variable edge_a   : boolean;
-        variable edge_b   : boolean;
-        variable rd_a     : boolean;
-        variable rd_b     : boolean;
-        variable wr_a     : boolean;
-        variable wr_b     : boolean;
-        variable bad_a    : boolean;
-        variable bad_b    : boolean;
-        variable ia       : natural range 0 to WORDS-1;
-        variable ib       : natural range 0 to WORDS-1;
-        variable qa       : word_t;
-        variable qb       : word_t;
+        variable mem    : mem_t := init_mem;
+        variable edge_a : boolean;
+        variable edge_b : boolean;
+        variable rd_a   : boolean;
+        variable rd_b   : boolean;
+        variable wr_a   : boolean;
+        variable wr_b   : boolean;
+        variable bad_a  : boolean;
+        variable bad_b  : boolean;
+        variable ia     : natural range 0 to WORDS-1;
+        variable ib     : natural range 0 to WORDS-1;
+        variable qa     : word_t;
+        variable qb     : word_t;
     begin
         edge_a := rising_edge(clk_a);
         edge_b := rising_edge(clk_b);
@@ -98,6 +98,18 @@ begin
                 rd_b := we_b = '0';
                 wr_b := we_b = '1';
             end if;
+        end if;
+
+        if (rd_a and wr_b and ia = ib) or (rd_b and wr_a and ia = ib) then
+            report "sram_dp(sim): " & mem_proc'path_name & " reads and writes word " &
+                   integer'image(ia) & " on its two ports in the same cycle; the read returns X"
+                severity warning;
+        end if;
+
+        if wr_a and wr_b and ia = ib then
+            report "sram_dp(sim): " & mem_proc'path_name & " writes word " &
+                   integer'image(ia) & " on both ports in the same cycle; the bits both enable become X"
+                severity warning;
         end if;
 
         if rd_a then
