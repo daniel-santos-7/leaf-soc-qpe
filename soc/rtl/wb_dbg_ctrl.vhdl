@@ -130,16 +130,16 @@ begin
                                         tx_valid_reg <= '1';
                                         rx_ready_reg <= '1';
                                 end case;
-                            elsif rx_empty = '0' then
+                            elsif rx_empty = '1' then
+                                state_reg    <= S_EMPTY;
+                                rx_ready_reg <= '1';
+                            else
                                 state_reg    <= S_INVALID;
                                 ready_reg    <= '0';
                                 tx_valid_reg <= '1';
                                 rx_ready_reg <= '1';
                                 ack_reg      <= '0';
                                 err_reg      <= '0';
-                            else
-                                state_reg    <= S_EMPTY;
-                                rx_ready_reg <= '1';
                             end if;
                         end if;
                     when S_READ =>
