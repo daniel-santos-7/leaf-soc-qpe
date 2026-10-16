@@ -45,7 +45,7 @@ architecture rtl of wb_dbg_ctrl is
     constant SUB_HALT : std_logic_vector(1 downto 0) := "01";
     constant SUB_ID   : std_logic_vector(1 downto 0) := "10";
 
-    type state_t is (S_INIT, S_IDLE, S_READ, S_WRITE, S_SEND, S_BUSY, S_CTRL, S_INVALID, S_RESP);
+    type state_t is (S_INIT, S_IDLE, S_READ, S_WRITE, S_SEND, S_BUSY, S_CTRL, S_INVALID, S_EMPTY, S_RESP);
 
     signal state_reg    : state_t;
     signal ready_reg    : std_logic;
@@ -130,8 +130,15 @@ begin
                                         tx_valid_reg <= '1';
                                         rx_ready_reg <= '1';
                                 end case;
-                            else
+                            elsif rx_empty = '0' then
                                 state_reg    <= S_INVALID;
+                                ready_reg    <= '0';
+                                tx_valid_reg <= '1';
+                                rx_ready_reg <= '1';
+                                ack_reg      <= '0';
+                                err_reg      <= '0';
+                            else
+                                state_reg    <= S_EMPTY;
                                 rx_ready_reg <= '1';
                             end if;
                         end if;
@@ -185,15 +192,12 @@ begin
                                 err_reg  <= '1';
                         end case;
                     when S_INVALID =>
-                        if rx_empty = '1' then
-                            state_reg    <= S_IDLE;
-                            rx_ready_reg <= '0';
-                        else
-                            state_reg    <= S_RESP;
-                            tx_valid_reg <= '1';
-                            ack_reg      <= '0';
-                            err_reg      <= '1';
-                        end if;
+                        state_reg <= S_RESP;
+                        ready_reg <= '1';
+                        err_reg   <= '1';
+                    when S_EMPTY =>
+                        state_reg    <= S_IDLE;
+                        rx_ready_reg <= '0';
                     when S_RESP =>
                         if tx_ready_i = '1' then
                             state_reg    <= S_IDLE;
