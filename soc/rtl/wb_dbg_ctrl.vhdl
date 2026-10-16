@@ -40,7 +40,6 @@ architecture rtl of wb_dbg_ctrl is
     constant OP_READ  : std_logic_vector(1 downto 0) := "00";
     constant OP_WRITE : std_logic_vector(1 downto 0) := "01";
     constant OP_CTRL  : std_logic_vector(1 downto 0) := "10";
-    constant OP_NOP   : std_logic_vector(1 downto 0) := "11";
 
     constant SUB_RUN  : std_logic_vector(1 downto 0) := "00";
     constant SUB_HALT : std_logic_vector(1 downto 0) := "01";
