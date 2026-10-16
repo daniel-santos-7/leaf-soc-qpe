@@ -33,7 +33,6 @@ entity leaf_soc is
         miso_i  : in  std_logic;
         miso_o  : out std_logic;
         miso_oe : out std_logic;
-        dbg     : in  std_logic;
         gpio_i  : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_o  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_oe : out std_logic_vector(GPIO_WIDTH-1 downto 0);
@@ -157,7 +156,7 @@ architecture rtl of leaf_soc is
     signal soc_xip_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_xip_tx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_xip_rx_valid : std_logic;
-    signal soc_xip_dis      : std_logic;
+    signal soc_xip_en       : std_logic;
 
     signal soc_spi_role_req : std_logic;
     signal soc_spi_role_ack : std_logic;
@@ -475,7 +474,7 @@ begin
         err_b_o    => soc_xip_err,
         stall_b_o  => soc_xip_stall,
         dat_b_o    => soc_xip_dat,
-        dis_i      => soc_xip_dis,
+        en_o       => soc_xip_en,
         tx_valid_o => soc_xip_tx_valid,
         tx_ready_i => soc_xip_tx_ready,
         tx_data_o  => soc_xip_tx_data,
@@ -485,9 +484,7 @@ begin
     );
 
     soc_spi_mux: entity work.spi_mux port map (
-        clk_i          => soc_syscon_clk,
-        rst_i          => soc_syscon_rst,
-        dbg_i          => dbg,
+        xip_en_i       => soc_xip_en,
         spi_role_ack_i => soc_spi_role_ack,
         spi_tx_ready_i => soc_spi_tx_ready,
         spi_rx_valid_i => soc_spi_rx_valid,
@@ -500,7 +497,6 @@ begin
         spi_tx_valid_o => soc_spi_tx_valid,
         spi_tx_data_o  => soc_spi_tx_data,
         spi_rx_ready_o => soc_spi_rx_ready,
-        xip_dis_o      => soc_xip_dis,
         xip_tx_ready_o => soc_xip_tx_ready,
         xip_rx_valid_o => soc_xip_rx_valid,
         dbg_tx_ready_o => soc_dbg_tx_ready,

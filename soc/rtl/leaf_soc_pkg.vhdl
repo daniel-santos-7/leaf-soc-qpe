@@ -111,7 +111,6 @@ package leaf_soc_pkg is
             miso_i  : in  std_logic;
             miso_o  : out std_logic;
             miso_oe : out std_logic;
-            dbg     : in  std_logic;
             gpio_i  : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
             gpio_o  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
             gpio_oe : out std_logic_vector(GPIO_WIDTH-1 downto 0);

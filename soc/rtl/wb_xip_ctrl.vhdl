@@ -34,7 +34,7 @@ entity wb_xip_ctrl is
         err_b_o    : out std_logic;
         stall_b_o  : out std_logic;
         dat_b_o    : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        dis_i      : in  std_logic;
+        en_o       : out std_logic;
         tx_valid_o : out std_logic;
         tx_ready_i : in  std_logic;
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
@@ -61,6 +61,7 @@ architecture rtl of wb_xip_ctrl is
     signal ack_a_reg    : std_logic;
     signal err_a_reg    : std_logic;
     signal cs_high_reg  : unsigned(7 downto 0);
+    signal en_reg       : std_logic;
 
     signal req_a        : std_logic;
     signal hit_a        : std_logic;
@@ -84,12 +85,16 @@ begin
                 ack_a_reg   <= '0';
                 err_a_reg   <= '0';
                 cs_high_reg <= to_unsigned(CS_HIGH_CYCLES, 8);
+                en_reg      <= '0';
             elsif req_a = '1' then
                 if hit_a = '1' then
                     ack_a_reg <= '1';
                     err_a_reg <= '0';
                     if we_a_i = '1' and sel_a_i(0) = '1' then
                         cs_high_reg <= unsigned(dat_a_i(7 downto 0));
+                    end if;
+                    if we_a_i = '1' and sel_a_i(1) = '1' then
+                        en_reg <= dat_a_i(8);
                     end if;
                 else
                     ack_a_reg <= '0';
@@ -117,7 +122,7 @@ begin
                     when IDLE =>
                         ack_b_reg <= '0';
                         if req_b = '1' then
-                            if dis_i = '0' then
+                            if en_reg = '1' then
                                 state_reg    <= SEND;
                                 adr_reg      <= adr_b_i;
                                 err_b_reg    <= '0';
@@ -171,11 +176,12 @@ begin
     ack_a_o    <= ack_a_reg;
     err_a_o    <= err_a_reg;
     stall_a_o  <= '0';
-    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 8 => '0') & std_logic_vector(cs_high_reg);
+    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 9 => '0') & en_reg & std_logic_vector(cs_high_reg);
     ack_b_o    <= ack_b_reg;
     err_b_o    <= err_b_reg;
     stall_b_o  <= stall_b_reg;
     dat_b_o    <= rx_data_i(7 downto 0) & rx_data_i(15 downto 8) & rx_data_i(23 downto 16) & rx_data_i(31 downto 24);
+    en_o       <= en_reg;
     tx_valid_o <= tx_valid_reg;
     tx_data_o  <= CMD_READ & adr_reg & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
     tx_bits_o  <= std_logic_vector(to_unsigned(SPI_WIDTH, SPI_CNT_BITS));
