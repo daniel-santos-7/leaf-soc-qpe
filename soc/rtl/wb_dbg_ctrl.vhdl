@@ -127,6 +127,8 @@ begin
                             elsif rx_empty = '0' then
                                 state_reg    <= S_RESP;
                                 tx_valid_reg <= '1';
+                                ack_reg      <= '0';
+                                err_reg      <= '1';
                             end if;
                         end if;
                     when S_READ =>
