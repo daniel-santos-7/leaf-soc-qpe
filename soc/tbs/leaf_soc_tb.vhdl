@@ -37,7 +37,6 @@ architecture tb of leaf_soc_tb is
     signal mosi_oe : std_logic;
     signal miso_o  : std_logic;
     signal miso_oe : std_logic;
-    signal dbg     : std_logic;
 
     signal pad_sclk   : std_logic;
     signal pad_cs_n   : std_logic;
@@ -94,7 +93,6 @@ begin
         miso_i  => pad_miso,
         miso_o  => miso_o,
         miso_oe => miso_oe,
-        dbg     => dbg,
         gpio_i  => gpio_i,
         gpio_o  => gpio_o,
         gpio_oe => gpio_oe,
@@ -106,7 +104,7 @@ begin
     pad_cs_n   <= cs_n_o when cs_n_oe = '1' else dbg_cs_n;
     pad_mosi   <= mosi_o when mosi_oe = '1' else dbg_mosi;
     pad_miso   <= miso_o when miso_oe = '1' else flash_miso;
-    flash_cs_n <= pad_cs_n when dbg = '0' else '1';
+    flash_cs_n <= pad_cs_n when cs_n_oe = '1' else '1';
 
     gpio_pad_proc: process(gpio_o, gpio_oe)
     begin
@@ -252,7 +250,6 @@ begin
         dbg_sclk <= '0';
         dbg_cs_n <= '1';
         dbg_mosi <= '0';
-        dbg      <= '0';
         dac_sel  <= '0';
         rst_n    <= '0';
         rx       <= '1';
@@ -290,7 +287,6 @@ begin
         assert active = '1' or (sig_i = (sig_i'range => '0') and sig_q = (sig_q'range => '0')) report "pulse generator not back on sig_i/sig_q" severity failure;
 
         if DBG_TEST then
-            dbg <= '1';
             dbg_wait(4);
             dbg_cmd(x"0000000A", x"00000000");
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
@@ -344,7 +340,6 @@ begin
             assert dbg_stat = x"D0000000" report "DBG: RAM0 read faulted" severity failure;
 
             dbg_cmd(x"00000002", x"00000000");
-            dbg <= '0';
             dbg_wait(512);
             uart_transmit(rx, RAM_JUMP_CMD);
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
