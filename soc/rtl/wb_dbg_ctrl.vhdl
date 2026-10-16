@@ -45,7 +45,7 @@ architecture rtl of wb_dbg_ctrl is
     constant SUB_HALT : std_logic_vector(1 downto 0) := "01";
     constant SUB_ID   : std_logic_vector(1 downto 0) := "10";
 
-    type state_t is (S_IDLE, S_READ, S_WRITE, S_SEND, S_BUSY, S_CTRL, S_RESP);
+    type state_t is (S_INIT, S_IDLE, S_READ, S_WRITE, S_SEND, S_BUSY, S_CTRL, S_RESP);
 
     signal state_reg    : state_t;
     signal ready_reg    : std_logic;
@@ -81,9 +81,9 @@ begin
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                state_reg    <= S_RESP;
+                state_reg    <= S_INIT;
                 ready_reg    <= '1';
-                tx_valid_reg <= '1';
+                tx_valid_reg <= '0';
                 halt_reg     <= '0';
                 ack_reg      <= '0';
                 err_reg      <= '0';
@@ -95,6 +95,9 @@ begin
                 dat_reg      <= (others => '0');
             else
                 case state_reg is
+                    when S_INIT =>
+                        state_reg    <= S_RESP;
+                        tx_valid_reg <= '1';
                     when S_IDLE =>
                         if rx_valid_i = '1' then
                             if rx_full = '1' then
