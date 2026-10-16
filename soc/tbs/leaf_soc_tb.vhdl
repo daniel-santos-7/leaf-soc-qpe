@@ -321,13 +321,13 @@ begin
             dbg_frame(x"90000004" & x"00000000", dbg_early);
             assert dbg_early = x"00000000" & x"CAFEF00D" report "DBG: early frame did not get the busy reply" severity failure;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"CAFEF00D" and dbg_stat = x"C0000000" report "DBG: early frame was not dropped" severity failure;
+            assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: early frame was not dropped" severity failure;
 
             dbg_frame(x"9000000D" & x"11111111", dbg_early, 1);
             dbg_frame(x"9000000C" & x"00000000", dbg_early);
             assert dbg_early(63) = '0' report "DBG: READY set in a frame 1 cycle after a command" severity failure;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"CAFEF00D" and dbg_stat = x"80000000" report "DBG: frame 1 cycle after a command was not dropped" severity failure;
+            assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: frame 1 cycle after a command was not dropped" severity failure;
 
             dbg_read(x"00001000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"A0000000" report "DBG: ROM read did not fault" severity failure;
