@@ -168,11 +168,13 @@ architecture rtl of leaf_soc is
     signal soc_spi_rx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_spi_rx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_spi_rx_valid : std_logic;
+    signal soc_spi_rx_ready : std_logic;
 
     signal soc_dbg_tx_valid : std_logic;
     signal soc_dbg_tx_ready : std_logic;
     signal soc_dbg_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_dbg_rx_valid : std_logic;
+    signal soc_dbg_rx_ready : std_logic;
 
     signal soc_dbg_cyc   : std_logic;
     signal soc_dbg_stb   : std_logic;
@@ -503,6 +505,7 @@ begin
     soc_dbg_tx_ready <= soc_spi_tx_ready and not soc_spi_role_ack;
     soc_xip_rx_valid <= soc_spi_rx_valid and soc_spi_role_ack;
     soc_dbg_rx_valid <= soc_spi_rx_valid and not soc_spi_role_ack;
+    soc_spi_rx_ready <= '1' when soc_spi_role_ack = '1' else soc_dbg_rx_ready;
 
     soc_spi: entity work.spi_port generic map (
         SCK_DIV  => XIP_SCK_DIV,
@@ -519,7 +522,7 @@ begin
         tx_valid_i => soc_spi_tx_valid,
         tx_data_i  => soc_spi_tx_data,
         tx_bits_i  => soc_xip_tx_bits,
-        rx_ready_i => '1',
+        rx_ready_i => soc_spi_rx_ready,
         role_ack_o => soc_spi_role_ack,
         sclk_o     => sclk_o,
         sclk_oe    => sclk_oe,
@@ -541,6 +544,7 @@ begin
         rx_data_i  => soc_spi_rx_data,
         rx_bits_i  => soc_spi_rx_bits,
         rx_valid_i => soc_dbg_rx_valid,
+        rx_ready_o => soc_dbg_rx_ready,
         tx_valid_o => soc_dbg_tx_valid,
         tx_ready_i => soc_dbg_tx_ready,
         tx_data_o  => soc_dbg_tx_data,

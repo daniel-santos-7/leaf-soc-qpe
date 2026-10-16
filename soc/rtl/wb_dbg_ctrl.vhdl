@@ -17,6 +17,7 @@ entity wb_dbg_ctrl is
         rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
         rx_bits_i  : in  std_logic_vector(SPI_CNT_BITS-1 downto 0);
         rx_valid_i : in  std_logic;
+        rx_ready_o : out std_logic;
         tx_valid_o : out std_logic;
         tx_ready_i : in  std_logic;
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
@@ -190,6 +191,7 @@ begin
 
     status <= ready_reg & ack_reg & err_reg & halt_reg & (SOC_DATA_WIDTH-5 downto 0 => '0');
 
+    rx_ready_o <= '0' when state_reg = S_IDLE and rx_empty = '0' else '1';
     tx_valid_o <= tx_valid_reg;
     tx_data_o  <= status & resp_reg;
     cyc_o      <= cyc_reg;
