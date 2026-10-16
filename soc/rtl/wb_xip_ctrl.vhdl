@@ -7,87 +7,177 @@
 
 library IEEE;
 use IEEE.std_logic_1164.all;
+use IEEE.numeric_std.all;
 use work.leaf_soc_pkg.all;
 
 entity wb_xip_ctrl is
+    generic (
+        CS_HIGH_CYCLES : positive := 2
+    );
     port (
-        clk_i     : in  std_logic;
-        rst_i     : in  std_logic;
-        cyc_i     : in  std_logic;
-        stb_i     : in  std_logic;
-        adr_i     : in  std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
-        ack_o     : out std_logic;
-        dat_o     : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
-        spi_clk   : out std_logic;
-        spi_mosi  : out std_logic;
-        spi_miso  : in  std_logic;
-        spi_cs_n  : out std_logic
+        clk_i      : in  std_logic;
+        rst_i      : in  std_logic;
+        cyc_a_i    : in  std_logic;
+        stb_a_i    : in  std_logic;
+        we_a_i     : in  std_logic;
+        sel_a_i    : in  std_logic_vector(3 downto 0);
+        adr_a_i    : in  std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+        dat_a_i    : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        ack_a_o    : out std_logic;
+        err_a_o    : out std_logic;
+        stall_a_o  : out std_logic;
+        dat_a_o    : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        cyc_b_i    : in  std_logic;
+        stb_b_i    : in  std_logic;
+        adr_b_i    : in  std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+        ack_b_o    : out std_logic;
+        err_b_o    : out std_logic;
+        stall_b_o  : out std_logic;
+        dat_b_o    : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
+        dis_i      : in  std_logic;
+        tx_valid_o : out std_logic;
+        tx_ready_i : in  std_logic;
+        tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
+        tx_bits_o  : out std_logic_vector(SPI_CNT_BITS-1 downto 0);
+        rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
+        rx_valid_i : in  std_logic
     );
 end entity wb_xip_ctrl;
 
 architecture rtl of wb_xip_ctrl is
 
-    type state_t is (IDLE, SHIFT, DONE);
+    constant CMD_READ : std_logic_vector(7 downto 0) := x"03";
 
-    signal state    : state_t;
-    signal sck      : std_logic;
-    signal bit_cnt  : natural range 0 to 63;
-    signal cmd_word : std_logic_vector(31 downto 0);
-    signal tx_shift : std_logic_vector(31 downto 0);
-    signal rx_shift : std_logic_vector(31 downto 0);
+    type state_t is (IDLE, SEND, BUSY, HOLD);
+
+    signal state_reg    : state_t;
+    signal adr_reg      : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
+    signal ack_b_reg    : std_logic;
+    signal err_b_reg    : std_logic;
+    signal stall_b_reg  : std_logic;
+    signal tx_valid_reg : std_logic;
+    signal hold_cnt_reg : unsigned(7 downto 0);
+
+    signal ack_a_reg    : std_logic;
+    signal err_a_reg    : std_logic;
+    signal cs_high_reg  : unsigned(7 downto 0);
+
+    signal req_a        : std_logic;
+    signal hit_a        : std_logic;
+    signal req_b        : std_logic;
+    signal hold_end     : std_logic;
 
 begin
 
-    cmd_word <= x"03" & adr_i & "00";
+    assert CS_HIGH_CYCLES <= 255 report "XIP: CS_HIGH_CYCLES must fit in 8 bits." severity failure;
 
-    xip_proc: process(clk_i)
+    req_a <= cyc_a_i and stb_a_i;
+    hit_a <= '1' when adr_a_i = (XIP_ADDR_WIDTH-1 downto 2 => '1') else '0';
+    req_b <= cyc_b_i and stb_b_i;
+
+    hold_end <= '1' when hold_cnt_reg >= cs_high_reg else '0';
+
+    cfg_proc: process(clk_i)
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                state    <= IDLE;
-                sck      <= '0';
-                bit_cnt  <= 0;
-                tx_shift <= (others => '0');
-                rx_shift <= (others => '0');
-                spi_cs_n <= '1';
-                spi_mosi <= '0';
+                ack_a_reg   <= '0';
+                err_a_reg   <= '0';
+                cs_high_reg <= to_unsigned(CS_HIGH_CYCLES, 8);
+            elsif req_a = '1' then
+                if hit_a = '1' then
+                    ack_a_reg <= '1';
+                    err_a_reg <= '0';
+                    if we_a_i = '1' and sel_a_i(0) = '1' then
+                        cs_high_reg <= unsigned(dat_a_i(7 downto 0));
+                    end if;
+                else
+                    ack_a_reg <= '0';
+                    err_a_reg <= '1';
+                end if;
             else
-                case state is
-                    when IDLE =>
-                        if cyc_i = '1' and stb_i = '1' then
-                            spi_cs_n <= '0';
-                            spi_mosi <= cmd_word(31);
-                            tx_shift <= cmd_word(30 downto 0) & '0';
-                            bit_cnt  <= 0;
-                            state    <= SHIFT;
-                        end if;
+                ack_a_reg <= '0';
+                err_a_reg <= '0';
+            end if;
+        end if;
+    end process cfg_proc;
 
-                    when SHIFT =>
-                        if sck = '0' then
-                            sck      <= '1';
-                            rx_shift <= rx_shift(30 downto 0) & spi_miso;
-                        else
-                            sck <= '0';
-                            if bit_cnt = 63 then
-                                spi_cs_n <= '1';
-                                spi_mosi <= '0';
-                                state    <= DONE;
+    fsm_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                state_reg    <= IDLE;
+                adr_reg      <= (others => '0');
+                ack_b_reg    <= '0';
+                err_b_reg    <= '0';
+                stall_b_reg  <= '0';
+                tx_valid_reg <= '0';
+            else
+                case state_reg is
+                    when IDLE =>
+                        ack_b_reg <= '0';
+                        if req_b = '1' then
+                            if dis_i = '0' then
+                                state_reg    <= SEND;
+                                adr_reg      <= adr_b_i;
+                                err_b_reg    <= '0';
+                                stall_b_reg  <= '1';
+                                tx_valid_reg <= '1';
                             else
-                                spi_mosi <= tx_shift(31);
-                                tx_shift <= tx_shift(30 downto 0) & '0';
-                                bit_cnt  <= bit_cnt + 1;
+                                err_b_reg <= '1';
+                            end if;
+                        else
+                            err_b_reg <= '0';
+                        end if;
+                    when SEND =>
+                        if tx_ready_i = '1' then
+                            state_reg    <= BUSY;
+                            tx_valid_reg <= '0';
+                        end if;
+                    when BUSY =>
+                        if rx_valid_i = '1' then
+                            ack_b_reg <= '1';
+                            if cs_high_reg > 4 then
+                                state_reg <= HOLD;
+                            else
+                                state_reg   <= IDLE;
+                                stall_b_reg <= '0';
                             end if;
                         end if;
-
-                    when DONE =>
-                        state <= IDLE;
+                    when HOLD =>
+                        ack_b_reg <= '0';
+                        if hold_end = '1' then
+                            state_reg   <= IDLE;
+                            stall_b_reg <= '0';
+                        end if;
                 end case;
             end if;
         end if;
-    end process xip_proc;
+    end process fsm_proc;
 
-    spi_clk <= sck;
-    dat_o   <= rx_shift(7 downto 0) & rx_shift(15 downto 8) & rx_shift(23 downto 16) & rx_shift(31 downto 24);
-    ack_o   <= '1' when state = DONE else '0';
+    hold_proc: process(clk_i)
+    begin
+        if rising_edge(clk_i) then
+            if rst_i = '1' then
+                hold_cnt_reg <= to_unsigned(5, 8);
+            elsif state_reg = HOLD then
+                hold_cnt_reg <= hold_cnt_reg + 1;
+            else
+                hold_cnt_reg <= to_unsigned(5, 8);
+            end if;
+        end if;
+    end process hold_proc;
+
+    ack_a_o    <= ack_a_reg;
+    err_a_o    <= err_a_reg;
+    stall_a_o  <= '0';
+    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 8 => '0') & std_logic_vector(cs_high_reg);
+    ack_b_o    <= ack_b_reg;
+    err_b_o    <= err_b_reg;
+    stall_b_o  <= stall_b_reg;
+    dat_b_o    <= rx_data_i(7 downto 0) & rx_data_i(15 downto 8) & rx_data_i(23 downto 16) & rx_data_i(31 downto 24);
+    tx_valid_o <= tx_valid_reg;
+    tx_data_o  <= CMD_READ & adr_reg & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
+    tx_bits_o  <= std_logic_vector(to_unsigned(SPI_WIDTH, SPI_CNT_BITS));
 
 end architecture rtl;

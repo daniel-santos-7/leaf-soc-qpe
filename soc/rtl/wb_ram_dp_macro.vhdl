@@ -16,8 +16,8 @@ entity wb_ram_dp_macro is
         MACRO_ADDR_BITS : natural := 11
     );
     port (
-        clk_i   : in  std_logic;
-        rst_i   : in  std_logic;
+        clk_i : in  std_logic;
+        rst_i : in  std_logic;
 
         dat_a_i : in  std_logic_vector(31 downto 0);
         cyc_a_i : in  std_logic;

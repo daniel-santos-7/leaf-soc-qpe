@@ -20,13 +20,20 @@
 .equ AMP_READOUT,    0x00000C00
 .equ ENV_READOUT,    0x0083126F
 
-.include "../common/qp.inc"
+.include "../common/qpe.inc"
 
 .section .text
 .globl _start
 
 _start:
     li sp, RAM_TOP
+
+    qpe.ftw   8
+    qpe.pow   9
+    qpe.amp   18
+    qpe.drag  20
+    qpe.env   19
+    qpe.delay 21
 
     li s0, FTW_PI
     li s1, 0
@@ -147,7 +154,7 @@ cmd_status:
 
     la a0, active_lbl
     call uart_print_str
-    csrr t0, WG_TRIG
+    csrr t0, QPE_CSR_TRIG
     andi t0, t0, 1
     mv a0, t0
     call uart_print_dec
@@ -164,14 +171,8 @@ cmd_help:
 // fire_pulse
 // --------------------------------------------------
 fire_pulse:
-    qp.ftw   s0
-    qp.pow   s1
-    qp.amp   s2
-    qp.drag  s4
-    qp.env   s3
-    qp.delay s5
-    qp.trigger
-1:  csrr t0, WG_TRIG
+    qpe.trigger
+1:  csrr t0, QPE_CSR_TRIG
     andi t0, t0, 1
     bnez t0, 1b
     la a0, ok_str

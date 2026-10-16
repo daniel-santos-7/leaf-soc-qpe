@@ -1,26 +1,34 @@
+----------------------------------------------------------------------
+-- Leaf project
+-- developed by: Daniel Santos
+-- module: system controller (clock and reset)
+-- 2026
+----------------------------------------------------------------------
+
 library IEEE;
 use IEEE.std_logic_1164.all;
-use IEEE.numeric_std.all;
 
 entity wb_syscon is
     port (
         clk   : in  std_logic;
-        rst   : in  std_logic;
+        rst_n : in  std_logic;
         clk_o : out std_logic;
         rst_o : out std_logic
     );
 end entity wb_syscon;
 
 architecture rtl of wb_syscon is
-    
+
     signal rst_sync : std_logic_vector(1 downto 0);
 
 begin
-    
-    rst_sync_proc: process(clk)
+
+    rst_sync_proc: process(clk, rst_n)
     begin
-        if rising_edge(clk) then
-            rst_sync <= rst_sync(0) & not rst;
+        if rst_n = '0' then
+            rst_sync <= (others => '1');
+        elsif rising_edge(clk) then
+            rst_sync <= rst_sync(0) & '0';
         end if;
     end process rst_sync_proc;
 
