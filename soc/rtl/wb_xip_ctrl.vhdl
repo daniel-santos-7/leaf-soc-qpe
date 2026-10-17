@@ -48,7 +48,7 @@ architecture rtl of wb_xip_ctrl is
 
     constant CMD_READ : std_logic_vector(7 downto 0) := x"03";
 
-    type state_t is (DIS, ERR, IDLE, SEND, BUSY, ACK, HOLD);
+    type state_t is (IDLE, ERR, SEND, BUSY, ACK, HOLD);
 
     signal state_reg    : state_t;
     signal adr_reg      : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
@@ -111,7 +111,7 @@ begin
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                state_reg    <= DIS;
+                state_reg    <= IDLE;
                 adr_reg      <= (others => '0');
                 ack_b_reg    <= '0';
                 err_b_reg    <= '0';
@@ -119,27 +119,23 @@ begin
                 tx_valid_reg <= '0';
             else
                 case state_reg is
-                    when DIS =>
-                        if req_b = '1' then
-                            state_reg   <= ERR;
-                            err_b_reg   <= '1';
-                            stall_b_reg <= '1';
-                        elsif en_reg = '1' then
-                            state_reg <= IDLE;
-                        end if;
-                    when ERR =>
-                        state_reg   <= DIS;
-                        err_b_reg   <= '0';
-                        stall_b_reg <= '0';
                     when IDLE =>
                         if req_b = '1' then
-                            state_reg    <= SEND;
-                            adr_reg      <= adr_b_i;
-                            stall_b_reg  <= '1';
-                            tx_valid_reg <= '1';
-                        elsif en_reg = '0' then
-                            state_reg <= DIS;
+                            if en_reg = '1' then
+                                state_reg    <= SEND;
+                                adr_reg      <= adr_b_i;
+                                stall_b_reg  <= '1';
+                                tx_valid_reg <= '1';
+                            else
+                                state_reg   <= ERR;
+                                err_b_reg   <= '1';
+                                stall_b_reg <= '1';
+                            end if;
                         end if;
+                    when ERR =>
+                        state_reg   <= IDLE;
+                        err_b_reg   <= '0';
+                        stall_b_reg <= '0';
                     when SEND =>
                         if tx_ready_i = '1' then
                             state_reg    <= BUSY;
