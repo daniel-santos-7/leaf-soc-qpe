@@ -33,7 +33,6 @@ entity leaf_soc is
         miso_i  : in  std_logic;
         miso_o  : out std_logic;
         miso_oe : out std_logic;
-        dbg     : in  std_logic;
         gpio_i  : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_o  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_oe : out std_logic_vector(GPIO_WIDTH-1 downto 0);
@@ -157,9 +156,9 @@ architecture rtl of leaf_soc is
     signal soc_xip_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_xip_tx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_xip_rx_valid : std_logic;
-    signal soc_xip_dis      : std_logic;
+    signal soc_xip_rx_ready : std_logic;
+    signal soc_xip_en       : std_logic;
 
-    signal soc_spi_dbg_reg  : std_logic_vector(1 downto 0);
     signal soc_spi_role_req : std_logic;
     signal soc_spi_role_ack : std_logic;
     signal soc_spi_tx_valid : std_logic;
@@ -476,36 +475,36 @@ begin
         err_b_o    => soc_xip_err,
         stall_b_o  => soc_xip_stall,
         dat_b_o    => soc_xip_dat,
-        dis_i      => soc_xip_dis,
+        en_o       => soc_xip_en,
         tx_valid_o => soc_xip_tx_valid,
         tx_ready_i => soc_xip_tx_ready,
         tx_data_o  => soc_xip_tx_data,
         tx_bits_o  => soc_xip_tx_bits,
         rx_data_i  => soc_spi_rx_data,
-        rx_valid_i => soc_xip_rx_valid
+        rx_valid_i => soc_xip_rx_valid,
+        rx_ready_o => soc_xip_rx_ready
     );
 
-    soc_spi_dbg_proc: process(soc_syscon_clk)
-    begin
-        if rising_edge(soc_syscon_clk) then
-            if soc_syscon_rst = '1' then
-                soc_spi_dbg_reg <= (others => '0');
-            else
-                soc_spi_dbg_reg <= soc_spi_dbg_reg(0) & dbg;
-            end if;
-        end if;
-    end process soc_spi_dbg_proc;
-
-    soc_spi_role_req <= not soc_spi_dbg_reg(1);
-    soc_xip_dis      <= soc_spi_dbg_reg(1) or not soc_spi_role_ack;
-
-    soc_spi_tx_valid <= soc_xip_tx_valid when soc_spi_role_ack = '1' else soc_dbg_tx_valid;
-    soc_spi_tx_data  <= soc_xip_tx_data  when soc_spi_role_ack = '1' else soc_dbg_tx_data;
-    soc_xip_tx_ready <= soc_spi_tx_ready and soc_spi_role_ack;
-    soc_dbg_tx_ready <= soc_spi_tx_ready and not soc_spi_role_ack;
-    soc_xip_rx_valid <= soc_spi_rx_valid and soc_spi_role_ack;
-    soc_dbg_rx_valid <= soc_spi_rx_valid and not soc_spi_role_ack;
-    soc_spi_rx_ready <= '1' when soc_spi_role_ack = '1' else soc_dbg_rx_ready;
+    soc_spi_mux: entity work.spi_mux port map (
+        xip_en_i       => soc_xip_en,
+        spi_role_ack_i => soc_spi_role_ack,
+        spi_tx_ready_i => soc_spi_tx_ready,
+        spi_rx_valid_i => soc_spi_rx_valid,
+        xip_tx_valid_i => soc_xip_tx_valid,
+        xip_tx_data_i  => soc_xip_tx_data,
+        xip_rx_ready_i => soc_xip_rx_ready,
+        dbg_tx_valid_i => soc_dbg_tx_valid,
+        dbg_tx_data_i  => soc_dbg_tx_data,
+        dbg_rx_ready_i => soc_dbg_rx_ready,
+        spi_role_req_o => soc_spi_role_req,
+        spi_tx_valid_o => soc_spi_tx_valid,
+        spi_tx_data_o  => soc_spi_tx_data,
+        spi_rx_ready_o => soc_spi_rx_ready,
+        xip_tx_ready_o => soc_xip_tx_ready,
+        xip_rx_valid_o => soc_xip_rx_valid,
+        dbg_tx_ready_o => soc_dbg_tx_ready,
+        dbg_rx_valid_o => soc_dbg_rx_valid
+    );
 
     soc_spi: entity work.spi_port generic map (
         SCK_DIV  => XIP_SCK_DIV,

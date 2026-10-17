@@ -3,6 +3,8 @@
 
 #define RAM0_BASE  0x80000000u
 #define XIP_BASE   0x20000000u
+#define XIP_CFG    (*(volatile uint32_t *)0x20FFFFFCu)
+#define XIP_EN     0x00000100u
 
 __attribute__((noinline)) static uint32_t scramble(uint32_t n) {
 	uint32_t s = 0x12345678u, i;
@@ -15,6 +17,7 @@ int main(void) {
 	uint32_t (*xip_scramble)(uint32_t) =
 		(uint32_t (*)(uint32_t))((uintptr_t)scramble - RAM0_BASE + XIP_BASE);
 	uint32_t ram = scramble(10);
+	XIP_CFG |= XIP_EN;
 	uint32_t xip = xip_scramble(10);
 
 	printf("XIP ram=%08lx xip=%08lx %s\n", (unsigned long)ram, (unsigned long)xip,
