@@ -156,6 +156,7 @@ architecture rtl of leaf_soc is
     signal soc_xip_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_xip_tx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_xip_rx_valid : std_logic;
+    signal soc_xip_rx_ready : std_logic;
     signal soc_xip_en       : std_logic;
 
     signal soc_spi_role_req : std_logic;
@@ -480,7 +481,8 @@ begin
         tx_data_o  => soc_xip_tx_data,
         tx_bits_o  => soc_xip_tx_bits,
         rx_data_i  => soc_spi_rx_data,
-        rx_valid_i => soc_xip_rx_valid
+        rx_valid_i => soc_xip_rx_valid,
+        rx_ready_o => soc_xip_rx_ready
     );
 
     soc_spi_mux: entity work.spi_mux port map (
@@ -490,6 +492,7 @@ begin
         spi_rx_valid_i => soc_spi_rx_valid,
         xip_tx_valid_i => soc_xip_tx_valid,
         xip_tx_data_i  => soc_xip_tx_data,
+        xip_rx_ready_i => soc_xip_rx_ready,
         dbg_tx_valid_i => soc_dbg_tx_valid,
         dbg_tx_data_i  => soc_dbg_tx_data,
         dbg_rx_ready_i => soc_dbg_rx_ready,
