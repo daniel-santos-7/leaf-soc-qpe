@@ -48,7 +48,7 @@ architecture rtl of wb_xip_ctrl is
 
     constant CMD_READ : std_logic_vector(7 downto 0) := x"03";
 
-    type state_t is (DIS, IDLE, SEND, BUSY, ACK, HOLD);
+    type state_t is (DIS, ERR, IDLE, SEND, BUSY, ACK, HOLD);
 
     signal state_reg    : state_t;
     signal adr_reg      : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
@@ -121,13 +121,16 @@ begin
                 case state_reg is
                     when DIS =>
                         if req_b = '1' then
-                            err_b_reg <= '1';
+                            state_reg   <= ERR;
+                            err_b_reg   <= '1';
+                            stall_b_reg <= '1';
                         elsif en_reg = '1' then
                             state_reg <= IDLE;
-                            err_b_reg <= '0';
-                        else
-                            err_b_reg <= '0';
                         end if;
+                    when ERR =>
+                        state_reg   <= DIS;
+                        err_b_reg   <= '0';
+                        stall_b_reg <= '0';
                     when IDLE =>
                         if req_b = '1' then
                             state_reg    <= SEND;
