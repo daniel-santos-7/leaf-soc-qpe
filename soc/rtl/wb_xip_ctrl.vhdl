@@ -48,6 +48,7 @@ end entity wb_xip_ctrl;
 architecture rtl of wb_xip_ctrl is
 
     constant CMD_READ : std_logic_vector(7 downto 0) := x"03";
+    constant CFG_ADR  : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2) := (others => '1');
 
     type state_t is (IDLE, ERR, SEND, BUSY, ACK, HOLD);
 
@@ -75,7 +76,7 @@ begin
     assert CS_HIGH_CYCLES <= 255 report "XIP: CS_HIGH_CYCLES must fit in 8 bits." severity failure;
 
     req_a <= cyc_a_i and stb_a_i;
-    hit_a <= '1' when adr_a_i = (XIP_ADDR_WIDTH-1 downto 2 => '1') else '0';
+    hit_a <= '1' when adr_a_i = CFG_ADR else '0';
     req_b <= cyc_b_i and stb_b_i;
 
     hold_end <= '1' when hold_cnt_reg >= cs_high_reg else '0';
