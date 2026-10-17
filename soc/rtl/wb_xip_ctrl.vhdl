@@ -48,7 +48,7 @@ architecture rtl of wb_xip_ctrl is
 
     constant CMD_READ : std_logic_vector(7 downto 0) := x"03";
 
-    type state_t is (IDLE, SEND, BUSY, HOLD);
+    type state_t is (DIS, IDLE, SEND, BUSY, ACK, HOLD);
 
     signal state_reg    : state_t;
     signal adr_reg      : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
@@ -111,7 +111,7 @@ begin
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                state_reg    <= IDLE;
+                state_reg    <= DIS;
                 adr_reg      <= (others => '0');
                 ack_b_reg    <= '0';
                 err_b_reg    <= '0';
@@ -119,20 +119,23 @@ begin
                 tx_valid_reg <= '0';
             else
                 case state_reg is
-                    when IDLE =>
-                        ack_b_reg <= '0';
+                    when DIS =>
                         if req_b = '1' then
-                            if en_reg = '1' then
-                                state_reg    <= SEND;
-                                adr_reg      <= adr_b_i;
-                                err_b_reg    <= '0';
-                                stall_b_reg  <= '1';
-                                tx_valid_reg <= '1';
-                            else
-                                err_b_reg <= '1';
-                            end if;
+                            err_b_reg <= '1';
+                        elsif en_reg = '1' then
+                            state_reg <= IDLE;
+                            err_b_reg <= '0';
                         else
                             err_b_reg <= '0';
+                        end if;
+                    when IDLE =>
+                        if req_b = '1' then
+                            state_reg    <= SEND;
+                            adr_reg      <= adr_b_i;
+                            stall_b_reg  <= '1';
+                            tx_valid_reg <= '1';
+                        elsif en_reg = '0' then
+                            state_reg <= DIS;
                         end if;
                     when SEND =>
                         if tx_ready_i = '1' then
@@ -141,16 +144,18 @@ begin
                         end if;
                     when BUSY =>
                         if rx_valid_i = '1' then
+                            state_reg <= ACK;
                             ack_b_reg <= '1';
-                            if cs_high_reg > 4 then
-                                state_reg <= HOLD;
-                            else
-                                state_reg   <= IDLE;
-                                stall_b_reg <= '0';
-                            end if;
+                        end if;
+                    when ACK =>
+                        ack_b_reg <= '0';
+                        if cs_high_reg > 5 then
+                            state_reg <= HOLD;
+                        else
+                            state_reg   <= IDLE;
+                            stall_b_reg <= '0';
                         end if;
                     when HOLD =>
-                        ack_b_reg <= '0';
                         if hold_end = '1' then
                             state_reg   <= IDLE;
                             stall_b_reg <= '0';
@@ -164,11 +169,11 @@ begin
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                hold_cnt_reg <= to_unsigned(5, 8);
+                hold_cnt_reg <= to_unsigned(6, 8);
             elsif state_reg = HOLD then
                 hold_cnt_reg <= hold_cnt_reg + 1;
             else
-                hold_cnt_reg <= to_unsigned(5, 8);
+                hold_cnt_reg <= to_unsigned(6, 8);
             end if;
         end if;
     end process hold_proc;
