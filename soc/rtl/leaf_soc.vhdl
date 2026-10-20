@@ -156,7 +156,6 @@ architecture rtl of leaf_soc is
     signal soc_xip_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_xip_tx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_xip_rx_valid : std_logic;
-    signal soc_xip_rx_ready : std_logic;
     signal soc_xip_en       : std_logic;
 
     signal soc_spi_role_req : std_logic;
@@ -167,13 +166,11 @@ architecture rtl of leaf_soc is
     signal soc_spi_rx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_spi_rx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_spi_rx_valid : std_logic;
-    signal soc_spi_rx_ready : std_logic;
 
     signal soc_dbg_tx_valid : std_logic;
     signal soc_dbg_tx_ready : std_logic;
     signal soc_dbg_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_dbg_rx_valid : std_logic;
-    signal soc_dbg_rx_ready : std_logic;
 
     signal soc_dbg_cyc   : std_logic;
     signal soc_dbg_stb   : std_logic;
@@ -481,8 +478,7 @@ begin
         tx_data_o  => soc_xip_tx_data,
         tx_bits_o  => soc_xip_tx_bits,
         rx_data_i  => soc_spi_rx_data,
-        rx_valid_i => soc_xip_rx_valid,
-        rx_ready_o => soc_xip_rx_ready
+        rx_valid_i => soc_xip_rx_valid
     );
 
     soc_spi_mux: entity work.spi_mux port map (
@@ -492,14 +488,11 @@ begin
         spi_rx_valid_i => soc_spi_rx_valid,
         xip_tx_valid_i => soc_xip_tx_valid,
         xip_tx_data_i  => soc_xip_tx_data,
-        xip_rx_ready_i => soc_xip_rx_ready,
         dbg_tx_valid_i => soc_dbg_tx_valid,
         dbg_tx_data_i  => soc_dbg_tx_data,
-        dbg_rx_ready_i => soc_dbg_rx_ready,
         spi_role_req_o => soc_spi_role_req,
         spi_tx_valid_o => soc_spi_tx_valid,
         spi_tx_data_o  => soc_spi_tx_data,
-        spi_rx_ready_o => soc_spi_rx_ready,
         xip_tx_ready_o => soc_xip_tx_ready,
         xip_rx_valid_o => soc_xip_rx_valid,
         dbg_tx_ready_o => soc_dbg_tx_ready,
@@ -507,13 +500,14 @@ begin
     );
 
     soc_spi: entity work.spi_port generic map (
-        SCK_DIV  => XIP_SCK_DIV,
+        DIV_BITS => SPI_DIV_BITS,
         WIDTH    => SPI_WIDTH,
         CNT_BITS => SPI_CNT_BITS
     ) port map (
         clk_i      => soc_syscon_clk,
         rst_i      => soc_syscon_rst,
         role_req_i => soc_spi_role_req,
+        sck_div_i  => XIP_SCK_DIV_VEC,
         sclk_i     => sclk_i,
         cs_n_i     => cs_n_i,
         mosi_i     => mosi_i,
@@ -521,7 +515,6 @@ begin
         tx_valid_i => soc_spi_tx_valid,
         tx_data_i  => soc_spi_tx_data,
         tx_bits_i  => soc_xip_tx_bits,
-        rx_ready_i => soc_spi_rx_ready,
         role_ack_o => soc_spi_role_ack,
         sclk_o     => sclk_o,
         sclk_oe    => sclk_oe,
@@ -543,7 +536,6 @@ begin
         rx_data_i  => soc_spi_rx_data,
         rx_bits_i  => soc_spi_rx_bits,
         rx_valid_i => soc_dbg_rx_valid,
-        rx_ready_o => soc_dbg_rx_ready,
         tx_valid_o => soc_dbg_tx_valid,
         tx_ready_i => soc_dbg_tx_ready,
         tx_data_o  => soc_dbg_tx_data,

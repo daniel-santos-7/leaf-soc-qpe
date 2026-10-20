@@ -17,7 +17,6 @@ entity wb_dbg_ctrl is
         rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
         rx_bits_i  : in  std_logic_vector(SPI_CNT_BITS-1 downto 0);
         rx_valid_i : in  std_logic;
-        rx_ready_o : out std_logic;
         tx_valid_o : out std_logic;
         tx_ready_i : in  std_logic;
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
@@ -45,12 +44,11 @@ architecture rtl of wb_dbg_ctrl is
     constant SUB_HALT : std_logic_vector(1 downto 0) := "01";
     constant SUB_ID   : std_logic_vector(1 downto 0) := "10";
 
-    type state_t is (S_INIT, S_IDLE, S_READ, S_WRITE, S_SEND, S_BUSY, S_CTRL, S_INVALID, S_EMPTY, S_RESP);
+    type state_t is (S_INIT, S_IDLE, S_READ, S_WRITE, S_SEND, S_BUSY, S_CTRL, S_INVALID, S_RESP);
 
     signal state_reg    : state_t;
     signal ready_reg    : std_logic;
     signal tx_valid_reg : std_logic;
-    signal rx_ready_reg : std_logic;
     signal halt_reg     : std_logic;
     signal ack_reg      : std_logic;
     signal err_reg      : std_logic;
@@ -85,7 +83,6 @@ begin
                 state_reg    <= S_INIT;
                 ready_reg    <= '1';
                 tx_valid_reg <= '0';
-                rx_ready_reg <= '1';
                 halt_reg     <= '0';
                 ack_reg      <= '0';
                 err_reg      <= '0';
@@ -105,41 +102,32 @@ begin
                             if rx_full = '1' then
                                 case op is
                                     when OP_READ =>
-                                        state_reg    <= S_READ;
-                                        ready_reg    <= '0';
-                                        tx_valid_reg <= '1';
-                                        rx_ready_reg <= '1';
-                                        ack_reg      <= '0';
-                                        err_reg      <= '0';
+                                        state_reg <= S_READ;
+                                        ready_reg <= '0';
+                                        ack_reg   <= '0';
+                                        err_reg   <= '0';
                                     when OP_WRITE =>
-                                        state_reg    <= S_WRITE;
-                                        ready_reg    <= '0';
-                                        tx_valid_reg <= '1';
-                                        rx_ready_reg <= '1';
-                                        ack_reg      <= '0';
-                                        err_reg      <= '0';
+                                        state_reg <= S_WRITE;
+                                        ready_reg <= '0';
+                                        ack_reg   <= '0';
+                                        err_reg   <= '0';
                                     when OP_CTRL =>
-                                        state_reg    <= S_CTRL;
-                                        ready_reg    <= '0';
-                                        tx_valid_reg <= '1';
-                                        rx_ready_reg <= '1';
-                                        ack_reg      <= '0';
-                                        err_reg      <= '0';
+                                        state_reg <= S_CTRL;
+                                        ready_reg <= '0';
+                                        ack_reg   <= '0';
+                                        err_reg   <= '0';
                                     when others =>
                                         state_reg    <= S_RESP;
                                         tx_valid_reg <= '1';
-                                        rx_ready_reg <= '1';
                                 end case;
                             elsif rx_empty = '1' then
-                                state_reg    <= S_EMPTY;
-                                rx_ready_reg <= '1';
-                            else
-                                state_reg    <= S_INVALID;
-                                ready_reg    <= '0';
+                                state_reg    <= S_RESP;
                                 tx_valid_reg <= '1';
-                                rx_ready_reg <= '1';
-                                ack_reg      <= '0';
-                                err_reg      <= '0';
+                            else
+                                state_reg <= S_INVALID;
+                                ready_reg <= '0';
+                                ack_reg   <= '0';
+                                err_reg   <= '0';
                             end if;
                         end if;
                     when S_READ =>
@@ -161,12 +149,13 @@ begin
                         end if;
                     when S_BUSY =>
                         if (ack_i or err_i) = '1' then
-                            state_reg <= S_RESP;
-                            ready_reg <= '1';
-                            ack_reg   <= ack_i;
-                            err_reg   <= err_i;
-                            cyc_reg   <= '0';
-                            we_reg    <= '0';
+                            state_reg    <= S_RESP;
+                            ready_reg    <= '1';
+                            tx_valid_reg <= '1';
+                            ack_reg      <= ack_i;
+                            err_reg      <= err_i;
+                            cyc_reg      <= '0';
+                            we_reg       <= '0';
                             if we_reg = '0' and ack_i = '1' then
                                 resp_reg <= dat_i;
                             else
@@ -174,8 +163,9 @@ begin
                             end if;
                         end if;
                     when S_CTRL =>
-                        state_reg <= S_RESP;
-                        ready_reg <= '1';
+                        state_reg    <= S_RESP;
+                        ready_reg    <= '1';
+                        tx_valid_reg <= '1';
                         case sub is
                             when SUB_RUN =>
                                 ack_reg  <= '1';
@@ -192,17 +182,14 @@ begin
                                 err_reg  <= '1';
                         end case;
                     when S_INVALID =>
-                        state_reg <= S_RESP;
-                        ready_reg <= '1';
-                        err_reg   <= '1';
-                    when S_EMPTY =>
-                        state_reg    <= S_IDLE;
-                        rx_ready_reg <= '0';
+                        state_reg    <= S_RESP;
+                        ready_reg    <= '1';
+                        tx_valid_reg <= '1';
+                        err_reg      <= '1';
                     when S_RESP =>
                         if tx_ready_i = '1' then
                             state_reg    <= S_IDLE;
                             tx_valid_reg <= '0';
-                            rx_ready_reg <= '0';
                         end if;
                 end case;
             end if;
@@ -211,7 +198,6 @@ begin
 
     status <= ready_reg & ack_reg & err_reg & halt_reg & (SOC_DATA_WIDTH-5 downto 0 => '0');
 
-    rx_ready_o <= rx_ready_reg;
     tx_valid_o <= tx_valid_reg;
     tx_data_o  <= status & resp_reg;
     cyc_o      <= cyc_reg;
