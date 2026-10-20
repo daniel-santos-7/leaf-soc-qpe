@@ -7,7 +7,6 @@
 
 library IEEE;
 use IEEE.std_logic_1164.all;
-use IEEE.numeric_std.all;
 
 package leaf_soc_pkg is
 
@@ -40,8 +39,6 @@ package leaf_soc_pkg is
     constant SPI_WIDTH    : positive := 64;
     constant SPI_CNT_BITS : positive := 7;
     constant SPI_DIV_BITS : positive := 8;
-
-    constant XIP_SCK_DIV_VEC : std_logic_vector(SPI_DIV_BITS-1 downto 0) := std_logic_vector(to_unsigned(XIP_SCK_DIV-1, SPI_DIV_BITS));
 
     constant DBG_ID : std_logic_vector(SOC_DATA_WIDTH-1 downto 0) := x"4C454146";
 
