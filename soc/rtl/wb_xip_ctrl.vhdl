@@ -97,10 +97,10 @@ begin
                     ack_a_reg <= '1';
                     err_a_reg <= '0';
                     if we_a_i = '1' and sel_a_i(0) = '1' then
-                        cs_high_reg <= unsigned(dat_a_i(7 downto 0));
+                        en_reg <= dat_a_i(0);
                     end if;
                     if we_a_i = '1' and sel_a_i(1) = '1' then
-                        en_reg <= dat_a_i(8);
+                        cs_high_reg <= unsigned(dat_a_i(15 downto 8));
                     end if;
                     if we_a_i = '1' and sel_a_i(2) = '1' then
                         sck_div_reg <= dat_a_i(16+SPI_DIV_BITS-1 downto 16);
@@ -189,7 +189,7 @@ begin
     ack_a_o    <= ack_a_reg;
     err_a_o    <= err_a_reg;
     stall_a_o  <= '0';
-    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 16+SPI_DIV_BITS => '0') & sck_div_reg & "0000000" & en_reg & std_logic_vector(cs_high_reg);
+    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 16+SPI_DIV_BITS => '0') & sck_div_reg & std_logic_vector(cs_high_reg) & "0000000" & en_reg;
     ack_b_o    <= ack_b_reg;
     err_b_o    <= err_b_reg;
     stall_b_o  <= stall_b_reg;

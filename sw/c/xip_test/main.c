@@ -4,7 +4,7 @@
 #define RAM0_BASE  0x80000000u
 #define XIP_BASE   0x20000000u
 #define XIP_CFG    (*(volatile uint32_t *)0x20FFFFFCu)
-#define XIP_EN     0x00000100u
+#define XIP_EN     0x00000001u
 
 __attribute__((noinline)) static uint32_t scramble(uint32_t n) {
 	uint32_t s = 0x12345678u, i;
