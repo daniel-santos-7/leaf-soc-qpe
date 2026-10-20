@@ -40,8 +40,7 @@ entity wb_xip_ctrl is
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
         tx_bits_o  : out std_logic_vector(SPI_CNT_BITS-1 downto 0);
         rx_data_i  : in  std_logic_vector(SPI_WIDTH-1 downto 0);
-        rx_valid_i : in  std_logic;
-        rx_ready_o : out std_logic
+        rx_valid_i : in  std_logic
     );
 end entity wb_xip_ctrl;
 
@@ -58,7 +57,6 @@ architecture rtl of wb_xip_ctrl is
     signal err_b_reg    : std_logic;
     signal stall_b_reg  : std_logic;
     signal tx_valid_reg : std_logic;
-    signal rx_ready_reg : std_logic;
     signal hold_cnt_reg : unsigned(7 downto 0);
 
     signal ack_a_reg    : std_logic;
@@ -120,7 +118,6 @@ begin
                 err_b_reg    <= '0';
                 stall_b_reg  <= '0';
                 tx_valid_reg <= '0';
-                rx_ready_reg <= '0';
             else
                 case state_reg is
                     when IDLE =>
@@ -147,13 +144,11 @@ begin
                         end if;
                     when BUSY =>
                         if rx_valid_i = '1' then
-                            state_reg    <= ACK;
-                            ack_b_reg    <= '1';
-                            rx_ready_reg <= '1';
+                            state_reg <= ACK;
+                            ack_b_reg <= '1';
                         end if;
                     when ACK =>
-                        ack_b_reg    <= '0';
-                        rx_ready_reg <= '0';
+                        ack_b_reg <= '0';
                         if cs_high_reg > 5 then
                             state_reg <= HOLD;
                         else
@@ -195,6 +190,5 @@ begin
     tx_valid_o <= tx_valid_reg;
     tx_data_o  <= CMD_READ & adr_reg & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
     tx_bits_o  <= std_logic_vector(to_unsigned(SPI_WIDTH, SPI_CNT_BITS));
-    rx_ready_o <= rx_ready_reg;
 
 end architecture rtl;
