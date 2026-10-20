@@ -12,7 +12,8 @@ use work.leaf_soc_pkg.all;
 
 entity wb_xip_ctrl is
     generic (
-        CS_HIGH_CYCLES : positive := 2
+        CS_HIGH_CYCLES : positive := 2;
+        SCK_DIV        : positive := 1
     );
     port (
         clk_i      : in  std_logic;
@@ -35,6 +36,7 @@ entity wb_xip_ctrl is
         stall_b_o  : out std_logic;
         dat_b_o    : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         en_o       : out std_logic;
+        sck_div_o  : out std_logic_vector(SPI_DIV_BITS-1 downto 0);
         tx_valid_o : out std_logic;
         tx_ready_i : in  std_logic;
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
@@ -63,6 +65,7 @@ architecture rtl of wb_xip_ctrl is
     signal err_a_reg    : std_logic;
     signal cs_high_reg  : unsigned(7 downto 0);
     signal en_reg       : std_logic;
+    signal sck_div_reg  : std_logic_vector(SPI_DIV_BITS-1 downto 0);
 
     signal req_a        : std_logic;
     signal hit_a        : std_logic;
@@ -72,6 +75,7 @@ architecture rtl of wb_xip_ctrl is
 begin
 
     assert CS_HIGH_CYCLES <= 255 report "XIP: CS_HIGH_CYCLES must fit in 8 bits." severity failure;
+    assert SCK_DIV <= 2**SPI_DIV_BITS report "XIP: SCK_DIV-1 must fit in SPI_DIV_BITS bits." severity failure;
 
     req_a <= cyc_a_i and stb_a_i;
     hit_a <= '1' when adr_a_i = CFG_ADR else '0';
@@ -87,6 +91,7 @@ begin
                 err_a_reg   <= '0';
                 cs_high_reg <= to_unsigned(CS_HIGH_CYCLES, 8);
                 en_reg      <= '0';
+                sck_div_reg <= std_logic_vector(to_unsigned(SCK_DIV-1, SPI_DIV_BITS));
             elsif req_a = '1' then
                 if hit_a = '1' then
                     ack_a_reg <= '1';
@@ -96,6 +101,9 @@ begin
                     end if;
                     if we_a_i = '1' and sel_a_i(1) = '1' then
                         en_reg <= dat_a_i(8);
+                    end if;
+                    if we_a_i = '1' and sel_a_i(2) = '1' then
+                        sck_div_reg <= dat_a_i(16+SPI_DIV_BITS-1 downto 16);
                     end if;
                 else
                     ack_a_reg <= '0';
@@ -181,12 +189,13 @@ begin
     ack_a_o    <= ack_a_reg;
     err_a_o    <= err_a_reg;
     stall_a_o  <= '0';
-    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 9 => '0') & en_reg & std_logic_vector(cs_high_reg);
+    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 16+SPI_DIV_BITS => '0') & sck_div_reg & "0000000" & en_reg & std_logic_vector(cs_high_reg);
     ack_b_o    <= ack_b_reg;
     err_b_o    <= err_b_reg;
     stall_b_o  <= stall_b_reg;
     dat_b_o    <= rx_data_i(7 downto 0) & rx_data_i(15 downto 8) & rx_data_i(23 downto 16) & rx_data_i(31 downto 24);
     en_o       <= en_reg;
+    sck_div_o  <= sck_div_reg;
     tx_valid_o <= tx_valid_reg;
     tx_data_o  <= CMD_READ & adr_reg & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
     tx_bits_o  <= std_logic_vector(to_unsigned(SPI_WIDTH, SPI_CNT_BITS));

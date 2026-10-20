@@ -157,6 +157,7 @@ architecture rtl of leaf_soc is
     signal soc_xip_tx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_xip_rx_valid : std_logic;
     signal soc_xip_en       : std_logic;
+    signal soc_xip_sck_div  : std_logic_vector(SPI_DIV_BITS-1 downto 0);
 
     signal soc_spi_role_req : std_logic;
     signal soc_spi_role_ack : std_logic;
@@ -451,7 +452,8 @@ begin
     );
 
     soc_xip: entity work.wb_xip_ctrl generic map (
-        CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES
+        CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES,
+        SCK_DIV        => XIP_SCK_DIV
     ) port map (
         clk_i      => soc_syscon_clk,
         rst_i      => soc_syscon_rst,
@@ -473,6 +475,7 @@ begin
         stall_b_o  => soc_xip_stall,
         dat_b_o    => soc_xip_dat,
         en_o       => soc_xip_en,
+        sck_div_o  => soc_xip_sck_div,
         tx_valid_o => soc_xip_tx_valid,
         tx_ready_i => soc_xip_tx_ready,
         tx_data_o  => soc_xip_tx_data,
@@ -507,7 +510,7 @@ begin
         clk_i      => soc_syscon_clk,
         rst_i      => soc_syscon_rst,
         role_req_i => soc_spi_role_req,
-        sck_div_i  => XIP_SCK_DIV_VEC,
+        sck_div_i  => soc_xip_sck_div,
         sclk_i     => sclk_i,
         cs_n_i     => cs_n_i,
         mosi_i     => mosi_i,
