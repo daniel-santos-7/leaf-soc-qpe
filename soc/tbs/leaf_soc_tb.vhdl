@@ -345,7 +345,16 @@ begin
             uart_transmit(rx, RAM_JUMP_CMD);
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
             assert uart_data = ACK report "DBG: no ACK after release" severity failure;
-            report "DBG ok: id, RAM1 write/read, short and empty frames, reserved CTRL, frame right after an empty one, early frame, ROM err, halt, release";
+
+            dbg_cmd(x"00000006", x"00000000");
+            dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
+            assert dbg_stat = x"D0000000" report "DBG: bad status after the second halt" severity failure;
+            dbg_write(x"20FFFFFC", x"00000001");
+            dbg_wait(512);
+            uart_transmit(rx, RAM_JUMP_CMD);
+            wait on uart_data'transaction until uart_data = ACK for 1 ms;
+            assert uart_data = ACK report "DBG: setting EN did not release the halted CPU" severity failure;
+            report "DBG ok: id, RAM1 write/read, short and empty frames, reserved CTRL, frame right after an empty one, early frame, ROM err, halt, release, EN releases halt";
         end if;
 
         if ROLE_TEST then
