@@ -52,7 +52,7 @@ architecture rtl of wb_xip_ctrl is
     constant CMD_READ : std_logic_vector(7 downto 0) := x"03";
     constant CFG_ADR  : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2) := (others => '1');
 
-    type state_t is (IDLE, ERR, SEND, BUSY, ACK, HOLD);
+    type state_t is (DIS, EN_WAIT, IDLE, DIS_WAIT, ERR, SEND, BUSY, ACK, HOLD);
 
     signal state_reg    : state_t;
     signal adr_reg      : std_logic_vector(XIP_ADDR_WIDTH-1 downto 2);
@@ -60,12 +60,13 @@ architecture rtl of wb_xip_ctrl is
     signal err_b_reg    : std_logic;
     signal stall_b_reg  : std_logic;
     signal tx_valid_reg : std_logic;
+    signal role_req_reg : std_logic;
+    signal act_reg      : std_logic;
     signal hold_cnt_reg : unsigned(7 downto 0);
 
     signal ack_a_reg    : std_logic;
     signal err_a_reg    : std_logic;
     signal cs_high_reg  : unsigned(7 downto 0);
-    signal en_req_reg   : std_logic;
     signal en_reg       : std_logic;
     signal sck_div_reg  : std_logic_vector(SPI_DIV_BITS-1 downto 0);
 
@@ -92,14 +93,14 @@ begin
                 ack_a_reg   <= '0';
                 err_a_reg   <= '0';
                 cs_high_reg <= to_unsigned(CS_HIGH_CYCLES, 8);
-                en_req_reg  <= '0';
+                en_reg      <= '0';
                 sck_div_reg <= std_logic_vector(to_unsigned(SCK_DIV-1, SPI_DIV_BITS));
             elsif req_a = '1' then
                 if hit_a = '1' then
                     ack_a_reg <= '1';
                     err_a_reg <= '0';
                     if we_a_i = '1' and sel_a_i(0) = '1' then
-                        en_req_reg <= dat_a_i(0);
+                        en_reg <= dat_a_i(0);
                     end if;
                     if we_a_i = '1' and sel_a_i(1) = '1' then
                         cs_high_reg <= unsigned(dat_a_i(15 downto 8));
@@ -122,34 +123,63 @@ begin
     begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
-                state_reg    <= IDLE;
+                state_reg    <= DIS;
                 adr_reg      <= (others => '0');
-                en_reg       <= '0';
                 ack_b_reg    <= '0';
                 err_b_reg    <= '0';
                 stall_b_reg  <= '0';
                 tx_valid_reg <= '0';
+                role_req_reg <= '0';
+                act_reg      <= '0';
             else
                 case state_reg is
+                    when DIS =>
+                        if req_b = '1' then
+                            state_reg   <= ERR;
+                            err_b_reg   <= '1';
+                            stall_b_reg <= '1';
+                        elsif en_reg = '1' then
+                            state_reg    <= EN_WAIT;
+                            role_req_reg <= '1';
+                        end if;
+                    when EN_WAIT =>
+                        if req_b = '1' then
+                            state_reg   <= ERR;
+                            err_b_reg   <= '1';
+                            stall_b_reg <= '1';
+                        elsif role_ack_i = '1' then
+                            state_reg <= IDLE;
+                            act_reg   <= '1';
+                        end if;
                     when IDLE =>
                         if req_b = '1' then
-                            if en_reg = '1' and role_ack_i = '1' then
-                                state_reg    <= SEND;
-                                adr_reg      <= adr_b_i;
-                                stall_b_reg  <= '1';
-                                tx_valid_reg <= '1';
-                            else
-                                state_reg   <= ERR;
-                                err_b_reg   <= '1';
-                                stall_b_reg <= '1';
-                            end if;
-                        else
-                            en_reg <= en_req_reg;
+                            state_reg    <= SEND;
+                            adr_reg      <= adr_b_i;
+                            stall_b_reg  <= '1';
+                            tx_valid_reg <= '1';
+                        elsif en_reg = '0' then
+                            state_reg    <= DIS_WAIT;
+                            role_req_reg <= '0';
+                            act_reg      <= '0';
+                        end if;
+                    when DIS_WAIT =>
+                        if req_b = '1' then
+                            state_reg   <= ERR;
+                            err_b_reg   <= '1';
+                            stall_b_reg <= '1';
+                        elsif role_ack_i = '0' then
+                            state_reg <= DIS;
                         end if;
                     when ERR =>
-                        state_reg   <= IDLE;
                         err_b_reg   <= '0';
                         stall_b_reg <= '0';
+                        if role_req_reg = '1' then
+                            state_reg <= EN_WAIT;
+                        elsif role_ack_i = '1' then
+                            state_reg <= DIS_WAIT;
+                        else
+                            state_reg <= DIS;
+                        end if;
                     when SEND =>
                         if tx_ready_i = '1' then
                             state_reg    <= BUSY;
@@ -194,12 +224,12 @@ begin
     ack_a_o    <= ack_a_reg;
     err_a_o    <= err_a_reg;
     stall_a_o  <= '0';
-    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 16+SPI_DIV_BITS => '0') & sck_div_reg & std_logic_vector(cs_high_reg) & "000000" & role_ack_i & en_req_reg;
+    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 16+SPI_DIV_BITS => '0') & sck_div_reg & std_logic_vector(cs_high_reg) & "000000" & act_reg & en_reg;
     ack_b_o    <= ack_b_reg;
     err_b_o    <= err_b_reg;
     stall_b_o  <= stall_b_reg;
     dat_b_o    <= rx_data_i(7 downto 0) & rx_data_i(15 downto 8) & rx_data_i(23 downto 16) & rx_data_i(31 downto 24);
-    en_o       <= en_reg;
+    en_o       <= role_req_reg;
     sck_div_o  <= sck_div_reg;
     tx_valid_o <= tx_valid_reg;
     tx_data_o  <= CMD_READ & adr_reg & "00" & (SOC_DATA_WIDTH-1 downto 0 => '0');
