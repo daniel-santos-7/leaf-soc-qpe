@@ -542,6 +542,7 @@ begin
         rx_valid_i => soc_dbg_rx_valid,
         tx_valid_o => soc_dbg_tx_valid,
         tx_ready_i => soc_dbg_tx_ready,
+        role_ack_i => soc_spi_role_ack,
         tx_data_o  => soc_dbg_tx_data,
         cyc_o      => soc_dbg_cyc,
         stb_o      => soc_dbg_stb,

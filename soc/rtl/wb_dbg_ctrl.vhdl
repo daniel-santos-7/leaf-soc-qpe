@@ -19,6 +19,7 @@ entity wb_dbg_ctrl is
         rx_valid_i : in  std_logic;
         tx_valid_o : out std_logic;
         tx_ready_i : in  std_logic;
+        role_ack_i : in  std_logic;
         tx_data_o  : out std_logic_vector(SPI_WIDTH-1 downto 0);
         cyc_o      : out std_logic;
         stb_o      : out std_logic;
@@ -93,12 +94,18 @@ begin
             else
                 case state_reg is
                     when S_INIT =>
-                        state_reg    <= S_REPLY;
-                        tx_valid_reg <= '1';
+                        if role_ack_i = '0' then
+                            state_reg    <= S_REPLY;
+                            tx_valid_reg <= '1';
+                        end if;
                     when S_REPLY =>
                         if tx_ready_i = '1' then
                             state_reg    <= S_CMD;
                             tx_valid_reg <= '0';
+                        elsif role_ack_i = '1' then
+                            state_reg    <= S_INIT;
+                            tx_valid_reg <= '0';
+                            halt_reg     <= '0';
                         end if;
                     when S_CMD =>
                         if rx_valid_i = '1' then
