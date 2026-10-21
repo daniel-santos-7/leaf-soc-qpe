@@ -475,6 +475,7 @@ begin
         stall_b_o  => soc_xip_stall,
         dat_b_o    => soc_xip_dat,
         en_o       => soc_xip_en,
+        role_ack_i => soc_spi_role_ack,
         sck_div_o  => soc_xip_sck_div,
         tx_valid_o => soc_xip_tx_valid,
         tx_ready_i => soc_xip_tx_ready,

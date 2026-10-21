@@ -36,6 +36,7 @@ entity wb_xip_ctrl is
         stall_b_o  : out std_logic;
         dat_b_o    : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         en_o       : out std_logic;
+        role_ack_i : in  std_logic;
         sck_div_o  : out std_logic_vector(SPI_DIV_BITS-1 downto 0);
         tx_valid_o : out std_logic;
         tx_ready_i : in  std_logic;
@@ -64,6 +65,7 @@ architecture rtl of wb_xip_ctrl is
     signal ack_a_reg    : std_logic;
     signal err_a_reg    : std_logic;
     signal cs_high_reg  : unsigned(7 downto 0);
+    signal en_req_reg   : std_logic;
     signal en_reg       : std_logic;
     signal sck_div_reg  : std_logic_vector(SPI_DIV_BITS-1 downto 0);
 
@@ -90,14 +92,14 @@ begin
                 ack_a_reg   <= '0';
                 err_a_reg   <= '0';
                 cs_high_reg <= to_unsigned(CS_HIGH_CYCLES, 8);
-                en_reg      <= '0';
+                en_req_reg  <= '0';
                 sck_div_reg <= std_logic_vector(to_unsigned(SCK_DIV-1, SPI_DIV_BITS));
             elsif req_a = '1' then
                 if hit_a = '1' then
                     ack_a_reg <= '1';
                     err_a_reg <= '0';
                     if we_a_i = '1' and sel_a_i(0) = '1' then
-                        en_reg <= dat_a_i(0);
+                        en_req_reg <= dat_a_i(0);
                     end if;
                     if we_a_i = '1' and sel_a_i(1) = '1' then
                         cs_high_reg <= unsigned(dat_a_i(15 downto 8));
@@ -122,6 +124,7 @@ begin
             if rst_i = '1' then
                 state_reg    <= IDLE;
                 adr_reg      <= (others => '0');
+                en_reg       <= '0';
                 ack_b_reg    <= '0';
                 err_b_reg    <= '0';
                 stall_b_reg  <= '0';
@@ -130,7 +133,7 @@ begin
                 case state_reg is
                     when IDLE =>
                         if req_b = '1' then
-                            if en_reg = '1' then
+                            if en_reg = '1' and role_ack_i = '1' then
                                 state_reg    <= SEND;
                                 adr_reg      <= adr_b_i;
                                 stall_b_reg  <= '1';
@@ -140,6 +143,8 @@ begin
                                 err_b_reg   <= '1';
                                 stall_b_reg <= '1';
                             end if;
+                        else
+                            en_reg <= en_req_reg;
                         end if;
                     when ERR =>
                         state_reg   <= IDLE;
@@ -189,7 +194,7 @@ begin
     ack_a_o    <= ack_a_reg;
     err_a_o    <= err_a_reg;
     stall_a_o  <= '0';
-    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 16+SPI_DIV_BITS => '0') & sck_div_reg & std_logic_vector(cs_high_reg) & "0000000" & en_reg;
+    dat_a_o    <= (SOC_DATA_WIDTH-1 downto 16+SPI_DIV_BITS => '0') & sck_div_reg & std_logic_vector(cs_high_reg) & "000000" & role_ack_i & en_req_reg;
     ack_b_o    <= ack_b_reg;
     err_b_o    <= err_b_reg;
     stall_b_o  <= stall_b_reg;
