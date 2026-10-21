@@ -44,10 +44,9 @@ architecture rtl of wb_dbg_ctrl is
     constant SUB_HALT : std_logic_vector(1 downto 0) := "01";
     constant SUB_ID   : std_logic_vector(1 downto 0) := "10";
 
-    type state_t is (S_INIT, S_IDLE, S_READ, S_WRITE, S_SEND, S_BUSY, S_CTRL, S_INVALID, S_RESP);
+    type state_t is (S_INIT, S_REPLY, S_CMD, S_SEND, S_BUSY);
 
     signal state_reg    : state_t;
-    signal ready_reg    : std_logic;
     signal tx_valid_reg : std_logic;
     signal halt_reg     : std_logic;
     signal ack_reg      : std_logic;
@@ -81,7 +80,6 @@ begin
         if rising_edge(clk_i) then
             if rst_i = '1' then
                 state_reg    <= S_INIT;
-                ready_reg    <= '1';
                 tx_valid_reg <= '0';
                 halt_reg     <= '0';
                 ack_reg      <= '0';
@@ -95,53 +93,69 @@ begin
             else
                 case state_reg is
                     when S_INIT =>
-                        state_reg    <= S_RESP;
+                        state_reg    <= S_REPLY;
                         tx_valid_reg <= '1';
-                    when S_IDLE =>
+                    when S_REPLY =>
+                        if tx_ready_i = '1' then
+                            state_reg    <= S_CMD;
+                            tx_valid_reg <= '0';
+                        end if;
+                    when S_CMD =>
                         if rx_valid_i = '1' then
                             if rx_full = '1' then
                                 case op is
                                     when OP_READ =>
-                                        state_reg <= S_READ;
-                                        ready_reg <= '0';
+                                        state_reg <= S_SEND;
                                         ack_reg   <= '0';
                                         err_reg   <= '0';
+                                        cyc_reg   <= '1';
+                                        stb_reg   <= '1';
+                                        adr_reg   <= adr;
                                     when OP_WRITE =>
-                                        state_reg <= S_WRITE;
-                                        ready_reg <= '0';
+                                        state_reg <= S_SEND;
                                         ack_reg   <= '0';
                                         err_reg   <= '0';
+                                        cyc_reg   <= '1';
+                                        stb_reg   <= '1';
+                                        we_reg    <= '1';
+                                        adr_reg   <= adr;
+                                        dat_reg   <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
                                     when OP_CTRL =>
-                                        state_reg <= S_CTRL;
-                                        ready_reg <= '0';
-                                        ack_reg   <= '0';
-                                        err_reg   <= '0';
+                                        state_reg    <= S_REPLY;
+                                        tx_valid_reg <= '1';
+                                        case sub is
+                                            when SUB_RUN =>
+                                                ack_reg  <= '1';
+                                                err_reg  <= '0';
+                                                halt_reg <= '0';
+                                                resp_reg <= (others => '0');
+                                            when SUB_HALT =>
+                                                ack_reg  <= '1';
+                                                err_reg  <= '0';
+                                                halt_reg <= '1';
+                                                resp_reg <= (others => '0');
+                                            when SUB_ID =>
+                                                ack_reg  <= '1';
+                                                err_reg  <= '0';
+                                                resp_reg <= DBG_ID;
+                                            when others =>
+                                                ack_reg  <= '0';
+                                                err_reg  <= '1';
+                                        end case;
                                     when others =>
-                                        state_reg    <= S_RESP;
+                                        state_reg    <= S_REPLY;
                                         tx_valid_reg <= '1';
                                 end case;
                             elsif rx_empty = '1' then
-                                state_reg    <= S_RESP;
+                                state_reg    <= S_REPLY;
                                 tx_valid_reg <= '1';
                             else
-                                state_reg <= S_INVALID;
-                                ready_reg <= '0';
-                                ack_reg   <= '0';
-                                err_reg   <= '0';
+                                state_reg    <= S_REPLY;
+                                tx_valid_reg <= '1';
+                                ack_reg      <= '0';
+                                err_reg      <= '1';
                             end if;
                         end if;
-                    when S_READ =>
-                        state_reg <= S_SEND;
-                        cyc_reg   <= '1';
-                        stb_reg   <= '1';
-                        adr_reg   <= adr;
-                    when S_WRITE =>
-                        state_reg <= S_SEND;
-                        cyc_reg   <= '1';
-                        stb_reg   <= '1';
-                        we_reg    <= '1';
-                        adr_reg   <= adr;
-                        dat_reg   <= rx_data_i(SOC_DATA_WIDTH-1 downto 0);
                     when S_SEND =>
                         if stall_i = '0' then
                             state_reg <= S_BUSY;
@@ -149,8 +163,7 @@ begin
                         end if;
                     when S_BUSY =>
                         if (ack_i or err_i) = '1' then
-                            state_reg    <= S_RESP;
-                            ready_reg    <= '1';
+                            state_reg    <= S_REPLY;
                             tx_valid_reg <= '1';
                             ack_reg      <= ack_i;
                             err_reg      <= err_i;
@@ -162,41 +175,12 @@ begin
                                 resp_reg <= (others => '0');
                             end if;
                         end if;
-                    when S_CTRL =>
-                        state_reg    <= S_RESP;
-                        ready_reg    <= '1';
-                        tx_valid_reg <= '1';
-                        case sub is
-                            when SUB_RUN =>
-                                ack_reg  <= '1';
-                                halt_reg <= '0';
-                                resp_reg <= (others => '0');
-                            when SUB_HALT =>
-                                ack_reg  <= '1';
-                                halt_reg <= '1';
-                                resp_reg <= (others => '0');
-                            when SUB_ID =>
-                                ack_reg  <= '1';
-                                resp_reg <= DBG_ID;
-                            when others =>
-                                err_reg  <= '1';
-                        end case;
-                    when S_INVALID =>
-                        state_reg    <= S_RESP;
-                        ready_reg    <= '1';
-                        tx_valid_reg <= '1';
-                        err_reg      <= '1';
-                    when S_RESP =>
-                        if tx_ready_i = '1' then
-                            state_reg    <= S_IDLE;
-                            tx_valid_reg <= '0';
-                        end if;
                 end case;
             end if;
         end if;
     end process fsm_proc;
 
-    status <= ready_reg & ack_reg & err_reg & halt_reg & (SOC_DATA_WIDTH-5 downto 0 => '0');
+    status <= '1' & ack_reg & err_reg & halt_reg & (SOC_DATA_WIDTH-5 downto 0 => '0');
 
     tx_valid_o <= tx_valid_reg;
     tx_data_o  <= status & resp_reg;

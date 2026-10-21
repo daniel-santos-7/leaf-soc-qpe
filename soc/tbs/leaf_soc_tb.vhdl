@@ -13,7 +13,8 @@ entity leaf_soc_tb is
         RUN_CYCLES     : natural := 500000;
         SAMPLES_FILE   : string := "";
         WGEN_IF_COP    : boolean := true;
-        DBG_TEST       : boolean := false
+        DBG_TEST       : boolean := false;
+        ROLE_TEST      : boolean := false
     );
 end entity leaf_soc_tb;
 
@@ -103,7 +104,7 @@ begin
     pad_sclk   <= sclk_o  when sclk_oe  = '1' else dbg_sclk;
     pad_cs_n   <= cs_n_o when cs_n_oe = '1' else dbg_cs_n;
     pad_mosi   <= mosi_o when mosi_oe = '1' else dbg_mosi;
-    pad_miso   <= miso_o when miso_oe = '1' else flash_miso;
+    pad_miso   <= miso_o when miso_oe = '1' else '0' when flash_miso = 'Z' else flash_miso;
     flash_cs_n <= pad_cs_n when cs_n_oe = '1' else '1';
 
     gpio_pad_proc: process(gpio_o, gpio_oe)
@@ -323,11 +324,11 @@ begin
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: early frame was not dropped" severity failure;
 
-            dbg_frame(x"9000000D" & x"11111111", dbg_early, 2);
+            dbg_frame(x"9000000D" & x"11111111", dbg_early, 1);
             dbg_frame(x"9000000C" & x"00000000", dbg_early);
-            assert dbg_early(63) = '0' report "DBG: READY set in a frame 2 cycles after a command" severity failure;
+            assert dbg_early(63) = '0' report "DBG: READY set in a frame 1 cycle after a command" severity failure;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
-            assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: frame 2 cycles after a command was not dropped" severity failure;
+            assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: command followed by a frame 1 cycle later did not run or the frame was not dropped" severity failure;
 
             dbg_read(x"00001000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"A0000000" report "DBG: ROM read did not fault" severity failure;
@@ -345,6 +346,25 @@ begin
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
             assert uart_data = ACK report "DBG: no ACK after release" severity failure;
             report "DBG ok: id, RAM1 write/read, short and empty frames, reserved CTRL, frame right after an empty one, early frame, ROM err, halt, release";
+        end if;
+
+        if ROLE_TEST then
+            wait on uart_data'transaction until uart_data = x"77" for 2 ms;
+            assert uart_data = x"77" report "ROLE: program did not start" severity failure;
+            dbg_wait(4);
+            dbg_cmd(x"0000000A", x"00000000");
+            dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
+            assert dbg_data = DBG_ID report "ROLE: bad ID" severity failure;
+
+            dbg_write(x"90000010", x"600DF00D");
+            wait on uart_data'transaction until uart_data = x"52" for 2 ms;
+            assert uart_data = x"52" report "ROLE: program did not come back from XIP" severity failure;
+
+            dbg_xfer(x"90000014", x"00000000", dbg_data, dbg_stat);
+            assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "ROLE: first frame after XIP did not get the last debug reply" severity failure;
+            dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
+            assert dbg_data = x"0EFFF9DC" and dbg_stat = x"C0000000" report "ROLE: command in the first frame after XIP did not run" severity failure;
+            report "ROLE ok: debug -> XIP -> debug, last reply kept, first command after XIP runs";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop
