@@ -396,7 +396,8 @@ begin
             dbg_read(x"8000001C", dbg_data, dbg_stat);
             assert dbg_data = x"00000001" report "ROLE: a fetch before the master role took effect did not answer ERR" severity failure;
             dbg_read(x"80000020", dbg_data, dbg_stat);
-            assert dbg_data = x"00000201" report "ROLE: ACT was set while the host held its frame" severity failure;
+            assert dbg_data = x"00" & std_logic_vector(to_unsigned(XIP_SCK_DIV - 1, 8)) & std_logic_vector(to_unsigned(XIP_CS_HIGH_CYCLES, 8)) & x"01"
+                report "ROLE: ACT was set while the host held its frame" severity failure;
             dbg_read(x"80000024", dbg_data, dbg_stat);
             assert dbg_data = x"0EFFF9DC" report "ROLE: XIP did not work once the master role took effect" severity failure;
             report "ROLE ok: debug -> XIP -> debug, last reply kept, first command after XIP runs, fetch in EN_WAIT answers ERR";
