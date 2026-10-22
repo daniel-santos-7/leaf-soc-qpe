@@ -16,6 +16,8 @@
 .text
 .globl _start
 _start:
+    la t0, trap_handler
+    csrw mtvec, t0
     li a0, UART_BRDV
     call uart_set_baud
 
@@ -108,3 +110,33 @@ ram_jump_command:
 	li a0, ACK
     call uart_write
     jr s7
+
+trap_handler:
+    li a0, '!'
+    call uart_write
+    csrr s0, mcause
+    jal s1, print_hex
+    csrr s0, mepc
+    jal s1, print_hex
+    csrr s0, mtval
+    jal s1, print_hex
+    li a0, '\n'
+    call uart_write
+    j read_command
+
+print_hex:
+    li a0, ' '
+    call uart_write
+    li s2, 8
+1:
+    srli a0, s0, 28
+    slli s0, s0, 4
+    addi a0, a0, '0'
+    li t0, '9' + 1
+    blt a0, t0, 2f
+    addi a0, a0, 'a' - '0' - 10
+2:
+    call uart_write
+    addi s2, s2, -1
+    bnez s2, 1b
+    jr s1

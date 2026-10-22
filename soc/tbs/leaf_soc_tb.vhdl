@@ -16,6 +16,7 @@ entity leaf_soc_tb is
         DBG_TEST       : boolean := false;
         ROLE_TEST      : boolean := false;
         BOOT_RAM0      : boolean := false;
+        TRAP_TEST      : boolean := false;
         RAM1_EN        : boolean := true
     );
 end entity leaf_soc_tb;
@@ -74,6 +75,7 @@ architecture tb of leaf_soc_tb is
     constant RAM0_JUMP_CMD : std_logic_vector(7 downto 0) := x"6A";
     constant RAM0_LOAD_CMD : std_logic_vector(7 downto 0) := x"6C";
     constant ACK           : std_logic_vector(7 downto 0) := x"06";
+    constant TRAP_LINE     : string := "! 00000001 10000000 10000000" & LF;
 
 begin
 
@@ -398,6 +400,22 @@ begin
             dbg_read(x"80000024", dbg_data, dbg_stat);
             assert dbg_data = x"0EFFF9DC" report "ROLE: XIP did not work once the master role took effect" severity failure;
             report "ROLE ok: debug -> XIP -> debug, last reply kept, first command after XIP runs, fetch in EN_WAIT answers ERR";
+        end if;
+
+        if TRAP_TEST then
+            for k in 1 to 2 loop
+                for i in TRAP_LINE'range loop
+                    wait on uart_data'transaction for 1 ms;
+                    assert uart_data = std_logic_vector(to_unsigned(character'pos(TRAP_LINE(i)), 8))
+                        report "TRAP: wrong trap report from the boot ROM" severity failure;
+                end loop;
+                if k = 1 then
+                    uart_transmit(rx, RAM_JUMP_CMD);
+                    wait on uart_data'transaction until uart_data = ACK for 1 ms;
+                    assert uart_data = ACK report "TRAP: boot ROM did not take a command after the trap" severity failure;
+                end if;
+            end loop;
+            report "TRAP ok: trap reported with mcause, mepc and mtval, boot ROM back in its command loop";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop

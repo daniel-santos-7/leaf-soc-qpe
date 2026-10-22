@@ -92,7 +92,20 @@ The boot ROM (`sw/asm/boot/start.S`, converted into `soc/rtl/boot_pkg.vhdl` by `
 | `RAM0_LOAD_CMD` | `0x6C` (`l`) | `0x80000000` | receive a program into RAM0 |
 | `RAM0_JUMP_CMD` | `0x6A` (`j`) | `0x80000000` | jump to RAM0 |
 
-Both loads use the same protocol, only the destination changes: `ACK`, then the 32-bit size with its CRC-8, then the image in 1 KB blocks, each followed by its CRC-8 and answered with `ACK` or `NAK` (resend). The ROM keeps the base of the command in `s7`, which the load and the jump use. A program for RAM0 must be linked at `0x80000000` and fit, with its stack, in 1 KB; `soc.ld` links into RAM1. Without RAM1 (`RAM1_EN = false`) only the RAM0 commands are of use: `RAM1_LOAD_CMD` and `RAM1_JUMP_CMD` fault in the boot ROM, which sets no `mtvec`, so the SoC loops at address 0 until a reset ([#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4)). The testbench takes the RAM0 path with `BOOT_RAM0=1`: it skips the preload and sends the program over the UART with `RAM0_LOAD_CMD` and `RAM0_JUMP_CMD`, which is slow (about 9k cycles per byte).
+Both loads use the same protocol, only the destination changes: `ACK`, then the 32-bit size with its CRC-8, then the image in 1 KB blocks, each followed by its CRC-8 and answered with `ACK` or `NAK` (resend). The ROM keeps the base of the command in `s7`, which the load and the jump use. A program for RAM0 must be linked at `0x80000000` and fit, with its stack, in 1 KB; `soc.ld` links into RAM1. Without RAM1 (`RAM1_EN = false`) only the RAM0 commands are of use: `RAM1_LOAD_CMD` and `RAM1_JUMP_CMD` fault, and the boot ROM reports the trap and waits for the next command (see below). The testbench takes the RAM0 path with `BOOT_RAM0=1`: it skips the preload and sends the program over the UART with `RAM0_LOAD_CMD` and `RAM0_JUMP_CMD`, which is slow (about 9k cycles per byte).
+
+The first thing the boot ROM does is point `mtvec` at a handler of its own, so a trap never jumps to `0x0`, which is outside the map and would fault again forever, losing the cause. Programs start with `mtvec` already set; one that wants its own handler writes `mtvec`, as `gpio_test` and `role_test` do. The handler sends one line on the UART, `!`, then `mcause`, `mepc` and `mtval` in hex, and goes back to waiting for a command, so after a fault the host can read what happened and load or start a program again without a reset. A jump to the UART, which the instruction channel does not reach, prints:
+
+```
+! 00000001 10000000 10000000
+```
+
+The handler runs in the boot ROM's own context: it does not return with `mret`, uses no stack, and leaves `mstatus.MIE` clear as the trap left it, so an interrupt source left enabled by the program cannot trap again. With it the ROM is full, 128 of its 128 words. `TRAP=1` checks it with `sw/asm/trap-test`, a program that jumps to `0x10000000`: the testbench expects the line above, sends `RAM_JUMP_CMD`, expects its `ACK` and the line again, and ends with `TRAP ok`:
+
+```bash
+make -C sw/asm/trap-test
+make run PROGRAM=sw/asm/trap-test/trap-test.bin TRAP=1 RUN_CYCLES=1000
+```
 
 ### GPIO
 The GPIO is the [`wb-gpio`](https://github.com/daniel-santos-7/wb-gpio) IP (submodule `ips/gpio`), instantiated with `G_WIDTH => GPIO_WIDTH` (8, in `leaf_soc_pkg`) on IO2, which only the data master reaches. It is a pipelined slave with a one-cycle `ACK` and no `ERR`, like the UART, and its `stall_o`, constant `'0'`, goes to the channel's `io2_stall_i`.
@@ -109,7 +122,7 @@ The GPIO is the [`wb-gpio`](https://github.com/daniel-santos-7/wb-gpio) IP (subm
 | `0x1C` | IRQ_FALL   | RW    | Falling-edge interrupt enable |
 | `0x20` | IRQ_STATUS | R/W1C | Pending events; writing 1 clears |
 
-`leaf_soc` brings the pins out as three vectors, `gpio_i`, `gpio_o` and `gpio_oe` (1 = drive), and leaves the tri-state buffer to the padframe or the board. The GPIO's `irq_o` drives the CPU's external interrupt input (`ex_irq_i`, `mip.MEIP`), the only interrupt source in the SoC; it stays high while any `IRQ_STATUS` bit is set, so a handler must clear the status before returning. Software must also set `mtvec` itself: nothing in `sw/` does by default (see [#4](https://github.com/daniel-santos-7/leaf-soc-qpe/issues/4)).
+`leaf_soc` brings the pins out as three vectors, `gpio_i`, `gpio_o` and `gpio_oe` (1 = drive), and leaves the tri-state buffer to the padframe or the board. The GPIO's `irq_o` drives the CPU's external interrupt input (`ex_irq_i`, `mip.MEIP`), the only interrupt source in the SoC; it stays high while any `IRQ_STATUS` bit is set, so a handler must clear the status before returning. Software must also point `mtvec` at its own handler: the one the boot ROM installs only reports the trap and returns to the bootloader (see Memory Map).
 
 Software reaches it through `sw/c/common/gpio.c`/`gpio.h`, which a program adds to `APP_SRC` like the pulse APIs: `gpio_set_dir`/`gpio_get_dir`, `gpio_get_in`, `gpio_set_out`/`gpio_get_out`, the atomic `gpio_set_bits`/`gpio_clr_bits`/`gpio_tgl_bits`, and `gpio_set_irq_rise`/`gpio_set_irq_fall`, `gpio_get_irq_status` and `gpio_clr_irq_status` (write 1 to clear). Arguments are pin masks, bit *n* for pin *n*. Assembly has the same calls as macros in `sw/asm/common/gpio.inc` (`gpio.set_dir s0`, `gpio.get_in a0`, …, symbols `GPIO_BASE`/`GPIO_OFF_*`): a setter takes the register holding the value, a getter the destination register, and every macro uses `t6` for the base, so `t6` cannot be a setter's argument. `sw/asm/gpio-test` repeats the pin and SET/CLR/TGL checks of `gpio_test`, then checks `IRQ_STATUS` and its W1C clear by polling, without taking the interrupt, and prints `GPIO asm ok`. Both APIs cover the peripheral only: taking the interrupt still means setting `mtvec`, `mie.MEIE` and `mstatus.MIE`, as `gpio_test` does.
 
@@ -317,6 +330,7 @@ To build and simulate the project, ensure the following tools are installed:
 | `SAMPLES` | *(none)* | `1` dumps every active I/Q sample to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
 | `DBG` | *(none)* | `1` runs the SPI debug bridge check after the program starts — see Debug Bridge |
 | `ROLE` | *(none)* | `1` runs the debug → XIP → debug role change check with `sw/c/role_test` — see Debug Bridge |
+| `TRAP` | *(none)* | `1` runs the boot ROM trap handler check with `sw/asm/trap-test` — see Memory Map |
 | `BOOT_RAM0` | *(none)* | `1` uploads `PROGRAM` over the UART into RAM0 and starts it there, instead of preloading RAM1 — see Memory Map |
 | `RAM1` | *(none)* | `0` builds the SoC without RAM1 (`-gRAM1_EN=false`); needs `BOOT_RAM0=1`, since there is no RAM left to preload |
 
