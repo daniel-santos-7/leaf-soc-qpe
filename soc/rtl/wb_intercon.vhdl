@@ -61,6 +61,7 @@ entity wb_intercon is
         ram1b_stb_o  : out std_logic;
         ram1b_adr_o  : out std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
         ram1b_ack_i  : in  std_logic;
+        ram1b_err_i  : in  std_logic;
         ram1b_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         io0_cyc_o    : out std_logic;
         io0_stb_o    : out std_logic;
@@ -115,6 +116,7 @@ entity wb_intercon is
         ram1a_adr_o  : out std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
         ram1a_dat_o  : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
         ram1a_ack_i  : in  std_logic;
+        ram1a_err_i  : in  std_logic;
         ram1a_dat_i  : in  std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
     );
 end entity wb_intercon;
@@ -191,7 +193,7 @@ begin
         io2_err_i    => '1',
         xip_err_i    => xipb_err_i,
         ram0_err_i   => '0',
-        ram1_err_i   => '0',
+        ram1_err_i   => ram1b_err_i,
         rom_stall_i  => '0',
         io0_stall_i  => '0',
         io1_stall_i  => '0',
@@ -273,7 +275,7 @@ begin
         io2_err_i    => '0',
         xip_err_i    => xipa_err_i,
         ram0_err_i   => '0',
-        ram1_err_i   => '0',
+        ram1_err_i   => ram1a_err_i,
         rom_stall_i  => '0',
         io0_stall_i  => io0_stall_i,
         io1_stall_i  => io1_stall_i,

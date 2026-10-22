@@ -14,7 +14,9 @@ entity leaf_soc_tb is
         SAMPLES_FILE   : string := "";
         WGEN_IF_COP    : boolean := true;
         DBG_TEST       : boolean := false;
-        ROLE_TEST      : boolean := false
+        ROLE_TEST      : boolean := false;
+        BOOT_RAM0      : boolean := false;
+        RAM1_EN        : boolean := true
     );
 end entity leaf_soc_tb;
 
@@ -67,13 +69,17 @@ architecture tb of leaf_soc_tb is
 
     constant CLK_PERIOD : time := 10 ns;
 
-    constant RAM_JUMP_CMD : std_logic_vector(7 downto 0) := x"4A";
-    constant ACK          : std_logic_vector(7 downto 0) := x"06";
+    constant RAM_JUMP_CMD  : std_logic_vector(7 downto 0) := x"4A";
+    constant RAM_LOAD_CMD  : std_logic_vector(7 downto 0) := x"4C";
+    constant RAM0_JUMP_CMD : std_logic_vector(7 downto 0) := x"6A";
+    constant RAM0_LOAD_CMD : std_logic_vector(7 downto 0) := x"6C";
+    constant ACK           : std_logic_vector(7 downto 0) := x"06";
 
 begin
 
     uut: leaf_soc generic map (
-        WGEN_IF_COP => WGEN_IF_COP
+        WGEN_IF_COP => WGEN_IF_COP,
+        RAM1_EN     => RAM1_EN
     ) port map (
         clk     => clk,
         rst_n   => rst_n,
@@ -276,8 +282,10 @@ begin
             else
                 report "ERROR: No ACK after RAM_JUMP_CMD" severity failure;
             end if;
+        elsif BOOT_RAM0 then
+            leaf_soc_send_program(rx, uart_data, PROGRAM, RAM0_LOAD_CMD, RAM0_JUMP_CMD);
         else
-            leaf_soc_send_program(rx, uart_data, PROGRAM);
+            leaf_soc_send_program(rx, uart_data, PROGRAM, RAM_LOAD_CMD, RAM_JUMP_CMD);
         end if;
 
         dac_sel <= '1';
@@ -293,11 +301,11 @@ begin
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = DBG_ID report "DBG: bad ID" severity failure;
 
-            dbg_write(x"90000000", x"DEADBEEF");
-            dbg_read(x"90000000", dbg_data, dbg_stat);
-            assert dbg_data = x"DEADBEEF" and dbg_stat = x"C0000000" report "DBG: RAM1 read mismatch" severity failure;
+            dbg_write(x"80000000", x"DEADBEEF");
+            dbg_read(x"80000000", dbg_data, dbg_stat);
+            assert dbg_data = x"DEADBEEF" and dbg_stat = x"C0000000" report "DBG: RAM0 read mismatch" severity failure;
 
-            dbg_frame(x"90000001", dbg_junk);
+            dbg_frame(x"80000001", dbg_junk);
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"DEADBEEF" and dbg_stat = x"A0000000" report "DBG: short frame did not report ERR" severity failure;
 
@@ -305,7 +313,7 @@ begin
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"DEADBEEF" and dbg_stat = x"A0000000" report "DBG: empty frame was not ignored" severity failure;
 
-            dbg_write(x"90000000", x"DEADBEEF");
+            dbg_write(x"80000000", x"DEADBEEF");
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: WRITE did not clear the result" severity failure;
 
@@ -314,18 +322,18 @@ begin
             assert dbg_data = x"00000000" and dbg_stat = x"A0000000" report "DBG: reserved CTRL subcommand did not report ERR" severity failure;
 
             dbg_empty(2);
-            dbg_frame(x"90000009" & x"CAFEF00D", dbg_early);
-            dbg_read(x"90000008", dbg_data, dbg_stat);
+            dbg_frame(x"80000009" & x"CAFEF00D", dbg_early);
+            dbg_read(x"80000008", dbg_data, dbg_stat);
             assert dbg_early(63) = '1' and dbg_data = x"CAFEF00D" report "DBG: command right after an empty frame was dropped" severity failure;
 
-            dbg_frame(x"90000005" & x"12345678", dbg_early, 2);
-            dbg_frame(x"90000004" & x"00000000", dbg_early);
+            dbg_frame(x"80000005" & x"12345678", dbg_early, 2);
+            dbg_frame(x"80000004" & x"00000000", dbg_early);
             assert dbg_early = x"00000000" & x"00000000" report "DBG: early frame did not get the busy reply" severity failure;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: early frame was not dropped" severity failure;
 
-            dbg_frame(x"9000000D" & x"11111111", dbg_early, 1);
-            dbg_frame(x"9000000C" & x"00000000", dbg_early);
+            dbg_frame(x"8000000D" & x"11111111", dbg_early, 1);
+            dbg_frame(x"8000000C" & x"00000000", dbg_early);
             assert dbg_early(63) = '0' report "DBG: READY set in a frame 1 cycle after a command" severity failure;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "DBG: command followed by a frame 1 cycle later did not run or the frame was not dropped" severity failure;
@@ -337,8 +345,8 @@ begin
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_stat = x"D0000000" report "DBG: bad status after halt" severity failure;
 
-            dbg_read(x"80000000", dbg_data, dbg_stat);
-            assert dbg_stat = x"D0000000" report "DBG: RAM0 read faulted" severity failure;
+            dbg_read(x"90000000", dbg_data, dbg_stat);
+            assert dbg_stat = x"D0000000" report "DBG: RAM1 read faulted" severity failure;
 
             dbg_cmd(x"00000002", x"00000000");
             dbg_wait(512);
@@ -354,7 +362,7 @@ begin
             uart_transmit(rx, RAM_JUMP_CMD);
             wait on uart_data'transaction until uart_data = ACK for 1 ms;
             assert uart_data = ACK report "DBG: setting EN did not release the halted CPU" severity failure;
-            report "DBG ok: id, RAM1 write/read, short and empty frames, reserved CTRL, frame right after an empty one, early frame, ROM err, halt, release, EN releases halt";
+            report "DBG ok: id, RAM0 write/read, short and empty frames, reserved CTRL, frame right after an empty one, early frame, ROM err, halt, release, EN releases halt";
         end if;
 
         if ROLE_TEST then
@@ -365,15 +373,31 @@ begin
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = DBG_ID report "ROLE: bad ID" severity failure;
 
-            dbg_write(x"90000010", x"600DF00D");
+            dbg_write(x"80000010", x"600DF00D");
             wait on uart_data'transaction until uart_data = x"52" for 2 ms;
             assert uart_data = x"52" report "ROLE: program did not come back from XIP" severity failure;
 
-            dbg_xfer(x"90000014", x"00000000", dbg_data, dbg_stat);
+            dbg_xfer(x"80000014", x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"00000000" and dbg_stat = x"C0000000" report "ROLE: first frame after XIP did not get the last debug reply" severity failure;
             dbg_xfer(DBG_NOP, x"00000000", dbg_data, dbg_stat);
             assert dbg_data = x"0EFFF9DC" and dbg_stat = x"C0000000" report "ROLE: command in the first frame after XIP did not run" severity failure;
-            report "ROLE ok: debug -> XIP -> debug, last reply kept, first command after XIP runs";
+
+            wait on uart_data'transaction until uart_data = x"0A" for 4 ms;
+            assert uart_data = x"0A" report "ROLE: program did not finish its ROLE line" severity failure;
+            dbg_write(x"80000018", x"5EC0DD00");
+            dbg_cs_n <= '0';
+            dbg_wait(20000);
+            dbg_cs_n <= '1';
+            wait on uart_data'transaction until uart_data = x"57" for 2 ms;
+            assert uart_data = x"57" report "ROLE: program did not finish the EN_WAIT check" severity failure;
+            dbg_wait(4);
+            dbg_read(x"8000001C", dbg_data, dbg_stat);
+            assert dbg_data = x"00000001" report "ROLE: a fetch before the master role took effect did not answer ERR" severity failure;
+            dbg_read(x"80000020", dbg_data, dbg_stat);
+            assert dbg_data = x"00000201" report "ROLE: ACT was set while the host held its frame" severity failure;
+            dbg_read(x"80000024", dbg_data, dbg_stat);
+            assert dbg_data = x"0EFFF9DC" report "ROLE: XIP did not work once the master role took effect" severity failure;
+            report "ROLE ok: debug -> XIP -> debug, last reply kept, first command after XIP runs, fetch in EN_WAIT answers ERR";
         end if;
 
         for i in 0 to RUN_CYCLES-1 loop

@@ -1,4 +1,4 @@
-.equ RAM_TOP, 0x80008000
+.equ RAM_TOP, 0x90008000
 
 .include "../common/qpe_mmio.inc"
 
