@@ -11,7 +11,8 @@ use work.leaf_soc_pkg.all;
 
 entity leaf_soc is
     generic (
-        WGEN_IF_COP : boolean := true
+        WGEN_IF_COP : boolean := true;
+        RAM1_EN     : boolean := false
     );
     port (
         clk     : in  std_logic;
@@ -83,6 +84,7 @@ architecture rtl of leaf_soc is
     signal soc_ram1_b_adr   : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
     signal soc_ram1_b_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram1_b_ack   : std_logic;
+    signal soc_ram1_b_err   : std_logic;
 
     signal soc_data_io0_cyc  : std_logic;
     signal soc_data_io0_stb  : std_logic;
@@ -128,6 +130,7 @@ architecture rtl of leaf_soc is
     signal soc_ram1_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram1_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram1_a_ack    : std_logic;
+    signal soc_ram1_a_err    : std_logic;
 
     signal soc_rom_ack : std_logic;
     signal soc_rom_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
@@ -348,6 +351,7 @@ begin
         ram1b_stb_o  => soc_ram1_b_stb,
         ram1b_adr_o  => soc_ram1_b_adr,
         ram1b_ack_i  => soc_ram1_b_ack,
+        ram1b_err_i  => soc_ram1_b_err,
         ram1b_dat_i  => soc_ram1_b_dat,
         io0_cyc_o    => soc_data_io0_cyc,
         io0_stb_o    => soc_data_io0_stb,
@@ -402,6 +406,7 @@ begin
         ram1a_adr_o  => soc_ram1_a_adr,
         ram1a_dat_o  => soc_ram1_a_dat_wr,
         ram1a_ack_i  => soc_ram1_a_ack,
+        ram1a_err_i  => soc_ram1_a_err,
         ram1a_dat_i  => soc_ram1_a_dat_rd
     );
 
@@ -577,24 +582,38 @@ begin
         dat_b_o => soc_ram0_b_dat
     );
 
-    soc_ram1: wb_ram_dp generic map (
-        BITS => RAM1_ADDR_WIDTH
-    ) port map (
-        clk_i   => soc_syscon_clk,
-        rst_i   => soc_syscon_rst,
-        dat_a_i => soc_ram1_a_dat_wr,
-        cyc_a_i => soc_ram1_a_cyc,
-        stb_a_i => soc_ram1_a_stb,
-        we_a_i  => soc_ram1_a_we,
-        sel_a_i => soc_ram1_a_sel,
-        adr_a_i => soc_ram1_a_adr,
-        ack_a_o => soc_ram1_a_ack,
-        dat_a_o => soc_ram1_a_dat_rd,
-        cyc_b_i => soc_ram1_b_cyc,
-        stb_b_i => soc_ram1_b_stb,
-        adr_b_i => soc_ram1_b_adr,
-        ack_b_o => soc_ram1_b_ack,
-        dat_b_o => soc_ram1_b_dat
-    );
+    ram1_gen: if RAM1_EN generate
+        soc_ram1: wb_ram_dp generic map (
+            BITS => RAM1_ADDR_WIDTH
+        ) port map (
+            clk_i   => soc_syscon_clk,
+            rst_i   => soc_syscon_rst,
+            dat_a_i => soc_ram1_a_dat_wr,
+            cyc_a_i => soc_ram1_a_cyc,
+            stb_a_i => soc_ram1_a_stb,
+            we_a_i  => soc_ram1_a_we,
+            sel_a_i => soc_ram1_a_sel,
+            adr_a_i => soc_ram1_a_adr,
+            ack_a_o => soc_ram1_a_ack,
+            dat_a_o => soc_ram1_a_dat_rd,
+            cyc_b_i => soc_ram1_b_cyc,
+            stb_b_i => soc_ram1_b_stb,
+            adr_b_i => soc_ram1_b_adr,
+            ack_b_o => soc_ram1_b_ack,
+            dat_b_o => soc_ram1_b_dat
+        );
+
+        soc_ram1_a_err <= '0';
+        soc_ram1_b_err <= '0';
+    end generate;
+
+    no_ram1_gen: if not RAM1_EN generate
+        soc_ram1_a_ack    <= '0';
+        soc_ram1_a_err    <= '1';
+        soc_ram1_a_dat_rd <= (others => '0');
+        soc_ram1_b_ack    <= '0';
+        soc_ram1_b_err    <= '1';
+        soc_ram1_b_dat    <= (others => '0');
+    end generate;
 
 end architecture rtl;

@@ -31,9 +31,11 @@ package leaf_soc_tb_pkg is
     ) return std_logic_vector;
 
     procedure leaf_soc_send_program (
-        signal   tx      : out std_logic;
-        signal   rx_data : in std_logic_vector(7 downto 0);
-        constant program : in string
+        signal   tx           : out std_logic;
+        signal   rx_data      : in std_logic_vector(7 downto 0);
+        constant program      : in string;
+        constant RAM_LOAD_CMD : in std_logic_vector(7 downto 0);
+        constant RAM_JUMP_CMD : in std_logic_vector(7 downto 0)
     );
 
 end package leaf_soc_tb_pkg;
@@ -116,13 +118,12 @@ package body leaf_soc_tb_pkg is
     end function calc_crc;
 
     procedure leaf_soc_send_program (
-        signal   tx      : out std_logic;
-        signal   rx_data : in std_logic_vector(7 downto 0);
-        constant program : in string
+        signal   tx           : out std_logic;
+        signal   rx_data      : in std_logic_vector(7 downto 0);
+        constant program      : in string;
+        constant RAM_LOAD_CMD : in std_logic_vector(7 downto 0);
+        constant RAM_JUMP_CMD : in std_logic_vector(7 downto 0)
     ) is
-
-        constant RAM_JUMP_CMD : std_logic_vector(7 downto 0) := x"4A";
-        constant RAM_LOAD_CMD : std_logic_vector(7 downto 0) := x"4C";
 
         constant ACK : std_logic_vector(7 downto 0) := x"06";
         constant NAK : std_logic_vector(7 downto 0) := x"15";
@@ -142,7 +143,7 @@ package body leaf_soc_tb_pkg is
         load_bin_file(program, program_data, program_size);
         report "Loaded " & integer'image(program_size) & " bytes from " & program;
 
-        report "Sending RAM_LOAD_CMD (0x4C)...";
+        report "Sending RAM_LOAD_CMD...";
         uart_transmit(tx, RAM_LOAD_CMD);
         wait until rx_data = ACK for 100 us;
         if rx_data = ACK then
@@ -199,7 +200,7 @@ package body leaf_soc_tb_pkg is
             end if;
         end if;
 
-        report "Sending RAM_JUMP_CMD (0x4A)...";
+        report "Sending RAM_JUMP_CMD...";
         uart_transmit(tx, RAM_JUMP_CMD);
         wait until rx_data = ACK for 100 us;
         if rx_data = ACK then

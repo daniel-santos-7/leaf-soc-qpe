@@ -1,5 +1,5 @@
 .equ RAM_SIZE, 0x8000
-.equ RAM_BASE, 0x80000000
+.equ RAM_BASE, 0x90000000
 .equ RAM_TOP,  RAM_BASE + RAM_SIZE
 
 .include "../common/qpe.inc"

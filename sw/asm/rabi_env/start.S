@@ -2,7 +2,7 @@
 # Sweeps ENV (envelope step) from slow to fast.
 # Fixed amplitude at half scale.
 
-.equ RAM_TOP,  0x80008000
+.equ RAM_TOP,  0x90008000
 
 .equ FTW_PI,   0x1999999A
 .equ ENV_START, 0x00100000
