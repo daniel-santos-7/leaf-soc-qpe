@@ -3,7 +3,7 @@
 # Interface: COP CSR (xwg macros)
 
 .equ UART_BASE_ADDR, 0x10000000
-.equ RAM_TOP,        0x80010000
+.equ RAM_TOP,        0x90008000
 
 # pi-pulse (4 us): FTW=5 MHz, AMP=2047, ENV=200 cyc, DRAG=0.2
 .equ FTW_PI,         0x1999999A

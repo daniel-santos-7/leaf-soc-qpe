@@ -1,6 +1,6 @@
 # rabi: Amplitude sweep, bank 0 loop, no UART
 
-.equ RAM_TOP,  0x80008000
+.equ RAM_TOP,  0x90008000
 
 .equ FTW_PI,   0x1999999A
 .equ ENV_PI,   0x0147AE14

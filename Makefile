@@ -41,7 +41,7 @@ endif
 endif
 
 PROGRAM       ?= sw/asm/hello-world/hello-world.bin
-RAM_INIT_FILE = $(PROGRAM)
+RAM_INIT_FILE = $(if $(filter 1,$(BOOT_RAM0)),,$(PROGRAM))
 RUN_CYCLES    ?= 500000
 WGEN_IF       ?= COP
 RAM           ?= BEHAV
@@ -57,6 +57,10 @@ $(error RAM=TECH needs the technology sources in $(TECH_DIR))
 endif
 else
 $(error RAM must be BEHAV, MACRO or TECH, got '$(RAM)')
+endif
+
+ifeq ($(RAM1)$(BOOT_RAM0),0)
+$(error RAM1=0 leaves no RAM to preload, add BOOT_RAM0=1)
 endif
 
 PROGRAM_NAME ?= $(shell basename $(PROGRAM) .bin)
@@ -76,6 +80,8 @@ GHDLXOPTS += $(if $(filter 1,$(SAMPLES)),-gSAMPLES_FILE=$(WAVESDIR)/$(SAMPLES_CS
 GHDLXOPTS += $(if $(filter MMIO,$(WGEN_IF)),-gWGEN_IF_COP=false,)
 GHDLXOPTS += $(if $(filter 1,$(DBG)),-gDBG_TEST=true,)
 GHDLXOPTS += $(if $(filter 1,$(ROLE)),-gROLE_TEST=true,)
+GHDLXOPTS += $(if $(filter 1,$(BOOT_RAM0)),-gBOOT_RAM0=true,)
+GHDLXOPTS += $(if $(filter 0,$(RAM1)),-gRAM1_EN=false,)
 
 $(WORKDIR) $(WAVESDIR):
 	mkdir -p $@
