@@ -329,6 +329,7 @@ make -C ips/cpu/verif/tests compare                       # CPU differential sui
 make -C ips/wgen run                                      # pulse generator IP testbench
 make -C sw run-quick                                      # build CoreMark + simulate, log to sw/logs/
 make -C sw upload BIN=./c/hello_world/hello_world.bin PORT=/dev/ttyUSB0
+make area                                                 # per-module area estimate (needs Yosys with the GHDL plugin)
 ```
 
 `make rtl-tar` packs the synthesisable sources of the SoC into `dist/leaf_soc_rtl.tar`: every file under `soc/rtl` and the IPs' `rtl` directories, with no testbenches and nothing from `TECH_DIR`. The archive is flat: it holds only the files, with no directories, and the build fails if two sources share a file name. Next to them it writes `files.f`, the files in analysis order. GHDL derives that order from the `RTL_TOP` elaboration (default `leaf_soc`), and appends the files that are outside that closure, `sram_dp`. The target analyses the list once in a scratch library before packing, so an order that does not analyse fails the build instead of producing the tar. The sources are VHDL-93 and need no `--ieee=synopsys`:
@@ -339,7 +340,15 @@ mkdir rtl && tar -xf dist/leaf_soc_rtl.tar -C rtl && cd rtl
 ghdl -a $(cat files.f) && ghdl --synth --out=none leaf_soc
 ```
 
-That archive synthesises both RAMs as inferred arrays. `make rtl-tar RAM=TECH` builds `dist/leaf_soc_tech_rtl.tar` for the macro RAM instead: it adds the technology's synthesis sources, which `TECH_DIR` lists in a file `syn.f` (names relative to `TECH_DIR`, no simulation models), and takes its order from the configuration `leaf_soc_tech`, which that directory must provide and which is the unit to synthesise. The macro cell itself stays unbound, a black box whose views come from the memory compiler, so GHDL's "not bound" warning on it is expected. This archive carries the technology files and follows their licence terms, not this repository's. `RAM=MACRO` is refused, since `sram_dp(sim)` is not synthesisable.
+That archive synthesises RAM0 as an inferred array, and RAM1 as well when the integration sets `RAM1_EN => true`. `make rtl-tar RAM=TECH` builds `dist/leaf_soc_tech_rtl.tar` for the macro RAM instead: it adds the technology's synthesis sources, which `TECH_DIR` lists in a file `syn.f` (names relative to `TECH_DIR`, no simulation models), and takes its order from the configuration `leaf_soc_tech`, which that directory must provide and which is the unit to synthesise. The macro cell itself stays unbound, a black box whose views come from the memory compiler, so GHDL's "not bound" warning on it is expected. This archive carries the technology files and follows their licence terms, not this repository's. `RAM=MACRO` is refused, since `sram_dp(sim)` is not synthesisable.
+
+`make area` estimates how the area of the SoC splits among its modules. It analyses the same sources as `rtl-tar` in a scratch library under `work/area`, synthesises `RTL_TOP` with Yosys down to generic gates (`synth`, then `abc -g cmos2`, keeping the hierarchy), and `scripts/area_report.py` turns the log into a table of transistors, share of the total and flip-flops per module, each module counted with its submodules. Gates take the transistor counts of Yosys's `stat -tech cmos`; flip-flops, which that estimate leaves out, take 24 transistors, plus 12 with an enable and 6 with a synchronous reset (`--ff`, `--ff-en`, `--ff-srst` on the script). It is a way to compare blocks, not the area of a cell library: there is no mapping to real cells and no routing, and black boxes such as hard macros count as zero. `WGEN_IF=MMIO` synthesises the MMIO variant, `RAM1=1` or `RAM1=0` sets `RAM1_EN` (default: the `leaf_soc` default, `false`), `RAM=TECH` uses the technology configuration with RAM1 on unless `RAM1=0`, and `AREA_DEPTH` (default 3) sets how many levels the table shows. A run takes about two minutes:
+
+```bash
+make area
+make area WGEN_IF=MMIO AREA_DEPTH=1
+python3 scripts/area_report.py work/area/area.log --depth 5 --ff 20
+```
 
 ## :balance_scale: License
 

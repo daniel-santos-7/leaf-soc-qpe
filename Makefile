@@ -31,12 +31,17 @@ RTL_TAR   = $(DISTDIR)/$(RTL_TOP)_rtl.tar
 RTL_WORK  = $(DISTDIR)/work
 RTL_FILES = $(patsubst ./%,%,$(RTL_SRC) $(RTL_TECH))
 
-ifneq ($(filter rtl-tar,$(MAKECMDGOALS)),)
+AREA_DIR   = $(WORKDIR)/area
+AREA_DEPTH ?= 3
+AREA_COP   = $(if $(filter MMIO,$(WGEN_IF)),false,true)
+AREA_RAM1  = $(if $(filter 0,$(RAM1)),false,$(if $(filter 1,$(RAM1)),true,$(if $(filter TECH,$(RAM)),true,false)))
+
+ifneq ($(filter rtl-tar area,$(MAKECMDGOALS)),)
 ifeq ($(RAM),MACRO)
-$(error rtl-tar: RAM=MACRO has no synthesisable macro, use BEHAV or TECH)
+$(error rtl-tar/area: RAM=MACRO has no synthesisable macro, use BEHAV or TECH)
 endif
 ifeq ($(RAM)$(RTL_TECH),TECH)
-$(error rtl-tar: RAM=TECH needs $(TECH_DIR)/syn.f)
+$(error rtl-tar/area: RAM=TECH needs $(TECH_DIR)/syn.f)
 endif
 endif
 
@@ -59,8 +64,10 @@ else
 $(error RAM must be BEHAV, MACRO or TECH, got '$(RAM)')
 endif
 
+ifeq ($(filter rtl-tar area clean,$(MAKECMDGOALS)),)
 ifeq ($(RAM1)$(BOOT_RAM0),0)
 $(error RAM1=0 leaves no RAM to preload, add BOOT_RAM0=1)
+endif
 endif
 
 PROGRAM_NAME ?= $(shell basename $(PROGRAM) .bin)
@@ -106,7 +113,7 @@ $(WORKDIR)/.make: $(WORKDIR)/.import $(WORKDIR)/program.bin
 	@$(GHDL) -m $(GHDLFLAGS) $(TOP_UNIT)
 	@touch $@
 
-.PHONY: run plot rtl-tar clean
+.PHONY: run plot rtl-tar area clean
 run: $(WORKDIR)/.make $(PROGRAM) | $(WAVESDIR)
 ifneq ($(RAM_INIT_FILE),)
 	@$(GHDL) -r $(GHDLFLAGS) $(TOP_UNIT) $(GHDLXOPTS) -gPROGRAM=$(PROGRAM) -gSKIP_UART_LOAD=true -gRUN_CYCLES=$(RUN_CYCLES)
@@ -144,6 +151,22 @@ $(RTL_TAR): $(RTL_SRC) $(RTL_TECH)
 	@tar -cf $@ -C $(RTL_WORK)/flat $$(cat $(RTL_WORK)/flat/files.f) files.f
 	@rm -rf $(RTL_WORK)
 	@echo "$@: $$(tar -tf $@ | wc -l) files"
+
+area:
+	@rm -rf $(AREA_DIR)
+	@mkdir -p $(AREA_DIR)
+	@$(GHDL) -i --workdir=$(AREA_DIR) $(RTL_FILES)
+	@$(GHDL) --elab-order -Wno-binding --workdir=$(AREA_DIR) $(RTL_TOP) > $(AREA_DIR)/order.txt
+	@for f in $(RTL_FILES); do \
+	    grep -qxF "$$f" $(AREA_DIR)/order.txt || echo "$$f" >> $(AREA_DIR)/order.txt; \
+	done
+	@$(GHDL) -a --workdir=$(AREA_DIR) $$(cat $(AREA_DIR)/order.txt)
+	@printf '%s\n' \
+	    "ghdl --workdir=$(AREA_DIR) -gWGEN_IF_COP=$(AREA_COP) -gRAM1_EN=$(AREA_RAM1) $(RTL_TOP)" \
+	    'hierarchy -top leaf_soc' 'synth -top leaf_soc' 'abc -g cmos2' 'opt_clean' 'stat' > $(AREA_DIR)/area.ys
+	@yosys -m ghdl -q -l $(AREA_DIR)/area.log $(AREA_DIR)/area.ys > /dev/null 2>&1 || { tail -20 $(AREA_DIR)/area.log; exit 1; }
+	@echo "$(RTL_TOP), WGEN_IF_COP=$(AREA_COP), RAM1_EN=$(AREA_RAM1)"
+	@python3 scripts/area_report.py $(AREA_DIR)/area.log --depth $(AREA_DEPTH)
 
 clean:
 	$(GHDL) clean --workdir=$(WORKDIR)
