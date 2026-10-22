@@ -3,8 +3,8 @@ ENTRY(_start)
 
 MEMORY
 {
-    RAM0 (rwx) : ORIGIN = 0x80000000, LENGTH = 0x00008000
-    RAM1 (rwx) : ORIGIN = 0x90000000, LENGTH = 0x00000400
+    RAM0 (rwx) : ORIGIN = 0x80000000, LENGTH = 0x00000400
+    RAM1 (rwx) : ORIGIN = 0x90000000, LENGTH = 0x00008000
 }
 
 SECTIONS
@@ -16,7 +16,7 @@ SECTIONS
 		*(.text*)
 		. = ALIGN(4);
 		__text_end = .;
-	} > RAM0
+	} > RAM1
 
 	.rodata :
 	{
@@ -24,7 +24,7 @@ SECTIONS
 		*(.rodata*)
 		. = ALIGN(4);
 		__rodata_end = .;
-	} > RAM0
+	} > RAM1
 
 	.data :
 	{
@@ -33,7 +33,7 @@ SECTIONS
 		*(.eh_frame*)
 		. = ALIGN(4);
 		__data_end = .;
-	} > RAM0
+	} > RAM1
 
 	.bss :
 	{
@@ -42,7 +42,7 @@ SECTIONS
 		*(.sbss*)
 		. = ALIGN(4);
 		__bss_end = .;
-	} > RAM0
+	} > RAM1
 
 	.sdata : 
 	{
@@ -50,20 +50,20 @@ SECTIONS
 		*(.sdata*)
 		. = ALIGN(4);
 		__sdata_end = .;
-	} > RAM0
+	} > RAM1
 
 	__global_pointer$ = __sdata_begin + 0x800;
 
-	__stack_top = ORIGIN(RAM0) + LENGTH(RAM0);
+	__stack_top = ORIGIN(RAM1) + LENGTH(RAM1);
 	__end = .;
 
-	.ram1 (NOLOAD) :
+	.ram0 (NOLOAD) :
 	{
-		__ram1_begin = .;
-		*(.ram1*)
+		__ram0_begin = .;
+		*(.ram0*)
 		. = ALIGN(4);
-		__ram1_end = .;
-	} > RAM1
+		__ram0_end = .;
+	} > RAM0
 
 	/DISCARD/ :
 	{
