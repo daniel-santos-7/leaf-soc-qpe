@@ -79,12 +79,14 @@ architecture rtl of leaf_soc is
     signal soc_ram0_b_adr   : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
     signal soc_ram0_b_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_b_ack   : std_logic;
+    signal soc_ram0_b_stall : std_logic;
     signal soc_ram1_b_cyc   : std_logic;
     signal soc_ram1_b_stb   : std_logic;
     signal soc_ram1_b_adr   : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
     signal soc_ram1_b_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram1_b_ack   : std_logic;
     signal soc_ram1_b_err   : std_logic;
+    signal soc_ram1_b_stall : std_logic;
 
     signal soc_data_io0_cyc  : std_logic;
     signal soc_data_io0_stb  : std_logic;
@@ -122,6 +124,7 @@ architecture rtl of leaf_soc is
     signal soc_ram0_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_a_ack    : std_logic;
+    signal soc_ram0_a_stall  : std_logic;
     signal soc_ram1_a_cyc    : std_logic;
     signal soc_ram1_a_stb    : std_logic;
     signal soc_ram1_a_we     : std_logic;
@@ -131,8 +134,10 @@ architecture rtl of leaf_soc is
     signal soc_ram1_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram1_a_ack    : std_logic;
     signal soc_ram1_a_err    : std_logic;
+    signal soc_ram1_a_stall  : std_logic;
 
-    signal soc_rom_ack : std_logic;
+    signal soc_rom_ack   : std_logic;
+    signal soc_rom_stall : std_logic;
     signal soc_rom_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_io0_ack   : std_logic;
@@ -334,6 +339,7 @@ begin
         rom_stb_o    => soc_inst_rom_stb,
         rom_adr_o    => soc_inst_rom_adr,
         rom_ack_i    => soc_rom_ack,
+        rom_stall_i  => soc_rom_stall,
         rom_dat_i    => soc_rom_dat,
         xipb_cyc_o   => soc_inst_xip_cyc,
         xipb_stb_o   => soc_inst_xip_stb,
@@ -346,12 +352,14 @@ begin
         ram0b_stb_o  => soc_ram0_b_stb,
         ram0b_adr_o  => soc_ram0_b_adr,
         ram0b_ack_i  => soc_ram0_b_ack,
+        ram0b_stall_i => soc_ram0_b_stall,
         ram0b_dat_i  => soc_ram0_b_dat,
         ram1b_cyc_o  => soc_ram1_b_cyc,
         ram1b_stb_o  => soc_ram1_b_stb,
         ram1b_adr_o  => soc_ram1_b_adr,
         ram1b_ack_i  => soc_ram1_b_ack,
         ram1b_err_i  => soc_ram1_b_err,
+        ram1b_stall_i => soc_ram1_b_stall,
         ram1b_dat_i  => soc_ram1_b_dat,
         io0_cyc_o    => soc_data_io0_cyc,
         io0_stb_o    => soc_data_io0_stb,
@@ -398,6 +406,7 @@ begin
         ram0a_adr_o  => soc_ram0_a_adr,
         ram0a_dat_o  => soc_ram0_a_dat_wr,
         ram0a_ack_i  => soc_ram0_a_ack,
+        ram0a_stall_i => soc_ram0_a_stall,
         ram0a_dat_i  => soc_ram0_a_dat_rd,
         ram1a_cyc_o  => soc_ram1_a_cyc,
         ram1a_stb_o  => soc_ram1_a_stb,
@@ -407,17 +416,19 @@ begin
         ram1a_dat_o  => soc_ram1_a_dat_wr,
         ram1a_ack_i  => soc_ram1_a_ack,
         ram1a_err_i  => soc_ram1_a_err,
+        ram1a_stall_i => soc_ram1_a_stall,
         ram1a_dat_i  => soc_ram1_a_dat_rd
     );
 
     soc_rom: entity work.wb_rom port map (
-        clk_i => soc_syscon_clk,
-        rst_i => soc_syscon_rst,
-        cyc_i => soc_inst_rom_cyc,
-        stb_i => soc_inst_rom_stb,
-        adr_i => soc_inst_rom_adr,
-        ack_o => soc_rom_ack,
-        dat_o => soc_rom_dat
+        clk_i   => soc_syscon_clk,
+        rst_i   => soc_syscon_rst,
+        cyc_i   => soc_inst_rom_cyc,
+        stb_i   => soc_inst_rom_stb,
+        adr_i   => soc_inst_rom_adr,
+        ack_o   => soc_rom_ack,
+        stall_o => soc_rom_stall,
+        dat_o   => soc_rom_dat
     );
 
     soc_uart: entity work.uart_wbsl port map (
@@ -574,11 +585,13 @@ begin
         sel_a_i => soc_ram0_a_sel,
         adr_a_i => soc_ram0_a_adr,
         ack_a_o => soc_ram0_a_ack,
+        stall_a_o => soc_ram0_a_stall,
         dat_a_o => soc_ram0_a_dat_rd,
         cyc_b_i => soc_ram0_b_cyc,
         stb_b_i => soc_ram0_b_stb,
         adr_b_i => soc_ram0_b_adr,
         ack_b_o => soc_ram0_b_ack,
+        stall_b_o => soc_ram0_b_stall,
         dat_b_o => soc_ram0_b_dat
     );
 
@@ -595,11 +608,13 @@ begin
             sel_a_i => soc_ram1_a_sel,
             adr_a_i => soc_ram1_a_adr,
             ack_a_o => soc_ram1_a_ack,
+            stall_a_o => soc_ram1_a_stall,
             dat_a_o => soc_ram1_a_dat_rd,
             cyc_b_i => soc_ram1_b_cyc,
             stb_b_i => soc_ram1_b_stb,
             adr_b_i => soc_ram1_b_adr,
             ack_b_o => soc_ram1_b_ack,
+            stall_b_o => soc_ram1_b_stall,
             dat_b_o => soc_ram1_b_dat
         );
 
@@ -610,9 +625,11 @@ begin
     no_ram1_gen: if not RAM1_EN generate
         soc_ram1_a_ack    <= '0';
         soc_ram1_a_err    <= '1';
+        soc_ram1_a_stall  <= '0';
         soc_ram1_a_dat_rd <= (others => '0');
         soc_ram1_b_ack    <= '0';
         soc_ram1_b_err    <= '1';
+        soc_ram1_b_stall  <= '0';
         soc_ram1_b_dat    <= (others => '0');
     end generate;
 

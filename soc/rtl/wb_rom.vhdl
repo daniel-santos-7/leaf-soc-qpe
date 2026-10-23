@@ -18,8 +18,9 @@ entity wb_rom is
         cyc_i : in  std_logic;
         stb_i : in  std_logic;
         adr_i : in  std_logic_vector(ROM_ADDR_WIDTH-1 downto 2);
-        ack_o : out std_logic;
-        dat_o : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
+        ack_o   : out std_logic;
+        stall_o : out std_logic;
+        dat_o   : out std_logic_vector(SOC_DATA_WIDTH-1 downto 0)
     );
 end entity wb_rom;
 
@@ -55,7 +56,8 @@ begin
         end if;
     end process dat_reg_proc;
 
-    ack_o <= ack_reg;
-    dat_o <= dat_reg;
+    ack_o   <= ack_reg;
+    stall_o <= '0';
+    dat_o   <= dat_reg;
 
 end architecture rtl;
