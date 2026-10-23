@@ -38,8 +38,7 @@ entity leaf_soc is
         gpio_i  : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_o  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_oe : out std_logic_vector(GPIO_WIDTH-1 downto 0);
-        dac_dat : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
-        dac_sel : in  std_logic
+        dac_dat : in  std_logic_vector(OUT_RES_BITS-1 downto 0)
     );
 end entity leaf_soc;
 
@@ -196,6 +195,7 @@ architecture rtl of leaf_soc is
 
     signal soc_qpe_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal soc_qpe_sig_q : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal soc_qpe_active : std_logic;
 
     signal soc_cop_csr_rdata : std_logic_vector(31 downto 0);
 
@@ -238,7 +238,7 @@ begin
             data_stall_i => soc_cpu_data_stall,
             sig_i_o      => soc_qpe_sig_i,
             sig_q_o      => soc_qpe_sig_q,
-            active_o     => active
+            active_o     => soc_qpe_active
         );
 
         soc_io1_ack   <= '0';
@@ -299,12 +299,13 @@ begin
             dat_o    => soc_io1_dat,
             sig_i_o  => soc_qpe_sig_i,
             sig_q_o  => soc_qpe_sig_q,
-            active_o => active
+            active_o => soc_qpe_active
         );
     end generate;
 
-    sig_i <= dac_dat when dac_sel = '1' else soc_qpe_sig_i;
-    sig_q <= dac_dat when dac_sel = '1' else soc_qpe_sig_q;
+    sig_i <= soc_qpe_sig_i when soc_qpe_active = '1' else dac_dat;
+    sig_q <= soc_qpe_sig_q when soc_qpe_active = '1' else dac_dat;
+    active <= soc_qpe_active;
 
     dac_clk <= not soc_syscon_clk;
 

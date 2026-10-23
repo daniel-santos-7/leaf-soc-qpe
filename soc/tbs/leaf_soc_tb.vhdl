@@ -62,7 +62,6 @@ architecture tb of leaf_soc_tb is
     constant DBG_HALF : natural := 5;
     constant DBG_NOP  : std_logic_vector(31 downto 0) := x"00000003";
 
-    signal dac_sel : std_logic;
 
     constant DAC_EXT : std_logic_vector(OUT_RES_BITS-1 downto 0) := "0100100011";
 
@@ -108,8 +107,7 @@ begin
         gpio_i  => gpio_i,
         gpio_o  => gpio_o,
         gpio_oe => gpio_oe,
-        dac_dat => DAC_EXT,
-        dac_sel => dac_sel
+        dac_dat => DAC_EXT
     );
 
     pad_sclk   <= sclk_o  when sclk_oe  = '1' else dbg_sclk;
@@ -196,6 +194,8 @@ begin
         if rising_edge(dac_clk) and clk_en = '1' then
             assert sig_i'stable(CLK_PERIOD/2 - 1 ns) and sig_q'stable(CLK_PERIOD/2 - 1 ns) and active'stable(CLK_PERIOD/2 - 1 ns)
                 report "sig_i/sig_q/active changed less than half a period before the dac_clk capture edge" severity failure;
+            assert active /= '0' or (sig_i = DAC_EXT and sig_q = DAC_EXT)
+                report "dac_dat not on sig_i/sig_q while the pulse generator is idle" severity failure;
         end if;
     end process dac_clk_proc;
 
@@ -272,7 +272,6 @@ begin
         dbg_sclk <= '0';
         dbg_cs_n <= '1';
         dbg_mosi <= '0';
-        dac_sel  <= '0';
         rst_n    <= '0';
         rx       <= '1';
         clk_en   <= '1';
@@ -302,13 +301,6 @@ begin
         else
             leaf_soc_send_program(rx, uart_data, PROGRAM, RAM_LOAD_CMD, RAM_JUMP_CMD);
         end if;
-
-        dac_sel <= '1';
-        wait until rising_edge(clk);
-        assert sig_i = DAC_EXT and sig_q = DAC_EXT report "parallel port not on sig_i/sig_q" severity failure;
-        dac_sel <= '0';
-        wait until rising_edge(clk);
-        assert active = '1' or (sig_i = (sig_i'range => '0') and sig_q = (sig_q'range => '0')) report "pulse generator not back on sig_i/sig_q" severity failure;
 
         if DBG_TEST then
             dbg_wait(4);
