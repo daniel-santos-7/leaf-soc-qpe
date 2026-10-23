@@ -89,6 +89,7 @@ GHDLXOPTS += $(if $(filter 1,$(DBG)),-gDBG_TEST=true,)
 GHDLXOPTS += $(if $(filter 1,$(ROLE)),-gROLE_TEST=true,)
 GHDLXOPTS += $(if $(filter 1,$(BOOT_RAM0)),-gBOOT_RAM0=true,)
 GHDLXOPTS += $(if $(filter 1,$(TRAP)),-gTRAP_TEST=true,)
+GHDLXOPTS += $(if $(filter 1,$(COLL)),-gCOLL_TEST=true,)
 GHDLXOPTS += $(if $(filter 0,$(RAM1)),-gRAM1_EN=false,)
 
 $(WORKDIR) $(WAVESDIR):

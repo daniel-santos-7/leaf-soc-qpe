@@ -17,6 +17,7 @@ entity leaf_soc_tb is
         ROLE_TEST      : boolean := false;
         BOOT_RAM0      : boolean := false;
         TRAP_TEST      : boolean := false;
+        COLL_TEST      : boolean := false;
         RAM1_EN        : boolean := true
     );
 end entity leaf_soc_tb;
@@ -191,6 +192,8 @@ begin
     test: process
         variable dbg_data : std_logic_vector(31 downto 0);
         variable dbg_stat : std_logic_vector(31 downto 0);
+        variable coll_cnt0 : std_logic_vector(31 downto 0);
+        variable coll_word : std_logic_vector(31 downto 0);
         variable dbg_junk : std_logic_vector(31 downto 0);
         variable dbg_early : std_logic_vector(63 downto 0);
 
@@ -401,6 +404,21 @@ begin
             dbg_read(x"80000024", dbg_data, dbg_stat);
             assert dbg_data = x"0EFFF9DC" report "ROLE: XIP did not work once the master role took effect" severity failure;
             report "ROLE ok: debug -> XIP -> debug, last reply kept, first command after XIP runs, fetch in EN_WAIT answers ERR";
+        end if;
+
+        if COLL_TEST then
+            dbg_wait(4);
+            dbg_read(x"90000008", coll_word, dbg_stat);
+            for i in 1 to 300 loop
+                dbg_write(x"90000008", coll_word);
+            end loop;
+            dbg_read(x"90000008", dbg_data, dbg_stat);
+            assert dbg_data = coll_word report "COLL: the rewritten instruction changed" severity failure;
+            dbg_read(x"80000000", coll_cnt0, dbg_stat);
+            dbg_wait(200);
+            dbg_read(x"80000000", dbg_data, dbg_stat);
+            assert unsigned(dbg_data) > unsigned(coll_cnt0) report "COLL: the CPU stopped while its loop was rewritten" severity failure;
+            report "COLL ok: 300 writes over the loop being fetched, loop intact, CPU still counting";
         end if;
 
         if TRAP_TEST then

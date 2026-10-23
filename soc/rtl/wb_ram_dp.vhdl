@@ -25,14 +25,16 @@ entity wb_ram_dp is
         we_a_i  : in  std_logic;
         sel_a_i : in  std_logic_vector(3 downto 0);
         adr_a_i : in  std_logic_vector(BITS-3 downto 0);
-        ack_a_o : out std_logic;
-        dat_a_o : out std_logic_vector(31 downto 0);
+        ack_a_o   : out std_logic;
+        stall_a_o : out std_logic;
+        dat_a_o   : out std_logic_vector(31 downto 0);
 
         cyc_b_i : in  std_logic;
         stb_b_i : in  std_logic;
         adr_b_i : in  std_logic_vector(BITS-3 downto 0);
-        ack_b_o : out std_logic;
-        dat_b_o : out std_logic_vector(31 downto 0)
+        ack_b_o   : out std_logic;
+        stall_b_o : out std_logic;
+        dat_b_o   : out std_logic_vector(31 downto 0)
     );
 end entity wb_ram_dp;
 
@@ -48,6 +50,8 @@ architecture macro of wb_ram_dp is
 
     signal ram_req_a : std_logic;
     signal ram_req_b : std_logic;
+    signal coll      : std_logic;
+    signal ram_acc_a : std_logic;
     signal ack_reg_a : std_logic;
     signal ack_reg_b : std_logic;
     signal rd_a      : std_logic;
@@ -77,6 +81,9 @@ begin
     ram_req_b <= cyc_b_i and stb_b_i;
     rd_a      <= ram_req_a and not we_a_i;
 
+    coll      <= ram_req_a and we_a_i and ram_req_b when adr_a_i = adr_b_i else '0';
+    ram_acc_a <= ram_req_a and not coll;
+
     addr_a <= adr_a_i(MACRO_ADDR_BITS-1 downto 0);
     addr_b <= adr_b_i(MACRO_ADDR_BITS-1 downto 0);
 
@@ -97,7 +104,7 @@ begin
 
     macros: for b in 0 to BANKS-1 generate
 
-        en_a(b) <= ram_req_a when bank_a = b else '0';
+        en_a(b) <= ram_acc_a when bank_a = b else '0';
         en_b(b) <= ram_req_b when bank_b = b else '0';
 
         macro_lo: sram_dp generic map (
@@ -161,14 +168,16 @@ begin
                 ack_reg_a <= '0';
                 ack_reg_b <= '0';
             else
-                ack_reg_a <= ram_req_a;
+                ack_reg_a <= ram_acc_a;
                 ack_reg_b <= ram_req_b;
             end if;
         end if;
     end process ack_proc;
 
-    ack_a_o <= ack_reg_a;
-    ack_b_o <= ack_reg_b;
+    ack_a_o   <= ack_reg_a;
+    stall_a_o <= coll;
+    ack_b_o   <= ack_reg_b;
+    stall_b_o <= '0';
 
     dat_a_o <= q_hi_a(sel_a) & q_lo_a(sel_a);
     dat_b_o <= q_hi_b(sel_b) & q_lo_b(sel_b);
@@ -251,9 +260,11 @@ begin
         end if;
     end process ack_reg_b_proc;
 
-    ack_a_o <= ack_reg_a;
-    dat_a_o <= dat_reg_a;
-    ack_b_o <= ack_reg_b;
-    dat_b_o <= dat_reg_b;
+    ack_a_o   <= ack_reg_a;
+    stall_a_o <= '0';
+    dat_a_o   <= dat_reg_a;
+    ack_b_o   <= ack_reg_b;
+    stall_b_o <= '0';
+    dat_b_o   <= dat_reg_b;
 
 end architecture rtl;
