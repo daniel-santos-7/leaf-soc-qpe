@@ -259,6 +259,16 @@ A program only works on a SoC built for the same interface. An MMIO program on a
 
 **DAC port:** `leaf_soc` has a 10-bit input `dac_dat` (`OUT_RES_BITS` wide) and a select input `dac_sel`. While `dac_sel` is 1, `sig_i` and `sig_q` both carry `dac_dat`; while it is 0 they carry the pulse generator's samples. The choice is up to whoever drives the pin: it does not follow `active`, which is not muxed and keeps reporting the generator, so a pulse fired while `dac_sel` is 1 plays internally but does not reach the pins. The mux is combinational and neither input is synchronised, so a change reaches the pins in the same cycle; a board that needs clean values must hold them stable or register them outside. The testbench drives `dac_dat` with `0x123`, and once the program has started it sets `dac_sel`, checks `0x123` on both pins, clears it and checks the idle generator's 0.
 
+**Sample clock:** `dac_clk` is the system clock inverted (`not clk`), forwarded so the DAC can capture `sig_i`, `sig_q` and `active` with a clock that leaves the chip next to them. The samples change just after the rising edge of `clk`, and `dac_clk` rises on its falling edge, half a period later, in the middle of the data eye: about half a period of setup and half of hold. Clock and data cross the same kind of pad, so pad and temperature variation largely cancel, and what is left is the pin-to-pin skew, which the board controls with matched traces. It assumes a DAC that captures one sample per cycle on the rising edge of a data clock; a DAC with only a conversion clock, a DDR interface, a half-rate interface or I and Q interleaved on one bus needs a different scheme. In an ASIC the inverter sits on the clock network, so clock-tree synthesis must handle it, and the constraints declare the pin a generated clock, with the DAC's setup and hold as output delays:
+
+```tcl
+create_generated_clock -name dac_clk -source [get_ports clk] -invert -divide_by 1 [get_ports dac_clk]
+set_output_delay -clock dac_clk -max <DAC tSU> [get_ports {sig_i[*] sig_q[*] active}]
+set_output_delay -clock dac_clk -min -<DAC tH>  [get_ports {sig_i[*] sig_q[*] active}]
+```
+
+The `dac_sel` mux above sits between the generator's flip-flops and the pins, so it adds its delay to the output path; it is left unregistered for now. The testbench captures the CSV samples (`SAMPLES=1`) on the rising edge of `dac_clk`, and at every such edge checks that `sig_i`, `sig_q` and `active` have been stable for almost half a period; with `dac_clk` not inverted the check fails.
+
 The I/Q output width is **not** fixed by the SoC: it follows `OUT_RES_BITS` in the generated `ips/wgen/rtl/sine_lut_pkg.vhd` (currently 10 bits), which `leaf_soc_pkg.vhdl` derives its own constant from. Do not hardcode it in the package, or the SoC ports stop matching `sig_gen`'s.
 
 > **Note — the COP registers hold pointers, not values.** Writing a parameter CSR stores `wdata[4:0]` as a *GPR index*; `qpe_csrs` then snoops the register-file write port and mirrors whatever lands in that GPR from then on. Binding does not copy the register's current value, so bind first, then load the register. The `qpe.*` macros in `sw/asm/common/qpe.inc` take the register *number* and bind with `csrwi`, which needs no scratch register:
@@ -342,7 +352,7 @@ To build and simulate the project, ensure the following tools are installed:
 | `RAM` | `BEHAV` | `BEHAV`, `MACRO` or `TECH` — see Macro-based RAM |
 | `TECH_DIR` | `tech` | Directory with the technology sources for `RAM=TECH` |
 | `WAVEFORM` | *(none)* | `ghw` or `fst`; written to `waves/<program>.<ext>` |
-| `SAMPLES` | *(none)* | `1` dumps every active I/Q sample to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
+| `SAMPLES` | *(none)* | `1` dumps every active I/Q sample, taken on the rising edge of `dac_clk`, to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
 | `DBG` | *(none)* | `1` runs the SPI debug bridge check after the program starts — see Debug Bridge |
 | `ROLE` | *(none)* | `1` runs the debug → XIP → debug role change check with `sw/c/role_test` — see Debug Bridge |
 | `COLL` | *(none)* | `1` runs the RAM1 store/fetch collision check with `sw/asm/coll-test` — see Macro-based RAM |
