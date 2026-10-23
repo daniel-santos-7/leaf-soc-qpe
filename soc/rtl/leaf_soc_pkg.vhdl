@@ -103,6 +103,7 @@ package leaf_soc_pkg is
             sig_i   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             sig_q   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             active  : out std_logic;
+            dac_clk : out std_logic;
             sclk_i  : in  std_logic;
             sclk_o  : out std_logic;
             sclk_oe : out std_logic;

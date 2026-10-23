@@ -22,6 +22,7 @@ entity leaf_soc is
         sig_i   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         sig_q   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         active  : out std_logic;
+        dac_clk : out std_logic;
         sclk_i  : in  std_logic;
         sclk_o  : out std_logic;
         sclk_oe : out std_logic;
@@ -304,6 +305,8 @@ begin
 
     sig_i <= dac_dat when dac_sel = '1' else soc_qpe_sig_i;
     sig_q <= dac_dat when dac_sel = '1' else soc_qpe_sig_q;
+
+    dac_clk <= not soc_syscon_clk;
 
     soc_intercon: entity work.wb_intercon port map (
         clk_i        => soc_syscon_clk,

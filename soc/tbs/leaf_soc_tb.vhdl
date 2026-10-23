@@ -31,6 +31,7 @@ architecture tb of leaf_soc_tb is
     signal sig_i  : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal sig_q  : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal active : std_logic;
+    signal dac_clk : std_logic;
 
     signal uart_data : std_logic_vector(7 downto 0);
 
@@ -91,6 +92,7 @@ begin
         sig_i   => sig_i,
         sig_q   => sig_q,
         active  => active,
+        dac_clk => dac_clk,
         sclk_i  => pad_sclk,
         sclk_o  => sclk_o,
         sclk_oe => sclk_oe,
@@ -172,7 +174,7 @@ begin
             write(l, string'("cycle,sig_i,sig_q"));
             writeline(f, l);
             loop
-                wait until rising_edge(clk) or clk_en = '0';
+                wait until rising_edge(dac_clk) or clk_en = '0';
                 exit when clk_en = '0';
                 if active = '1' then
                     write(l, cycle);
@@ -188,6 +190,14 @@ begin
         end if;
         wait;
     end process samples_proc;
+
+    dac_clk_proc: process(dac_clk)
+    begin
+        if rising_edge(dac_clk) and clk_en = '1' then
+            assert sig_i'stable(CLK_PERIOD/2 - 1 ns) and sig_q'stable(CLK_PERIOD/2 - 1 ns) and active'stable(CLK_PERIOD/2 - 1 ns)
+                report "sig_i/sig_q/active changed less than half a period before the dac_clk capture edge" severity failure;
+        end if;
+    end process dac_clk_proc;
 
     test: process
         variable dbg_data : std_logic_vector(31 downto 0);
