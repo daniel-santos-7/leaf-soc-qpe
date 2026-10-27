@@ -34,6 +34,7 @@ RTL_FILES = $(patsubst ./%,%,$(RTL_SRC) $(RTL_TECH))
 AREA_DIR   = $(WORKDIR)/area
 AREA_DEPTH ?= 3
 AREA_COP   = $(if $(filter MMIO,$(WGEN_IF)),false,true)
+AREA_RAM0  = $(if $(filter 0,$(RAM0)),false,true)
 AREA_RAM1  = $(if $(filter 0,$(RAM1)),false,$(if $(filter 1,$(RAM1)),true,$(if $(filter TECH,$(RAM)),true,false)))
 
 ifneq ($(filter rtl-tar area,$(MAKECMDGOALS)),)
@@ -68,6 +69,11 @@ ifeq ($(filter rtl-tar area clean,$(MAKECMDGOALS)),)
 ifeq ($(RAM1)$(BOOT_RAM0),0)
 $(error RAM1=0 leaves no RAM to preload, add BOOT_RAM0=1)
 endif
+ifeq ($(RAM0),0)
+ifneq ($(filter 1,$(BOOT_RAM0) $(DBG) $(ROLE) $(COLL)),)
+$(error RAM0=0: BOOT_RAM0, DBG, ROLE and COLL need RAM0)
+endif
+endif
 endif
 
 PROGRAM_NAME ?= $(shell basename $(PROGRAM) .bin)
@@ -90,6 +96,7 @@ GHDLXOPTS += $(if $(filter 1,$(ROLE)),-gROLE_TEST=true,)
 GHDLXOPTS += $(if $(filter 1,$(BOOT_RAM0)),-gBOOT_RAM0=true,)
 GHDLXOPTS += $(if $(filter 1,$(TRAP)),-gTRAP_TEST=true,)
 GHDLXOPTS += $(if $(filter 1,$(COLL)),-gCOLL_TEST=true,)
+GHDLXOPTS += $(if $(filter 0,$(RAM0)),-gRAM0_EN=false,)
 GHDLXOPTS += $(if $(filter 0,$(RAM1)),-gRAM1_EN=false,)
 
 $(WORKDIR) $(WAVESDIR):
@@ -164,10 +171,10 @@ area:
 	done
 	@$(GHDL) -a --workdir=$(AREA_DIR) $$(cat $(AREA_DIR)/order.txt)
 	@printf '%s\n' \
-	    "ghdl --workdir=$(AREA_DIR) -gWGEN_IF_COP=$(AREA_COP) -gRAM1_EN=$(AREA_RAM1) $(RTL_TOP)" \
+	    "ghdl --workdir=$(AREA_DIR) -gWGEN_IF_COP=$(AREA_COP) -gRAM0_EN=$(AREA_RAM0) -gRAM1_EN=$(AREA_RAM1) $(RTL_TOP)" \
 	    'hierarchy -top leaf_soc' 'synth -top leaf_soc' 'abc -g cmos2' 'opt_clean' 'stat' > $(AREA_DIR)/area.ys
 	@yosys -m ghdl -q -l $(AREA_DIR)/area.log $(AREA_DIR)/area.ys > /dev/null 2>&1 || { tail -20 $(AREA_DIR)/area.log; exit 1; }
-	@echo "$(RTL_TOP), WGEN_IF_COP=$(AREA_COP), RAM1_EN=$(AREA_RAM1)"
+	@echo "$(RTL_TOP), WGEN_IF_COP=$(AREA_COP), RAM0_EN=$(AREA_RAM0), RAM1_EN=$(AREA_RAM1)"
 	@python3 scripts/area_report.py $(AREA_DIR)/area.log --depth $(AREA_DEPTH)
 
 clean:

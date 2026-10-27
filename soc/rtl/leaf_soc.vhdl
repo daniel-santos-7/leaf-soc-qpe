@@ -12,6 +12,7 @@ use work.leaf_soc_pkg.all;
 entity leaf_soc is
     generic (
         WGEN_IF_COP : boolean := true;
+        RAM0_EN     : boolean := true;
         RAM1_EN     : boolean := false
     );
     port (
@@ -79,6 +80,7 @@ architecture rtl of leaf_soc is
     signal soc_ram0_b_adr   : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
     signal soc_ram0_b_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_b_ack   : std_logic;
+    signal soc_ram0_b_err   : std_logic;
     signal soc_ram0_b_stall : std_logic;
     signal soc_ram1_b_cyc   : std_logic;
     signal soc_ram1_b_stb   : std_logic;
@@ -124,6 +126,7 @@ architecture rtl of leaf_soc is
     signal soc_ram0_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_a_ack    : std_logic;
+    signal soc_ram0_a_err    : std_logic;
     signal soc_ram0_a_stall  : std_logic;
     signal soc_ram1_a_cyc    : std_logic;
     signal soc_ram1_a_stb    : std_logic;
@@ -364,6 +367,7 @@ begin
         ram0b_stb_o  => soc_ram0_b_stb,
         ram0b_adr_o  => soc_ram0_b_adr,
         ram0b_ack_i  => soc_ram0_b_ack,
+        ram0b_err_i  => soc_ram0_b_err,
         ram0b_stall_i => soc_ram0_b_stall,
         ram0b_dat_i  => soc_ram0_b_dat,
         ram1b_cyc_o  => soc_ram1_b_cyc,
@@ -418,6 +422,7 @@ begin
         ram0a_adr_o  => soc_ram0_a_adr,
         ram0a_dat_o  => soc_ram0_a_dat_wr,
         ram0a_ack_i  => soc_ram0_a_ack,
+        ram0a_err_i  => soc_ram0_a_err,
         ram0a_stall_i => soc_ram0_a_stall,
         ram0a_dat_i  => soc_ram0_a_dat_rd,
         ram1a_cyc_o  => soc_ram1_a_cyc,
@@ -585,27 +590,43 @@ begin
         halt_o     => soc_dbg_halt
     );
 
-    soc_ram0: wb_ram_dp generic map (
-        BITS => RAM0_ADDR_WIDTH
-    ) port map (
-        clk_i   => soc_syscon_clk,
-        rst_i   => soc_syscon_rst,
-        dat_a_i => soc_ram0_a_dat_wr,
-        cyc_a_i => soc_ram0_a_cyc,
-        stb_a_i => soc_ram0_a_stb,
-        we_a_i  => soc_ram0_a_we,
-        sel_a_i => soc_ram0_a_sel,
-        adr_a_i => soc_ram0_a_adr,
-        ack_a_o => soc_ram0_a_ack,
-        stall_a_o => soc_ram0_a_stall,
-        dat_a_o => soc_ram0_a_dat_rd,
-        cyc_b_i => soc_ram0_b_cyc,
-        stb_b_i => soc_ram0_b_stb,
-        adr_b_i => soc_ram0_b_adr,
-        ack_b_o => soc_ram0_b_ack,
-        stall_b_o => soc_ram0_b_stall,
-        dat_b_o => soc_ram0_b_dat
-    );
+    ram0_gen: if RAM0_EN generate
+        soc_ram0: wb_ram_dp generic map (
+            BITS => RAM0_ADDR_WIDTH
+        ) port map (
+            clk_i   => soc_syscon_clk,
+            rst_i   => soc_syscon_rst,
+            dat_a_i => soc_ram0_a_dat_wr,
+            cyc_a_i => soc_ram0_a_cyc,
+            stb_a_i => soc_ram0_a_stb,
+            we_a_i  => soc_ram0_a_we,
+            sel_a_i => soc_ram0_a_sel,
+            adr_a_i => soc_ram0_a_adr,
+            ack_a_o => soc_ram0_a_ack,
+            stall_a_o => soc_ram0_a_stall,
+            dat_a_o => soc_ram0_a_dat_rd,
+            cyc_b_i => soc_ram0_b_cyc,
+            stb_b_i => soc_ram0_b_stb,
+            adr_b_i => soc_ram0_b_adr,
+            ack_b_o => soc_ram0_b_ack,
+            stall_b_o => soc_ram0_b_stall,
+            dat_b_o => soc_ram0_b_dat
+        );
+
+        soc_ram0_a_err <= '0';
+        soc_ram0_b_err <= '0';
+    end generate;
+
+    no_ram0_gen: if not RAM0_EN generate
+        soc_ram0_a_ack    <= '0';
+        soc_ram0_a_err    <= '1';
+        soc_ram0_a_stall  <= '0';
+        soc_ram0_a_dat_rd <= (others => '0');
+        soc_ram0_b_ack    <= '0';
+        soc_ram0_b_err    <= '1';
+        soc_ram0_b_stall  <= '0';
+        soc_ram0_b_dat    <= (others => '0');
+    end generate;
 
     ram1_gen: if RAM1_EN generate
         soc_ram1: wb_ram_dp generic map (
