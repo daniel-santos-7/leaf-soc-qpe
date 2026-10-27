@@ -93,6 +93,7 @@ package leaf_soc_pkg is
     component leaf_soc is
         generic (
             WGEN_IF_COP : boolean := true;
+            RAM0_EN     : boolean := true;
             RAM1_EN     : boolean := false
         );
         port (

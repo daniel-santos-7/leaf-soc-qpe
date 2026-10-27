@@ -18,6 +18,7 @@ entity leaf_soc_tb is
         BOOT_RAM0      : boolean := false;
         TRAP_TEST      : boolean := false;
         COLL_TEST      : boolean := false;
+        RAM0_EN        : boolean := true;
         RAM1_EN        : boolean := true
     );
 end entity leaf_soc_tb;
@@ -83,6 +84,7 @@ begin
 
     uut: leaf_soc generic map (
         WGEN_IF_COP => WGEN_IF_COP,
+        RAM0_EN     => RAM0_EN,
         RAM1_EN     => RAM1_EN
     ) port map (
         clk     => clk,
