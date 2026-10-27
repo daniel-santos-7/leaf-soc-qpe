@@ -303,9 +303,17 @@ begin
         );
     end generate;
 
-    sig_i <= soc_qpe_sig_i when soc_qpe_active = '1' else dac_dat;
-    sig_q <= soc_qpe_sig_q when soc_qpe_active = '1' else dac_dat;
-    active <= soc_qpe_active;
+    soc_dac_out: entity work.dac_out port map (
+        clk_i     => soc_syscon_clk,
+        rst_i     => soc_syscon_rst,
+        sig_i_i   => soc_qpe_sig_i,
+        sig_q_i   => soc_qpe_sig_q,
+        active_i  => soc_qpe_active,
+        dac_dat_i => dac_dat,
+        sig_i_o   => sig_i,
+        sig_q_o   => sig_q,
+        active_o  => active
+    );
 
     dac_clk <= not soc_syscon_clk;
 
