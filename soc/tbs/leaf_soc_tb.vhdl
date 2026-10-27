@@ -31,6 +31,7 @@ architecture tb of leaf_soc_tb is
     signal sig_i  : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal sig_q  : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal active : std_logic;
+    signal dac_chk : std_logic := '0';
     signal dac_clk : std_logic;
 
     signal uart_data : std_logic_vector(7 downto 0);
@@ -194,7 +195,7 @@ begin
         if rising_edge(dac_clk) and clk_en = '1' then
             assert sig_i'stable(CLK_PERIOD/2 - 1 ns) and sig_q'stable(CLK_PERIOD/2 - 1 ns) and active'stable(CLK_PERIOD/2 - 1 ns)
                 report "sig_i/sig_q/active changed less than half a period before the dac_clk capture edge" severity failure;
-            assert active /= '0' or (sig_i = DAC_EXT and sig_q = DAC_EXT)
+            assert dac_chk = '0' or active /= '0' or (sig_i = DAC_EXT and sig_q = DAC_EXT)
                 report "dac_dat not on sig_i/sig_q while the pulse generator is idle" severity failure;
         end if;
     end process dac_clk_proc;
@@ -278,10 +279,15 @@ begin
         wait until rising_edge(clk);
         wait until rising_edge(clk);
         wait until rising_edge(clk);
+        wait for 1 ns;
+        assert active = '0' and sig_i = (sig_i'range => '0') and sig_q = (sig_q'range => '0')
+            report "sig_i/sig_q/active not 0 during reset" severity failure;
 
         rst_n <= '1';
         wait until rising_edge(clk);
         wait until rising_edge(clk);
+        wait until rising_edge(clk);
+        dac_chk <= '1';
 
         for i in 0 to 511 loop
             wait until rising_edge(clk);
