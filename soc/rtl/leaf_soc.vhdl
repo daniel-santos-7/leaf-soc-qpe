@@ -11,7 +11,8 @@ use work.leaf_soc_pkg.all;
 
 entity leaf_soc is
     generic (
-        WGEN_IF_COP : boolean := true
+        WGEN_IF_COP : boolean := true;
+        RAM1_EN     : boolean := false
     );
     port (
         clk     : in  std_logic;
@@ -21,6 +22,7 @@ entity leaf_soc is
         sig_i   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         sig_q   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         active  : out std_logic;
+        dac_clk : out std_logic;
         sclk_i  : in  std_logic;
         sclk_o  : out std_logic;
         sclk_oe : out std_logic;
@@ -36,8 +38,7 @@ entity leaf_soc is
         gpio_i  : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_o  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
         gpio_oe : out std_logic_vector(GPIO_WIDTH-1 downto 0);
-        dac_dat : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
-        dac_sel : in  std_logic
+        dac_dat : in  std_logic_vector(OUT_RES_BITS-1 downto 0)
     );
 end entity leaf_soc;
 
@@ -78,11 +79,14 @@ architecture rtl of leaf_soc is
     signal soc_ram0_b_adr   : std_logic_vector(RAM0_ADDR_WIDTH-1 downto 2);
     signal soc_ram0_b_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_b_ack   : std_logic;
+    signal soc_ram0_b_stall : std_logic;
     signal soc_ram1_b_cyc   : std_logic;
     signal soc_ram1_b_stb   : std_logic;
     signal soc_ram1_b_adr   : std_logic_vector(RAM1_ADDR_WIDTH-1 downto 2);
     signal soc_ram1_b_dat   : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram1_b_ack   : std_logic;
+    signal soc_ram1_b_err   : std_logic;
+    signal soc_ram1_b_stall : std_logic;
 
     signal soc_data_io0_cyc  : std_logic;
     signal soc_data_io0_stb  : std_logic;
@@ -120,6 +124,7 @@ architecture rtl of leaf_soc is
     signal soc_ram0_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram0_a_ack    : std_logic;
+    signal soc_ram0_a_stall  : std_logic;
     signal soc_ram1_a_cyc    : std_logic;
     signal soc_ram1_a_stb    : std_logic;
     signal soc_ram1_a_we     : std_logic;
@@ -128,8 +133,11 @@ architecture rtl of leaf_soc is
     signal soc_ram1_a_dat_wr : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram1_a_dat_rd : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
     signal soc_ram1_a_ack    : std_logic;
+    signal soc_ram1_a_err    : std_logic;
+    signal soc_ram1_a_stall  : std_logic;
 
-    signal soc_rom_ack : std_logic;
+    signal soc_rom_ack   : std_logic;
+    signal soc_rom_stall : std_logic;
     signal soc_rom_dat : std_logic_vector(SOC_DATA_WIDTH-1 downto 0);
 
     signal soc_io0_ack   : std_logic;
@@ -156,8 +164,8 @@ architecture rtl of leaf_soc is
     signal soc_xip_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_xip_tx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_xip_rx_valid : std_logic;
-    signal soc_xip_rx_ready : std_logic;
     signal soc_xip_en       : std_logic;
+    signal soc_xip_sck_div  : std_logic_vector(SPI_DIV_BITS-1 downto 0);
 
     signal soc_spi_role_req : std_logic;
     signal soc_spi_role_ack : std_logic;
@@ -167,13 +175,11 @@ architecture rtl of leaf_soc is
     signal soc_spi_rx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_spi_rx_bits  : std_logic_vector(SPI_CNT_BITS-1 downto 0);
     signal soc_spi_rx_valid : std_logic;
-    signal soc_spi_rx_ready : std_logic;
 
     signal soc_dbg_tx_valid : std_logic;
     signal soc_dbg_tx_ready : std_logic;
     signal soc_dbg_tx_data  : std_logic_vector(SPI_WIDTH-1 downto 0);
     signal soc_dbg_rx_valid : std_logic;
-    signal soc_dbg_rx_ready : std_logic;
 
     signal soc_dbg_cyc   : std_logic;
     signal soc_dbg_stb   : std_logic;
@@ -189,6 +195,7 @@ architecture rtl of leaf_soc is
 
     signal soc_qpe_sig_i : std_logic_vector(OUT_RES_BITS-1 downto 0);
     signal soc_qpe_sig_q : std_logic_vector(OUT_RES_BITS-1 downto 0);
+    signal soc_qpe_active : std_logic;
 
     signal soc_cop_csr_rdata : std_logic_vector(31 downto 0);
 
@@ -231,7 +238,7 @@ begin
             data_stall_i => soc_cpu_data_stall,
             sig_i_o      => soc_qpe_sig_i,
             sig_q_o      => soc_qpe_sig_q,
-            active_o     => active
+            active_o     => soc_qpe_active
         );
 
         soc_io1_ack   <= '0';
@@ -292,12 +299,23 @@ begin
             dat_o    => soc_io1_dat,
             sig_i_o  => soc_qpe_sig_i,
             sig_q_o  => soc_qpe_sig_q,
-            active_o => active
+            active_o => soc_qpe_active
         );
     end generate;
 
-    sig_i <= dac_dat when dac_sel = '1' else soc_qpe_sig_i;
-    sig_q <= dac_dat when dac_sel = '1' else soc_qpe_sig_q;
+    soc_dac_out: entity work.dac_out port map (
+        clk_i     => soc_syscon_clk,
+        rst_i     => soc_syscon_rst,
+        sig_i_i   => soc_qpe_sig_i,
+        sig_q_i   => soc_qpe_sig_q,
+        active_i  => soc_qpe_active,
+        dac_dat_i => dac_dat,
+        sig_i_o   => sig_i,
+        sig_q_o   => sig_q,
+        active_o  => active
+    );
+
+    dac_clk <= not soc_syscon_clk;
 
     soc_intercon: entity work.wb_intercon port map (
         clk_i        => soc_syscon_clk,
@@ -333,6 +351,7 @@ begin
         rom_stb_o    => soc_inst_rom_stb,
         rom_adr_o    => soc_inst_rom_adr,
         rom_ack_i    => soc_rom_ack,
+        rom_stall_i  => soc_rom_stall,
         rom_dat_i    => soc_rom_dat,
         xipb_cyc_o   => soc_inst_xip_cyc,
         xipb_stb_o   => soc_inst_xip_stb,
@@ -345,11 +364,14 @@ begin
         ram0b_stb_o  => soc_ram0_b_stb,
         ram0b_adr_o  => soc_ram0_b_adr,
         ram0b_ack_i  => soc_ram0_b_ack,
+        ram0b_stall_i => soc_ram0_b_stall,
         ram0b_dat_i  => soc_ram0_b_dat,
         ram1b_cyc_o  => soc_ram1_b_cyc,
         ram1b_stb_o  => soc_ram1_b_stb,
         ram1b_adr_o  => soc_ram1_b_adr,
         ram1b_ack_i  => soc_ram1_b_ack,
+        ram1b_err_i  => soc_ram1_b_err,
+        ram1b_stall_i => soc_ram1_b_stall,
         ram1b_dat_i  => soc_ram1_b_dat,
         io0_cyc_o    => soc_data_io0_cyc,
         io0_stb_o    => soc_data_io0_stb,
@@ -396,6 +418,7 @@ begin
         ram0a_adr_o  => soc_ram0_a_adr,
         ram0a_dat_o  => soc_ram0_a_dat_wr,
         ram0a_ack_i  => soc_ram0_a_ack,
+        ram0a_stall_i => soc_ram0_a_stall,
         ram0a_dat_i  => soc_ram0_a_dat_rd,
         ram1a_cyc_o  => soc_ram1_a_cyc,
         ram1a_stb_o  => soc_ram1_a_stb,
@@ -404,17 +427,20 @@ begin
         ram1a_adr_o  => soc_ram1_a_adr,
         ram1a_dat_o  => soc_ram1_a_dat_wr,
         ram1a_ack_i  => soc_ram1_a_ack,
+        ram1a_err_i  => soc_ram1_a_err,
+        ram1a_stall_i => soc_ram1_a_stall,
         ram1a_dat_i  => soc_ram1_a_dat_rd
     );
 
     soc_rom: entity work.wb_rom port map (
-        clk_i => soc_syscon_clk,
-        rst_i => soc_syscon_rst,
-        cyc_i => soc_inst_rom_cyc,
-        stb_i => soc_inst_rom_stb,
-        adr_i => soc_inst_rom_adr,
-        ack_o => soc_rom_ack,
-        dat_o => soc_rom_dat
+        clk_i   => soc_syscon_clk,
+        rst_i   => soc_syscon_rst,
+        cyc_i   => soc_inst_rom_cyc,
+        stb_i   => soc_inst_rom_stb,
+        adr_i   => soc_inst_rom_adr,
+        ack_o   => soc_rom_ack,
+        stall_o => soc_rom_stall,
+        dat_o   => soc_rom_dat
     );
 
     soc_uart: entity work.uart_wbsl port map (
@@ -454,7 +480,8 @@ begin
     );
 
     soc_xip: entity work.wb_xip_ctrl generic map (
-        CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES
+        CS_HIGH_CYCLES => XIP_CS_HIGH_CYCLES,
+        SCK_DIV        => XIP_SCK_DIV
     ) port map (
         clk_i      => soc_syscon_clk,
         rst_i      => soc_syscon_rst,
@@ -476,13 +503,14 @@ begin
         stall_b_o  => soc_xip_stall,
         dat_b_o    => soc_xip_dat,
         en_o       => soc_xip_en,
+        role_ack_i => soc_spi_role_ack,
+        sck_div_o  => soc_xip_sck_div,
         tx_valid_o => soc_xip_tx_valid,
         tx_ready_i => soc_xip_tx_ready,
         tx_data_o  => soc_xip_tx_data,
         tx_bits_o  => soc_xip_tx_bits,
         rx_data_i  => soc_spi_rx_data,
-        rx_valid_i => soc_xip_rx_valid,
-        rx_ready_o => soc_xip_rx_ready
+        rx_valid_i => soc_xip_rx_valid
     );
 
     soc_spi_mux: entity work.spi_mux port map (
@@ -492,14 +520,11 @@ begin
         spi_rx_valid_i => soc_spi_rx_valid,
         xip_tx_valid_i => soc_xip_tx_valid,
         xip_tx_data_i  => soc_xip_tx_data,
-        xip_rx_ready_i => soc_xip_rx_ready,
         dbg_tx_valid_i => soc_dbg_tx_valid,
         dbg_tx_data_i  => soc_dbg_tx_data,
-        dbg_rx_ready_i => soc_dbg_rx_ready,
         spi_role_req_o => soc_spi_role_req,
         spi_tx_valid_o => soc_spi_tx_valid,
         spi_tx_data_o  => soc_spi_tx_data,
-        spi_rx_ready_o => soc_spi_rx_ready,
         xip_tx_ready_o => soc_xip_tx_ready,
         xip_rx_valid_o => soc_xip_rx_valid,
         dbg_tx_ready_o => soc_dbg_tx_ready,
@@ -507,13 +532,14 @@ begin
     );
 
     soc_spi: entity work.spi_port generic map (
-        SCK_DIV  => XIP_SCK_DIV,
+        DIV_BITS => SPI_DIV_BITS,
         WIDTH    => SPI_WIDTH,
         CNT_BITS => SPI_CNT_BITS
     ) port map (
         clk_i      => soc_syscon_clk,
         rst_i      => soc_syscon_rst,
         role_req_i => soc_spi_role_req,
+        sck_div_i  => soc_xip_sck_div,
         sclk_i     => sclk_i,
         cs_n_i     => cs_n_i,
         mosi_i     => mosi_i,
@@ -521,7 +547,6 @@ begin
         tx_valid_i => soc_spi_tx_valid,
         tx_data_i  => soc_spi_tx_data,
         tx_bits_i  => soc_xip_tx_bits,
-        rx_ready_i => soc_spi_rx_ready,
         role_ack_o => soc_spi_role_ack,
         sclk_o     => sclk_o,
         sclk_oe    => sclk_oe,
@@ -543,9 +568,9 @@ begin
         rx_data_i  => soc_spi_rx_data,
         rx_bits_i  => soc_spi_rx_bits,
         rx_valid_i => soc_dbg_rx_valid,
-        rx_ready_o => soc_dbg_rx_ready,
         tx_valid_o => soc_dbg_tx_valid,
         tx_ready_i => soc_dbg_tx_ready,
+        role_ack_i => soc_spi_role_ack,
         tx_data_o  => soc_dbg_tx_data,
         cyc_o      => soc_dbg_cyc,
         stb_o      => soc_dbg_stb,
@@ -572,32 +597,52 @@ begin
         sel_a_i => soc_ram0_a_sel,
         adr_a_i => soc_ram0_a_adr,
         ack_a_o => soc_ram0_a_ack,
+        stall_a_o => soc_ram0_a_stall,
         dat_a_o => soc_ram0_a_dat_rd,
         cyc_b_i => soc_ram0_b_cyc,
         stb_b_i => soc_ram0_b_stb,
         adr_b_i => soc_ram0_b_adr,
         ack_b_o => soc_ram0_b_ack,
+        stall_b_o => soc_ram0_b_stall,
         dat_b_o => soc_ram0_b_dat
     );
 
-    soc_ram1: wb_ram_dp generic map (
-        BITS => RAM1_ADDR_WIDTH
-    ) port map (
-        clk_i   => soc_syscon_clk,
-        rst_i   => soc_syscon_rst,
-        dat_a_i => soc_ram1_a_dat_wr,
-        cyc_a_i => soc_ram1_a_cyc,
-        stb_a_i => soc_ram1_a_stb,
-        we_a_i  => soc_ram1_a_we,
-        sel_a_i => soc_ram1_a_sel,
-        adr_a_i => soc_ram1_a_adr,
-        ack_a_o => soc_ram1_a_ack,
-        dat_a_o => soc_ram1_a_dat_rd,
-        cyc_b_i => soc_ram1_b_cyc,
-        stb_b_i => soc_ram1_b_stb,
-        adr_b_i => soc_ram1_b_adr,
-        ack_b_o => soc_ram1_b_ack,
-        dat_b_o => soc_ram1_b_dat
-    );
+    ram1_gen: if RAM1_EN generate
+        soc_ram1: wb_ram_dp generic map (
+            BITS => RAM1_ADDR_WIDTH
+        ) port map (
+            clk_i   => soc_syscon_clk,
+            rst_i   => soc_syscon_rst,
+            dat_a_i => soc_ram1_a_dat_wr,
+            cyc_a_i => soc_ram1_a_cyc,
+            stb_a_i => soc_ram1_a_stb,
+            we_a_i  => soc_ram1_a_we,
+            sel_a_i => soc_ram1_a_sel,
+            adr_a_i => soc_ram1_a_adr,
+            ack_a_o => soc_ram1_a_ack,
+            stall_a_o => soc_ram1_a_stall,
+            dat_a_o => soc_ram1_a_dat_rd,
+            cyc_b_i => soc_ram1_b_cyc,
+            stb_b_i => soc_ram1_b_stb,
+            adr_b_i => soc_ram1_b_adr,
+            ack_b_o => soc_ram1_b_ack,
+            stall_b_o => soc_ram1_b_stall,
+            dat_b_o => soc_ram1_b_dat
+        );
+
+        soc_ram1_a_err <= '0';
+        soc_ram1_b_err <= '0';
+    end generate;
+
+    no_ram1_gen: if not RAM1_EN generate
+        soc_ram1_a_ack    <= '0';
+        soc_ram1_a_err    <= '1';
+        soc_ram1_a_stall  <= '0';
+        soc_ram1_a_dat_rd <= (others => '0');
+        soc_ram1_b_ack    <= '0';
+        soc_ram1_b_err    <= '1';
+        soc_ram1_b_stall  <= '0';
+        soc_ram1_b_dat    <= (others => '0');
+    end generate;
 
 end architecture rtl;

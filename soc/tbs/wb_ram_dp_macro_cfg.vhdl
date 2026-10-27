@@ -9,8 +9,8 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use work.leaf_soc_tb_pkg.all;
 
-configuration wb_ram_dp_macro_preloaded of wb_ram_dp_macro is
-    for rtl
+configuration wb_ram_dp_macro_preloaded of wb_ram_dp is
+    for macro
         for macros(0)
             for macro_lo : sram_dp
                 use entity work.sram_dp(sim)

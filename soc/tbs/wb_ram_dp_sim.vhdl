@@ -19,6 +19,7 @@ entity wb_ram_dp_sim is
         sel_a_i : in  std_logic_vector(3 downto 0);
         adr_a_i : in  std_logic_vector(BITS-3 downto 0);
         ack_a_o : out std_logic;
+        stall_a_o : out std_logic;
         dat_a_o : out std_logic_vector(31 downto 0);
 
         -- Port B: instruction channel (read-only, full word)
@@ -26,6 +27,7 @@ entity wb_ram_dp_sim is
         stb_b_i : in  std_logic;
         adr_b_i : in  std_logic_vector(BITS-3 downto 0);
         ack_b_o : out std_logic;
+        stall_b_o : out std_logic;
         dat_b_o : out std_logic_vector(31 downto 0)
     );
 end entity wb_ram_dp_sim;
@@ -129,6 +131,8 @@ begin
     end process ack_reg_b_proc;
 
     ack_a_o <= ack_reg_a;
+    stall_a_o <= '0';
+    stall_b_o <= '0';
     dat_a_o <= dat_reg_a;
     ack_b_o <= ack_reg_b;
     dat_b_o <= dat_reg_b;
