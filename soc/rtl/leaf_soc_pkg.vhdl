@@ -26,18 +26,19 @@ package leaf_soc_pkg is
     constant IO1_ADDR_WIDTH  : natural := 5;
     constant IO2_ADDR_WIDTH  : natural := 6;
     constant XIP_ADDR_WIDTH  : natural := 24;
-    constant RAM0_ADDR_WIDTH : natural := 15;
-    constant RAM1_ADDR_WIDTH : natural := 10;
+    constant RAM0_ADDR_WIDTH : natural := 10;
+    constant RAM1_ADDR_WIDTH : natural := 15;
 
     constant OUT_RES_BITS : natural := work.sine_lut_pkg.OUT_RES_BITS;
 
     constant GPIO_WIDTH : natural := 8;
 
-    constant XIP_SCK_DIV        : positive := 1;
-    constant XIP_CS_HIGH_CYCLES : positive := 2;
+    constant XIP_SCK_DIV        : positive := 2;
+    constant XIP_CS_HIGH_CYCLES : positive := 10;
 
     constant SPI_WIDTH    : positive := 64;
     constant SPI_CNT_BITS : positive := 7;
+    constant SPI_DIV_BITS : positive := 8;
 
     constant DBG_ID : std_logic_vector(SOC_DATA_WIDTH-1 downto 0) := x"4C454146";
 
@@ -55,11 +56,13 @@ package leaf_soc_pkg is
             sel_a_i : in  std_logic_vector(3 downto 0);
             adr_a_i : in  std_logic_vector(BITS-3 downto 0);
             ack_a_o : out std_logic;
+            stall_a_o : out std_logic;
             dat_a_o : out std_logic_vector(31 downto 0);
             cyc_b_i : in  std_logic;
             stb_b_i : in  std_logic;
             adr_b_i : in  std_logic_vector(BITS-3 downto 0);
             ack_b_o : out std_logic;
+            stall_b_o : out std_logic;
             dat_b_o : out std_logic_vector(31 downto 0)
         );
     end component wb_ram_dp;
@@ -89,7 +92,8 @@ package leaf_soc_pkg is
 
     component leaf_soc is
         generic (
-            WGEN_IF_COP : boolean := true
+            WGEN_IF_COP : boolean := true;
+            RAM1_EN     : boolean := false
         );
         port (
             clk     : in  std_logic;
@@ -99,6 +103,7 @@ package leaf_soc_pkg is
             sig_i   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             sig_q   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
             active  : out std_logic;
+            dac_clk : out std_logic;
             sclk_i  : in  std_logic;
             sclk_o  : out std_logic;
             sclk_oe : out std_logic;
@@ -114,8 +119,7 @@ package leaf_soc_pkg is
             gpio_i  : in  std_logic_vector(GPIO_WIDTH-1 downto 0);
             gpio_o  : out std_logic_vector(GPIO_WIDTH-1 downto 0);
             gpio_oe : out std_logic_vector(GPIO_WIDTH-1 downto 0);
-            dac_dat : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
-            dac_sel : in  std_logic
+            dac_dat : in  std_logic_vector(OUT_RES_BITS-1 downto 0)
         );
     end component leaf_soc;
 

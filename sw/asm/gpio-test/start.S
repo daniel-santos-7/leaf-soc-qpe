@@ -1,4 +1,4 @@
-.equ RAM_TOP,        0x80008000
+.equ RAM_TOP,        0x90008000
 .equ UART_BASE_ADDR, 0x10000000
 
 .include "../common/gpio.inc"

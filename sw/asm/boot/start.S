@@ -1,10 +1,13 @@
 .equ UART_BRDV, 0x0364
 
-.equ RAM_BASE_ADDR, 0x80000000
+.equ RAM0_BASE_ADDR, 0x80000000
+.equ RAM1_BASE_ADDR, 0x90000000
 .equ RAM_SIZE, 0x8000
 
-.equ RAM_JUMP_CMD, 0x4A
-.equ RAM_LOAD_CMD, 0x4C
+.equ RAM1_JUMP_CMD, 0x4A
+.equ RAM1_LOAD_CMD, 0x4C
+.equ RAM0_JUMP_CMD, 0x6A
+.equ RAM0_LOAD_CMD, 0x6C
 
 .equ ACK, 0x06
 .equ NAK, 0x15
@@ -13,14 +16,22 @@
 .text
 .globl _start
 _start:
+    la t0, trap_handler
+    csrw mtvec, t0
     li a0, UART_BRDV
     call uart_set_baud
 
 read_command:
     call uart_read
-    li t0, RAM_LOAD_CMD
+    li s7, RAM1_BASE_ADDR
+    li t0, RAM1_LOAD_CMD
     beq t0, a0, ram_load_command
-    li t0, RAM_JUMP_CMD
+    li t0, RAM1_JUMP_CMD
+    beq t0, a0, ram_jump_command
+    li s7, RAM0_BASE_ADDR
+    li t0, RAM0_LOAD_CMD
+    beq t0, a0, ram_load_command
+    li t0, RAM0_JUMP_CMD
     beq t0, a0, ram_jump_command
     li a0, NAK
     call uart_write
@@ -31,16 +42,16 @@ ram_load_command:
     call uart_write
 
 read_program_size:
-    li s0, RAM_BASE_ADDR
-    li s1, RAM_BASE_ADDR + 0x4
+    mv s0, s7
+    addi s1, s7, 0x4
     li s2, 0x0
     la s3, read_program_size
     la s4, read_program_block
     j read_data
 
 read_program_block:
-    li s0, RAM_BASE_ADDR
-    li s1, RAM_BASE_ADDR
+    mv s0, s7
+    mv s1, s7
     li s2, 0x0
     la s3, 2f
     la s4, 3f
@@ -98,5 +109,34 @@ read_data:
 ram_jump_command:
 	li a0, ACK
     call uart_write
-    li t0, RAM_BASE_ADDR
-    jr t0
+    jr s7
+
+trap_handler:
+    li a0, '!'
+    call uart_write
+    csrr s0, mcause
+    jal s1, print_hex
+    csrr s0, mepc
+    jal s1, print_hex
+    csrr s0, mtval
+    jal s1, print_hex
+    li a0, '\n'
+    call uart_write
+    j read_command
+
+print_hex:
+    li a0, ' '
+    call uart_write
+    li s2, 8
+1:
+    srli a0, s0, 28
+    slli s0, s0, 4
+    addi a0, a0, '0'
+    li t0, '9' + 1
+    blt a0, t0, 2f
+    addi a0, a0, 'a' - '0' - 10
+2:
+    call uart_write
+    addi s2, s2, -1
+    bnez s2, 1b
+    jr s1

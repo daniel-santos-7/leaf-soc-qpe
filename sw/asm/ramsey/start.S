@@ -2,7 +2,7 @@
 # Fixed amplitude at half scale, sweeps inter-pulse delay.
 # Needs ~500k cycles per sweep at max delay.
 
-.equ RAM_TOP,  0x80008000
+.equ RAM_TOP,  0x90008000
 
 .equ FTW_PI,   0x1999999A
 .equ ENV_PI,   0x0147AE14

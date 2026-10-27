@@ -3,7 +3,7 @@
 # Interface: COP CSR (xwg macros)
 
 .equ UART_BASE_ADDR, 0x10000000
-.equ RAM_TOP,        0x80010000
+.equ RAM_TOP,        0x90008000
 
 # pi-pulse (4 us): FTW=5 MHz, AMP=2047, ENV=200 cyc, DRAG=0.2
 .equ FTW_PI,         0x1999999A
@@ -112,11 +112,11 @@ cmd_trigger:
 
 cmd_burst:
     call parse_dec
-    mv t0, a0
+    mv s6, a0
 1:
-    beqz t0, 2f
+    beqz s6, 2f
     call fire_pulse
-    addi t0, t0, -1
+    addi s6, s6, -1
     j 1b
 2:
     j main_loop
@@ -155,8 +155,9 @@ cmd_status:
     la a0, active_lbl
     call uart_print_str
     csrr t0, QPE_CSR_TRIG
+    srli t0, t0, 1
     andi t0, t0, 1
-    mv a0, t0
+    xori a0, t0, 1
     call uart_print_dec
     la a0, nl
     call uart_print_str
@@ -171,12 +172,14 @@ cmd_help:
 // fire_pulse
 // --------------------------------------------------
 fire_pulse:
+    addi sp, sp, -4
+    sw   ra, 0(sp)
     qpe.trigger
-1:  csrr t0, QPE_CSR_TRIG
-    andi t0, t0, 1
-    bnez t0, 1b
+    qpe.wait
     la a0, ok_str
     call uart_print_str
+    lw   ra, 0(sp)
+    addi sp, sp, 4
     ret
 
 // --------------------------------------------------

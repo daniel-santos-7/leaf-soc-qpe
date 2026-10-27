@@ -8,11 +8,10 @@ Portas da entidade `leaf_soc` (`soc/rtl/leaf_soc.vhdl`), com `OUT_RES_BITS = 10`
 | | `rst_n` | in | 1 | reset, ativo em baixo (sincronizado no `wb_syscon`) |
 | UART | `rx` | in | 1 | recepção serial |
 | | `tx` | out | 1 | transmissão serial |
-| Pulsos (QPE) | `sig_i` | out | 10 | amostra I (do gerador, ou `dac_dat` com `dac_sel = 1`) |
+| Pulsos (QPE) | `sig_i` | out | 10 | amostra I (do gerador com `active = 1`, senão `dac_dat`), registrada: 1 ciclo de atraso, 0 no reset |
 | | `sig_q` | out | 10 | amostra Q (idem) |
-| | `active` | out | 1 | gerador emitindo um pulso |
-| Entrada externa do DAC | `dac_dat` | in | 10 | valor posto em `sig_i` e `sig_q` com `dac_sel = 1` |
-| | `dac_sel` | in | 1 | 1 = `dac_dat` nas saídas, 0 = amostras do QPE |
+| | `active` | out | 1 | gerador emitindo um pulso, alinhado com as amostras; só para integração e teste, não vai a pad |
+| Entrada externa do DAC | `dac_dat` | in | 10 | valor posto em `sig_i` e `sig_q` com `active = 0`, amostrado na subida de `clk` |
 | SPI (XIP / debug) | `sclk_i` | in | 1 | SCK vindo do host de debug (papel slave) |
 | | `sclk_o` | out | 1 | SCK gerado pelo SoC (papel master, XIP) |
 | | `sclk_oe` | out | 1 | 1 = o SoC dirige o SCK (master) |
