@@ -14,7 +14,6 @@ entity wb_syscon is
         rst_n     : in  std_logic;
         halt_i    : in  std_logic;
         clk_o     : out std_logic;
-        dac_clk_o : out std_logic;
         sys_rst_o : out std_logic;
         cpu_rst_o : out std_logic
     );
@@ -49,7 +48,6 @@ begin
     end process rst_proc;
 
     clk_o <= clk;
-    dac_clk_o <= not clk;
     sys_rst_o <= sys_rst_reg;
     cpu_rst_o <= cpu_rst_reg;
 

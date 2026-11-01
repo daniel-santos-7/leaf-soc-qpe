@@ -17,6 +17,7 @@ entity dac_out is
         sig_q_i   : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
         active_i  : in  std_logic;
         dac_dat_i : in  std_logic_vector(OUT_RES_BITS-1 downto 0);
+        dac_clk_o : out std_logic;
         sig_i_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         sig_q_o   : out std_logic_vector(OUT_RES_BITS-1 downto 0);
         active_o  : out std_logic
@@ -50,8 +51,9 @@ begin
         end if;
     end process out_proc;
 
-    sig_i_o  <= sig_i_reg;
-    sig_q_o  <= sig_q_reg;
-    active_o <= active_reg;
+    dac_clk_o <= not clk_i;
+    sig_i_o   <= sig_i_reg;
+    sig_q_o   <= sig_q_reg;
+    active_o  <= active_reg;
 
 end architecture rtl;

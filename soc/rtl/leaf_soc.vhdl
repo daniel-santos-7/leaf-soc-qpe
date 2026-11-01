@@ -209,7 +209,6 @@ begin
         rst_n     => rst_n,
         halt_i    => soc_dbg_halt,
         clk_o     => soc_syscon_clk,
-        dac_clk_o => dac_clk,
         sys_rst_o => soc_syscon_rst,
         cpu_rst_o => soc_cpu_rst
     );
@@ -314,6 +313,7 @@ begin
         sig_q_i   => soc_qpe_sig_q,
         active_i  => soc_qpe_active,
         dac_dat_i => dac_dat,
+        dac_clk_o => dac_clk,
         sig_i_o   => sig_i,
         sig_q_o   => sig_q,
         active_o  => active
