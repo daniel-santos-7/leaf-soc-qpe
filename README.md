@@ -8,24 +8,22 @@ This repository carries the SoC together with a **QPE** (Quantum Pulse Extension
 
 - **Leaf Processor:** 32-bit RISC-V core (RV32I) with a 2-stage pipeline.
 - **Wishbone B4 Bus:** Crossbar interconnect; instruction fetch and data accesses run in parallel.
-- **Memory System:** Integrated Boot ROM, two internal dual-port RAMs: RAM0 (1 KB) and RAM1 (32 KB).
-- **Standard Peripherals:** UART for serial communication and an 8-pin GPIO with edge interrupts.
-- **Pulse Generator:** DDS signal generator with Gaussian envelopes and DRAG correction, reachable either as a coprocessor or as a memory-mapped peripheral.
-- **Debug Bridge:** SPI slave that reads and writes the data bus and holds the CPU in reset, with no change to the core.
-- **Expandability:** Ready for XIP (Execute-In-Place) and custom hardware via a dedicated coprocessor interface.
-- **FPGA Friendly:** Synthesizable VHDL design optimized for modern FPGA architectures.
+- **Memory System:** Boot ROM and two dual-port RAMs: RAM0 (1 KB) and RAM1 (32 KB).
+- **Standard Peripherals:** UART and an 8-pin GPIO with edge interrupts.
+- **Pulse Generator:** DDS signal generator with Gaussian envelopes and DRAG correction, reachable as a coprocessor or as a memory-mapped peripheral.
+- **XIP:** Execute-in-place from an external SPI NOR flash.
+- **Debug Bridge:** SPI slave that reads and writes the data bus and holds the CPU in reset.
+- **FPGA Friendly:** Synthesizable VHDL-93.
 
 ## :gears: Microarchitecture
 
-The SoC architecture is centered around the **Wishbone B4** interconnect, which manages the communication between the Leaf core's two masters and the slave peripherals.
-
 ### Processor
-The **Leaf** core implements the RV32I base integer instruction set. It features a 2-stage pipeline (Fetch and Execute) and supports Machine-mode CSRs, hardware counters, and interrupts.
+The **Leaf** core implements RV32I with a 2-stage pipeline (Fetch and Execute), Machine-mode CSRs, hardware counters and interrupts.
 
 ### Bus & Interconnect
-The Leaf core is Harvard: it has two Wishbone B4 masters, one for instruction fetch and one for data. A third master, the SPI debug bridge, shares the data channel with the core. Both drive the bus as **pipelined** masters: `STB` is asserted for a single cycle and `ACK` is awaited with `CYC` held. Byte selects (`SEL`) and error reporting (`ERR`) are supported.
+The core has two Wishbone B4 masters, one for instruction fetch and one for data; the SPI debug bridge is a third master that shares the data channel. All of them are pipelined masters (`STB` for one cycle, `ACK` awaited with `CYC` held) and use `SEL` and `ERR`.
 
-A single **Intercon** (`wb_intercon`) connects both masters to the slaves as a partial crossbar:
+`wb_intercon` connects them to the slaves as a partial crossbar:
 
 | Master | ROM | XIP B | RAM0 B | RAM1 B | UART | IO1 | GPIO | XIP A | RAM0 A | RAM1 A |
 |--------|:---:|:-----:|:------:|:------:|:----:|:---:|:----:|:-----:|:------:|:------:|
@@ -33,90 +31,83 @@ A single **Intercon** (`wb_intercon`) connects both masters to the slaves as a p
 | Data | | | | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Debug (via data) | | | | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-The instruction and data sets of slaves are disjoint, so the two CPU channels run in parallel with no arbitration between them. The debug bridge reaches exactly the data set, through `wb_arbiter` in front of the data `wb_channel` (see Debug Bridge). Each dual-port RAM appears as two slave interfaces, which is what lets a fetch and a load/store complete in the same cycle. The XIP controller has two slave interfaces too: port B (instruction) reads the flash, port A (data) reaches its configuration register (see XIP Controller). Both are instances of the same `wb_ram_dp`: RAM0 with `BITS => 10`, RAM1 with `BITS => 15`. RAM1 is optional: the `leaf_soc` generic `RAM1_EN` is `false` by default, and then RAM1 is not instantiated and both of its slave interfaces answer `ERR`, so any access to `0x90000000` takes an access fault, like an unmapped address. That is why `wb_intercon` brings out `ram1a_err_i` and `ram1b_err_i`, which `leaf_soc` ties to `'0'` when RAM1 is there and to `'1'` when it is not; the map, the decode and the other slaves do not change. An integration that wants RAM1, including any that runs the programs in `sw/`, which are linked into it, sets `RAM1_EN => true`; the testbench does so by default, and `RAM1=0` turns it off. RAM0 is optional the same way, through `RAM0_EN`, which is `true` by default since without RAM1 it is the only RAM: with `RAM0_EN => false` RAM0 is not instantiated, its two slave interfaces answer `ERR` through `ram0a_err_i` and `ram0b_err_i`, and any access to `0x80000000` faults. The testbench keeps RAM0 by default, and `RAM0=0` turns it off.
+The two slave sets are disjoint, so the CPU channels run in parallel with no arbitration. Each RAM and the XIP controller have two slave interfaces, B for instruction and A for data, so a fetch and a load/store can complete in the same cycle. The debug bridge enters the data channel through `wb_arbiter` (see Debug Bridge).
 
-`wb_intercon` is structural: one **`wb_channel`** per master, i.e. per CPU channel. `wb_channel` has a port group for every slave in the memory map (`rom_*`, `io0_*`, `io1_*`, `io2_*`, `xip_*`, `ram0_*`, `ram1_*`) and decodes them against the bases and widths in `leaf_soc_pkg`. The regions are disjoint, which keeps the select one-hot. Each instance connects the slaves routed to its master and ties off the others: their outputs are left `open`, and their inputs are tied to `ACK = '0'`, `ERR = '1'`, `STALL = '0'` and zero data.
+`wb_intercon` holds one `wb_channel` per master, which decodes the address against `leaf_soc_pkg`:
 
-Inside `wb_channel`:
+- **Responses** are steered by a registered select, held until the addressed slave answers, so there is one transfer in flight per channel and a slave may take any number of cycles. Single-cycle slaves still run at one transfer per cycle.
+- **Errors:** an unmapped address, or a slave not routed to that master (a load from ROM, a fetch from the UART), answers `ERR` one cycle later and the CPU takes an access fault.
+- **Stall** is raised while a response is outstanding or while the addressed slave raises its own `STALL`. Only the XIP fetch port and RAM1's data port (see Macro-based RAM) ever do.
 
-- **Forward path:** combinational. A slave's `STB` is the master's `STB` gated by the decode of the current address and by the outstanding response (below). It is not gated by the slave's own `STALL`: as Wishbone B4 requires, the slave sees `STB` held while it stalls and takes the request in the first cycle it does not.
-- **Response path:** `ACK`, `ERR` and read data are steered by a *registered* select per slave, set when the request is accepted and held until that slave answers with `ACK` or `ERR`. A pipelined master that moves to a new address every cycle still gets each response matched to the request that produced it, however late the response comes. The select is only set by an accepted request (`CYC and STB` with no stall); otherwise a stale select would survive into idle cycles and could let a phantom `ACK` through.
-- **Unrouted accesses:** a tied-off slave answers through its fixed `ERR = '1'`, gated by the registered select like any response, and an address outside the map is answered by the decoder itself. Either way `ERR` arrives one cycle after the request (a load from ROM, a fetch from the UART, an unmapped address), and the CPU takes an access-fault trap instead of waiting for an `ACK` that never comes. A slave with no error signal of its own, when routed, has its `ERR` input tied to `'0'`.
-- **Stall:** each channel drives its master's `STALL`, which is high in two cases. While a response is outstanding (a select is held and its slave has not answered in this cycle), so there is only ever one request in flight and nothing can overtake a slow response; a new request is still accepted in the cycle the response arrives, so a slave that answers one cycle after its strobe runs at one transfer per cycle. And while the addressed slave raises its own `STALL`, so a slave can insert wait states before taking a request. Every slave brings its `stall_o` out through `wb_intercon`: the ROM, the UART, `wb_sig_gen`, the GPIO, both XIP ports and both ports of each RAM. Only the XIP fetch port (see XIP Controller) and RAM1's data port, for one cycle when a store meets a fetch of the same word (see Macro-based RAM), ever raise it; the others tie it low. `wb_ram_dp` has a `stall_a_o` and a `stall_b_o`, both `'0'` except `stall_a_o` in the `macro` architecture. The `STALL` inputs of a slave a channel does not route are tied to `'0'` inside `wb_intercon`.
-
-A slave may therefore take any number of cycles to answer. The ROM, the ports of both RAMs, the UART and the GPIO answer one cycle after the strobe; XIP takes a whole SPI read, during which its select is held and the master is stalled, and then stalls the next XIP request through its own `STALL` while `CS#` must stay high.
-
-Every slave also accepts a new request on every cycle, with no gating on its own pending `ACK`. A classic slave that writes only while its `ACK` is low would, behind a pipelined master, drop the second of two requests on consecutive cycles and still acknowledge it; `wb_ram_dp` therefore guards its port-A write with the request alone.
+Every slave accepts a request on every cycle, with no gating on its pending `ACK`. Routing a slave to another master means connecting its port group on that master's `wb_channel`, plus an arbiter once two masters can reach it.
 
 ### XIP Controller
-`wb_xip_ctrl` turns each instruction fetch in `0x20000000`–`0x20FFFFFF` into one SPI Read (`0x03`) of four bytes: command, 24-bit address, 32 data bits, 64 SCK periods in all. It uses SPI mode 0. `CS#` falls together with the first MOSI bit, MOSI changes on SCK falling edges, and MISO is sampled in the system cycle in which SCK rises. SCK, MOSI and `CS#` all come straight from flip-flops. The pins are shared with the debug bridge (see SPI Pins below).
+`wb_xip_ctrl` turns each instruction fetch in `0x20000000`–`0x20FFFFFF` into one SPI Read (`03h`): command, 24-bit address and 32 data bits in a single 64-bit frame, SPI mode 0, MSB first. The flash sends the lowest address first, so the word is byte-swapped for the little-endian CPU. Frames go out through the master role of the shared SPI port (see SPI Pins), and the instruction master is stalled for the whole read.
 
-It is two modules. The master role of the [`ips/spi`](ips/spi/) IP (`spi_port`, see SPI Pins) drives the pins and sends one frame per word offered through its `tx_valid`/`tx_ready` handshake (`tx_ready` pulses for one cycle as the frame starts), of the length given on `tx_bits` (XIP always uses `SPI_WIDTH`, 64 bits): 64 bits out, 64 bits in, with `rx_valid` pulsing for one cycle in the second cycle after `CS#` rises. The IP has no receive buffer and no `rx_ready`: `BUSY` waits for the pulse, and the word stays on `rx_data` until the next frame starts, which only `wb_xip_ctrl` can start, so `ACK` reads it onto `DAT` one cycle later. The IP takes the SCK half-period from its `sck_div_i` input, driven by the `SCK_DIV` field of the configuration register below, as each frame starts and keeps `CS#` high for at least 2 cycles between frames; its shift registers (`spi_trx`) are shared with the debug slave, since only one role is active at a time. It knows nothing about flash commands (see the IP's README). `wb_xip_ctrl` (`soc_xip`) is the Wishbone side, an FSM with states `DIS`, `EN_WAIT`, `IDLE`, `DIS_WAIT`, `ERR`, `SEND`, `BUSY`, `ACK` and `HOLD`. The first four run the role handshake with the SPI port: out of reset it is in `DIS`, with `role_req` low; once software sets `EN` it raises `role_req` and moves to `EN_WAIT`, which waits for `role_ack`; then it moves to `IDLE` and sets `ACT`. `IDLE` is the only state that takes fetches. Once software clears `EN`, `IDLE` lowers `role_req` and clears `ACT` in a cycle with no fetch, moving to `DIS_WAIT`, which waits for `role_ack` to fall, and back to `DIS`. `role_req` therefore only changes in `DIS` and `IDLE`, never while a fetch is in progress, and always with the XIP side's `tx_valid` low. An `EN` written while the FSM waits in `EN_WAIT` or `DIS_WAIT` is followed once that wait ends. A fetch that arrives in `DIS`, `EN_WAIT` or `DIS_WAIT` moves it to `ERR` for one cycle, so the fetch answers `ERR` one cycle later (with `STALL` held high meanwhile, as in `ACK`, so a fetch that follows is not lost); the CPU is never stalled waiting for the role to change. `ERR` returns to `EN_WAIT` while `role_req` is high, to `DIS_WAIT` while `role_ack` is still high, and to `DIS` otherwise, which is where it came from or the state that follows it. `SEND` is only entered from `IDLE`, with the port already a master, so its `tx_ready` always comes. On a request it latches the address and, from `SEND`, offers a frame of `03h`, the 24-bit address and 32 zero bits; `tx_valid` and `ACK` come straight from flip-flops, so the frame starts the cycle after the request and `ACK` follows `rx_valid` by one cycle: `BUSY` moves to `ACK` on `rx_valid`, and `ACK` is high exactly while the FSM is in that state. `DAT` carries the low 32 received bits byte-swapped (the flash sends the byte at the lowest address first, and the CPU is little-endian). It also enforces the flash's minimum `CS#` high time, set by the `CS_HIGH` register, and its `STALL` holds the next request off meanwhile. `stall_o` comes from a flip-flop too: it rises when a request is accepted and falls when the FSM returns to `IDLE`, or leaves `ERR`, so the channel stalls a new XIP request (but not one to another slave) until the controller can take it. `STALL` stays high in `ACK`, which Wishbone allows: `ACK` ends the read in progress while `STALL` refuses the next one. Without a hold, `CS#` already stays high for 5 cycles between two reads: it rises in the IP's last cycle of the frame, `rx_valid` comes in the second cycle, `ACK` in the third, `IDLE` takes a request held under `STALL` in the fourth, and `tx_valid` rises in the fifth. So `ACK` goes straight to `IDLE` when `CS_HIGH` is 5 or less, and otherwise passes through `HOLD` for `CS_HIGH-5` cycles. `hold_cnt_reg` counts the `CS#` high time that leaving `HOLD` in the current cycle would give: it is 6 in the first `HOLD` cycle, and `HOLD` ends once it reaches `CS_HIGH`, so lowering the register during a hold only shortens it.
+**Configuration register** at `0x20FFFFFC`, on the data port. Any other data access in the window answers `ERR`, so XIP is fetch-only.
 
-**Configuration register:** port A of `wb_xip_ctrl` is a data-channel slave in the same `0x20000000`–`0x20FFFFFF` window, with a single configuration register in the last word, `0x20FFFFFC`. Bit 0, `EN`, gives the SPI port to the XIP controller (written only when `SEL(0)` is set, resets to 0, reads back the value written, see SPI Pins); bit 1, `ACT`, read-only, is set while the controller is in `IDLE` or a fetch, i.e. while it takes fetches (from `role_ack` rising in `EN_WAIT` until `IDLE` lowers `role_req`); bits 15–8, `CS_HIGH`, hold the minimum `CS#` high time in system cycles (written only when `SEL(1)` is set) and reset to `XIP_CS_HIGH_CYCLES`; bits 23–16, `SCK_DIV`, set the SCK half-period to `SCK_DIV + 1` system cycles (written only when `SEL(2)` is set, resets to `XIP_SCK_DIV - 1`; 0 gives SCK at half the system clock); bits 7–2 and 31–24 are ignored and read as 0. Each field has a byte of its own, so a byte store changes one field and leaves the others alone. The IP reads `SCK_DIV` only as a frame starts, so a new value applies from the next fetch and can be written while code runs from XIP. Any other data access in the window answers `ERR` one cycle later, so a load from the flash still takes an access fault. Port A answers one cycle after its strobe and never stalls (its `stall_a_o` is tied to `'0'`, kept so both ports have the same interface); it is independent of the fetch port, so the CPU can change `CS_HIGH` while code runs from XIP.
+| Bits | Field | Access | Reset | Description |
+|------|-------|--------|-------|-------------|
+| 0 | `EN` | RW | 0 | Gives the SPI port to XIP (master role) |
+| 1 | `ACT` | RO | 0 | The master role is in effect and XIP takes fetches |
+| 15–8 | `CS_HIGH` | RW | `XIP_CS_HIGH_CYCLES` | Minimum `CS#` high time between reads, in cycles (never less than 5) |
+| 23–16 | `SCK_DIV` | RW | `XIP_SCK_DIV - 1` | SCK half-period is `SCK_DIV + 1` cycles |
 
-Two constants in `leaf_soc_pkg` set the SPI timing out of reset: `XIP_SCK_DIV`, passed to `wb_xip_ctrl` as `SCK_DIV`, which resets the `SCK_DIV` field to `XIP_SCK_DIV - 1` (`SPI_DIV_BITS` = 8 bits wide, so `XIP_SCK_DIV` is at most 256), and `XIP_CS_HIGH_CYCLES`, passed to `wb_xip_ctrl` as `CS_HIGH_CYCLES`, the reset value of `CS_HIGH`. Below, `XIP_SCK_DIV` stands for the half-period in effect, `SCK_DIV + 1` once software changes the field:
+The other bits read 0. Each field has a byte of its own, so a byte store changes one field. `SCK_DIV` and `CS_HIGH` apply from the next fetch and can be written while code runs from XIP.
 
-- **`XIP_SCK_DIV`:** SCK stays `XIP_SCK_DIV` system cycles high and `XIP_SCK_DIV` low, and the first SCK rise comes `XIP_SCK_DIV` cycles after `CS#` falls. MISO is sampled `XIP_SCK_DIV` cycles after the falling edge that launched it, which is the window the flash's tCLQV plus pad and board delays must fit in.
-- **`XIP_CS_HIGH_CYCLES`:** `CS#` stays high for at least this many cycles between two reads (or as many as `CS_HIGH` holds once software changes it), and never less than 5 (see above); it must fit in 8 bits. A request that arrives earlier is stalled by `wb_xip_ctrl` in `HOLD` until the count is over.
+**Enabling:** set `EN`, wait for `ACT`, then jump into XIP. A fetch while `ACT` is clear answers `ERR` and the CPU takes an instruction access fault. Code running from XIP may clear `EN`: it keeps running, and the port goes back to the debug bridge once the code jumps to RAM. While `EN` is 1 the debug bridge cannot be reached.
 
-The flash is not chosen yet, so the defaults are conservative values meant to work with any SPI NOR flash at the 100 MHz system clock: `XIP_SCK_DIV = 2` and `XIP_CS_HIGH_CYCLES = 10`. Three datasheet figures bound them:
+**Timing:** the flash is not chosen yet, so the reset values in `leaf_soc_pkg`, `XIP_SCK_DIV = 2` and `XIP_CS_HIGH_CYCLES = 10`, are conservative for any 3.3 V SPI NOR at the 100 MHz system clock:
 
-| Figure | Typical range (3.3 V SPI NOR) | Bound | Default at 100 MHz |
-|---|---|---|---|
-| Maximum SCK of the `03h` read | about 25 MHz on older parts, 50–55 MHz on current ones | SCK = 100 / (2 × `XIP_SCK_DIV`) MHz | 25 MHz |
-| tCLQV (SCK fall to MISO valid), plus pad and board delays | 6–8 ns in the flash, plus a few ns | sampling window of `XIP_SCK_DIV` × 10 ns | 20 ns |
-| tSHSL (minimum `CS#` high) | about 10–50 ns, up to 100 ns on older parts | `XIP_CS_HIGH_CYCLES` × 10 ns, at least 5 cycles | 100 ns |
+| Datasheet figure | Typical range | Default at 100 MHz |
+|---|---|---|
+| Maximum SCK of the `03h` read | about 25 MHz on older parts, 50–55 MHz on current ones | 25 MHz |
+| tCLQV (SCK fall to MISO valid), plus pad and board delays | 6–8 ns plus a few ns | 20 ns sampling window |
+| tSHSL (minimum `CS#` high) | about 10–50 ns, up to 100 ns on older parts | 100 ns |
 
-`XIP_SCK_DIV = 1` would put SCK at 50 MHz, above the `03h` limit of many parts, and leave 10 ns for tCLQV and the pads. Once the flash and the board are known, software can speed XIP up through the `SCK_DIV` and `CS_HIGH` fields without any change to the silicon; the reset values only have to be safe. A word takes `128 × XIP_SCK_DIV + 4` cycles from request to `ACK` (260 with the defaults, against 132 at `XIP_SCK_DIV = 1`), and the next request is taken one cycle after `ACK`, plus `CS_HIGH-5` cycles of `HOLD` when it is above 5, and the instruction master is stalled for all of it, so code in XIP runs roughly two orders of magnitude slower than from RAM.
+A word takes `128 × (SCK_DIV + 1) + 4` cycles from request to `ACK` (260 with the defaults), so code in XIP runs about two orders of magnitude slower than from RAM. Once the flash and the board are known, software can speed it up through `SCK_DIV` and `CS_HIGH`.
 
-XIP is fetch-only. The flash has no write path, and the data channel reaches only the configuration register, so any other load or store in the window takes an access fault. In simulation the testbench's `spi_flash_model` holds a copy of the program binary (512 KB, addresses wrap), so a function at `0x90000000 + n` can also be called at `0x20000000 + n` if its code is position-independent. `sw/c/xip_test` sets `EN`, waits for `ACT`, does exactly that and compares the result with the RAM1 call (`XIP ram=0efff9dc xip=0efff9dc ok`); it needs about 1M cycles with the defaults (500k at `XIP_SCK_DIV = 1`).
-
-Routing a slave to a master means connecting its port group on that master's `wb_channel` instead of tying it off. A new slave in the memory map needs a port group in `wb_channel`. A slave reachable from both masters also needs an arbiter in front of it.
+In simulation the flash model holds a copy of the program binary (512 KB, addresses wrap), so position-independent code at `0x90000000 + n` can also be called at `0x20000000 + n`. `sw/c/xip_test` does that and prints `XIP ram=0efff9dc xip=0efff9dc ok` in about 1M cycles.
 
 ### Memory Map
-The default address space allocation is defined as follows:
 
 | Peripheral | Base Address | Size | Description |
 |------------|--------------|------|-------------|
-| **ROM**    | `0x00001000` | 512 B | Bootloader / Initialization code |
+| **ROM**    | `0x00001000` | 512 B | Bootloader |
 | **UART**   | `0x10000000` | 16 B | Serial communication (IO0) |
-| **IO1**    | `0x10001000` | 32 B | Pulse generator CSRs (MMIO mode only) |
+| **IO1**    | `0x10001000` | 32 B | Pulse generator registers (MMIO mode only) |
 | **GPIO**   | `0x10002000` | 64 B | General-purpose I/O, 8 pins (IO2) |
-| **XIP**    | `0x20000000` | 16 MB | External Flash / Execute-In-Place (Optional) |
-| **RAM0**   | `0x80000000` | 1 KB | Scratch memory, flip-flops (dual-port: A = data, B = instruction) |
-| **RAM1**   | `0x90000000` | 32 KB | Main System Memory, SRAM macros (dual-port: A = data, B = instruction) |
+| **XIP**    | `0x20000000` | 16 MB | External SPI flash, execute-in-place |
+| **RAM0**   | `0x80000000` | 1 KB | Scratch memory, flip-flops |
+| **RAM1**   | `0x90000000` | 32 KB | Program memory, SRAM macros |
 
-Bases and widths are declared once in [`soc/rtl/leaf_soc_pkg.vhdl`](soc/rtl/leaf_soc_pkg.vhdl), which is the source of truth for the map.
+[`soc/rtl/leaf_soc_pkg.vhdl`](soc/rtl/leaf_soc_pkg.vhdl) is the source of truth for bases and widths.
 
-Programs are linked into RAM1 (`sw/*/common/soc.ld`), and the boot ROM loads and jumps to `0x90000000`. RAM0 is declared there as a second region with a `.ram0` section, which is `NOLOAD`: a loadable section at `0x80000000` would make `objcopy -O binary` start the `.bin` there and pad it across the 256 MB gap to RAM1. So RAM0 is never preloaded and `crt0` does not clear it, and its contents are undefined until the program writes them. Put data there with `__attribute__((section(".ram0")))`. Code must be copied in at run time, and the instruction master can then fetch it. `sw/c/ram0_test` sweeps the whole region with word, half-word and byte accesses, prints a checksum (`d2072fde`) and an error count, then copies two instructions in and calls them (`exec=42`). In simulation `soc_ram0` binds to the synthesis `wb_ram_dp`, not a preloading model.
+Both RAMs are optional, through the `leaf_soc` generics `RAM0_EN` (default `true`) and `RAM1_EN` (default `false`). An absent RAM answers every access with `ERR`. The programs in `sw/` are linked into RAM1, so an integration that runs them sets `RAM1_EN => true`; the testbench does.
 
-The boot ROM (`sw/asm/boot/start.S`, converted into `soc/rtl/boot_pkg.vhdl` by `boot.py`) takes one command byte at a time on the UART and answers `NAK` to anything else. A program can be loaded into and started from either RAM:
+Programs are linked into RAM1 (`sw/*/common/soc.ld`). RAM0 is a `NOLOAD` section, `.ram0`: it is never preloaded nor cleared by `crt0`. Put data there with `__attribute__((section(".ram0")))`; code must be copied in at run time.
 
-| Command | Code | Base | Action |
-|---------|------|------|--------|
-| `RAM1_LOAD_CMD` | `0x4C` (`L`) | `0x90000000` | receive a program into RAM1 |
-| `RAM1_JUMP_CMD` | `0x4A` (`J`) | `0x90000000` | jump to RAM1 |
-| `RAM0_LOAD_CMD` | `0x6C` (`l`) | `0x80000000` | receive a program into RAM0 |
-| `RAM0_JUMP_CMD` | `0x6A` (`j`) | `0x80000000` | jump to RAM0 |
+**Boot ROM:** `sw/asm/boot/start.S`, converted into `soc/rtl/boot_pkg.vhdl` by `boot.py`. It takes one command byte at a time on the UART and answers `NAK` to anything else:
 
-Both loads use the same protocol, only the destination changes: `ACK`, then the 32-bit size with its CRC-8, then the image in 1 KB blocks, each followed by its CRC-8 and answered with `ACK` or `NAK` (resend). The ROM keeps the base of the command in `s7`, which the load and the jump use. A program for RAM0 must be linked at `0x80000000` and fit, with its stack, in 1 KB; `soc.ld` links into RAM1. Without RAM1 (`RAM1_EN = false`) only the RAM0 commands are of use: `RAM1_LOAD_CMD` and `RAM1_JUMP_CMD` fault, and the boot ROM reports the trap and waits for the next command (see below). The testbench takes the RAM0 path with `BOOT_RAM0=1`: it skips the preload and sends the program over the UART with `RAM0_LOAD_CMD` and `RAM0_JUMP_CMD`, which is slow (about 9k cycles per byte).
+| Command | Code | Action |
+|---------|------|--------|
+| `RAM1_LOAD_CMD` | `0x4C` (`L`) | receive a program into RAM1 |
+| `RAM1_JUMP_CMD` | `0x4A` (`J`) | jump to `0x90000000` |
+| `RAM0_LOAD_CMD` | `0x6C` (`l`) | receive a program into RAM0 |
+| `RAM0_JUMP_CMD` | `0x6A` (`j`) | jump to `0x80000000` |
 
-The first thing the boot ROM does is point `mtvec` at a handler of its own, so a trap never jumps to `0x0`, which is outside the map and would fault again forever, losing the cause. Programs start with `mtvec` already set; one that wants its own handler writes `mtvec`, as `gpio_test` and `role_test` do. The handler sends one line on the UART, `!`, then `mcause`, `mepc` and `mtval` in hex, and goes back to waiting for a command, so after a fault the host can read what happened and load or start a program again without a reset. A jump to the UART, which the instruction channel does not reach, prints:
+A load answers `ACK`, then takes the 32-bit size with its CRC-8 and the image in 1 KB blocks, each followed by its CRC-8 and answered with `ACK` or `NAK` (resend). A program for RAM0 must be linked at `0x80000000` and fit, with its stack, in 1 KB.
+
+The boot ROM points `mtvec` at its own handler before anything else. On a trap it prints `!`, `mcause`, `mepc` and `mtval` in hex and goes back to waiting for a command, so the host can see what happened without a reset. A jump to the UART prints:
 
 ```
 ! 00000001 10000000 10000000
 ```
 
-The handler runs in the boot ROM's own context: it does not return with `mret`, uses no stack, and leaves `mstatus.MIE` clear as the trap left it, so an interrupt source left enabled by the program cannot trap again. With it the ROM is full, 128 of its 128 words. `TRAP=1` checks it with `sw/asm/trap-test`, a program that jumps to `0x10000000`: the testbench expects the line above, sends `RAM_JUMP_CMD`, expects its `ACK` and the line again, and ends with `TRAP ok`:
-
-```bash
-make -C sw/asm/trap-test
-make run PROGRAM=sw/asm/trap-test/trap-test.bin TRAP=1 RUN_CYCLES=1000
-```
+A program that wants its own handler writes `mtvec`.
 
 ### GPIO
-The GPIO is the [`wb-gpio`](https://github.com/daniel-santos-7/wb-gpio) IP (submodule `ips/gpio`), instantiated with `G_WIDTH => GPIO_WIDTH` (8, in `leaf_soc_pkg`) on IO2, which only the data master reaches. It is a pipelined slave with a one-cycle `ACK` and no `ERR`, like the UART, and its `stall_o`, constant `'0'`, goes to the channel's `io2_stall_i`.
+The GPIO is the [`wb-gpio`](https://github.com/daniel-santos-7/wb-gpio) IP (submodule `ips/gpio`), 8 pins (`GPIO_WIDTH` in `leaf_soc_pkg`) on IO2, reached by the data master only.
 
 | Offset | Register | Access | Description |
 |--------|----------|--------|-------------|
@@ -130,118 +121,88 @@ The GPIO is the [`wb-gpio`](https://github.com/daniel-santos-7/wb-gpio) IP (subm
 | `0x1C` | IRQ_FALL   | RW    | Falling-edge interrupt enable |
 | `0x20` | IRQ_STATUS | R/W1C | Pending events; writing 1 clears |
 
-`leaf_soc` brings the pins out as three vectors, `gpio_i`, `gpio_o` and `gpio_oe` (1 = drive), and leaves the tri-state buffer to the padframe or the board. The GPIO's `irq_o` drives the CPU's external interrupt input (`ex_irq_i`, `mip.MEIP`), the only interrupt source in the SoC; it stays high while any `IRQ_STATUS` bit is set, so a handler must clear the status before returning. Software must also point `mtvec` at its own handler: the one the boot ROM installs only reports the trap and returns to the bootloader (see Memory Map).
+The pins leave `leaf_soc` as `gpio_i`, `gpio_o` and `gpio_oe` (1 = drive); the tri-state buffer belongs to the pads or the board. `irq_o` drives the CPU's external interrupt (`mip.MEIP`), the only interrupt source in the SoC. It stays high while any `IRQ_STATUS` bit is set, so a handler must clear the status before returning, and software must install its own `mtvec` handler to take it.
 
-Software reaches it through `sw/c/common/gpio.c`/`gpio.h`, which a program adds to `APP_SRC` like the pulse APIs: `gpio_set_dir`/`gpio_get_dir`, `gpio_get_in`, `gpio_set_out`/`gpio_get_out`, the atomic `gpio_set_bits`/`gpio_clr_bits`/`gpio_tgl_bits`, and `gpio_set_irq_rise`/`gpio_set_irq_fall`, `gpio_get_irq_status` and `gpio_clr_irq_status` (write 1 to clear). Arguments are pin masks, bit *n* for pin *n*. Assembly has the same calls as macros in `sw/asm/common/gpio.inc` (`gpio.set_dir s0`, `gpio.get_in a0`, …, symbols `GPIO_BASE`/`GPIO_OFF_*`): a setter takes the register holding the value, a getter the destination register, and every macro uses `t6` for the base, so `t6` cannot be a setter's argument. `sw/asm/gpio-test` repeats the pin and SET/CLR/TGL checks of `gpio_test`, then checks `IRQ_STATUS` and its W1C clear by polling, without taking the interrupt, and prints `GPIO asm ok`. Both APIs cover the peripheral only: taking the interrupt still means setting `mtvec`, `mie.MEIE` and `mstatus.MIE`, as `gpio_test` does.
-
-In the testbench each pin reads back its own output when `gpio_oe` is set and the constant `0xA5` otherwise. `sw/c/gpio_test` exercises the pins and the SET/CLR/TGL registers, then enables a rising-edge interrupt on pin 1 and takes it through `mtvec`. It prints `in=aa`, `af`, `ac`, `a5` and `irq count=1 status=02 mcause=8000000b pending=00`, and needs about 1.2M cycles to finish printing.
+Software: `sw/c/common/gpio.c`/`gpio.h` in C (added through `APP_SRC`) and `sw/asm/common/gpio.inc` in assembly, with one call per register and pin masks as arguments. The assembly macros use `t6` for the base. `sw/c/gpio_test` shows the full flow, interrupt included.
 
 ### Macro-based RAM
-`wb_ram_dp` (`soc/rtl/wb_ram_dp.vhdl`) has two architectures. `rtl` infers the array; `macro` builds RAM1's 32 KB out of hard SRAM macros instead: eight 2048 x 16 dual-port macros, four banks in depth by two halves in width. Both share the entity, so they have the same ports and the same pipelined contract (one-cycle `ACK`, a write accepted on every request cycle); the entity's `MACRO_ADDR_BITS` generic is used by `macro` only. `rtl` is the last architecture in the file, so it is the one an instance gets when no configuration names one: RAM0, and both RAMs of `leaf_soc` synthesised without a configuration. The low `MACRO_ADDR_BITS` (11) bits of the word address index inside a macro and the bits above select the bank; only the addressed bank is enabled. `sel_a_i` becomes an active-high per-bit write mask, one byte lane at a time, `sel_a_i(0..1)` into the low half and `sel_a_i(2..3)` into the high one. Port B is tied read-only because it serves the instruction master.
+`wb_ram_dp` has two architectures with the same ports: `rtl` infers the array, and `macro` builds RAM1's 32 KB from eight 2048 × 16 dual-port SRAM macros (four banks by two halves). `rtl` is the default binding, so RAM0, and `leaf_soc` synthesised without a configuration, get the inferred array. RAM0 always uses `rtl`: at 1 KB it is smaller than one macro.
 
-The macros are reached through `sram_dp`, a technology-neutral interface declared once in `soc/rtl/sram_dp.vhdl`: per port a clock, `en`, `we`, `wmask`, `addr`, `d` and `q`, all active high. Its contract is that of a synchronous SRAM: one cycle of read latency, and `q` changes only on a read cycle, so a write or an idle port holds the last value read. That is why the wrapper registers the bank of each read to steer the output mux on the `ACK` cycle. A read that meets a write to the same word on the other port returns unknowns, and two writes to one word corrupt the bits both of them enable. The entity also carries `INIT_FILE`, `INIT_BANK` and `INIT_HALF`, which only a simulation architecture uses. `wb_ram_dp(macro)` instantiates `sram_dp` as a component so that a configuration can pick the architecture:
+The macros are reached through `sram_dp` (`soc/rtl/sram_dp.vhdl`), a technology-neutral synchronous SRAM interface. `soc/tbs/sram_dp_sim.vhdl` models it for simulation. The technology architecture, which maps it onto a real macro, is not in this repository: it comes from a memory compiler under NDA and lives in `TECH_DIR` (default `tech/`, gitignored), together with the configurations that use it.
 
-- `soc/tbs/sram_dp_sim.vhdl` holds architecture `sim`, a behavioural model of that contract. With `INIT_FILE` set it zero-fills the array and loads the half-words of its bank from a raw little-endian image; with `INIT_FILE = ""` the array powers up unknown.
-- A technology architecture maps `sram_dp` onto a real macro's pins. It is not part of this repository: it lives in the directory named by `TECH_DIR` (default `tech/`, which is gitignored), because the macro, its model and its documentation come from a memory compiler under NDA.
-
-`RAM` selects what the testbench binds to `soc_ram1` (inside the `ram1_gen` generate block), as a different top-level configuration rather than a source edit:
+`RAM` picks what the testbench binds to RAM1:
 
 | `RAM` | Top | RAM1 |
 |-------|-----|------|
-| `BEHAV` | `leaf_soc_tb_sim` | `wb_ram_dp_sim`, the inferred array |
+| `BEHAV` | `leaf_soc_tb_sim` | inferred array |
 | `MACRO` | `leaf_soc_tb_macro` | `wb_ram_dp(macro)` over `sram_dp(sim)` |
 | `TECH` | `leaf_soc_tb_tech` | `wb_ram_dp(macro)` over the technology architecture |
 
-`MACRO` goes through `wb_ram_dp_macro_sim`, which instantiates the configuration `wb_ram_dp_macro_preloaded`: it binds each macro to `sram_dp(sim)` with its bank and half preloaded from `work/program.bin`, so the `RAM_JUMP_CMD` shortcut still applies. A configuration has no loop, so the four banks are spelled out, and `wb_ram_dp_macro_sim` asserts `BITS = 15` rather than silently preloading part of the RAM. Every configuration lives in its own file, one top per file, so that each top's dependency closure stays separate. For `TECH`, the directory must supply the technology architecture of `sram_dp` and a configuration `leaf_soc_tb_tech`; the Makefile adds its `*.vhdl` files to the build when it exists and refuses `RAM=TECH` when it does not. RAM0 always uses `wb_ram_dp(rtl)`: at 256 words it is smaller than one macro.
+For synthesis with macros, use the configuration `leaf_soc_tech` from `TECH_DIR`; it leaves the macro cell unbound, as a black box.
 
-Synthesis works the same way. `leaf_soc` instantiates `soc_ram1` as the `wb_ram_dp` component, so synthesising `leaf_soc` directly gives the inferred array. To get the macros, synthesise a configuration of `leaf_soc` that binds `soc_ram1` to `wb_ram_dp(macro)` and `sram_dp` to the technology architecture, leaving the macro cell itself unbound so it becomes a black box. That configuration lives with the technology files too. RAM0 stays on `wb_ram_dp(rtl)` in synthesis as well, by design: its 8 Kbit are built as flip-flops rather than a macro.
+A store on port A and a fetch on port B of the same word in the same cycle would leave the fetch undefined in a macro. `wb_ram_dp(macro)` delays the store by one cycle instead (port A stalls), so the fetch sees the old word under every `RAM`. Code written at run time must be jumped to before it runs; `FENCE.I` is a no-op on this core ([leaf#8](https://github.com/daniel-santos-7/leaf/issues/8)).
 
-`sw/c/ram_test` checks the array end to end. It sweeps the free part of RAM1, which crosses all four banks, with word stores, then byte and half-word stores on every fourth word, then a store followed at once by a load of the same word. It reads everything back and prints an order-dependent checksum and an error count, so a bank-decode or write-mask fault moves the checksum. It must not call `uart_init`, since rewriting the baud divisor corrupts the ACK the boot ROM still has in flight when it jumps to RAM, and the checksum avoids `*` because a software multiply on rv32i would dominate the run. It needs about 6M cycles and prints `checksum 52E41464`, `errors 00000000` under every `RAM`:
-
-```bash
-make -C sw/c/ram_test
-make run PROGRAM=sw/c/ram_test/ram_test.bin RAM=MACRO RUN_CYCLES=6000000
-```
-
-RAM1's two ports share one clock, so a store on port A and an instruction fetch on port B can hit the same word in the same cycle. A macro cannot serve both: the store lands, but the read on the other port is undefined (unknowns in `sram_dp(sim)`). `wb_ram_dp(rtl)` simply returns the old word. `wb_ram_dp(macro)` makes the two agree by delaying the store: when port A writes the word port B reads in that cycle (`coll`), port A does not enable the macros, gives no `ACK` and raises `stall_a_o`, while port B reads the old word as usual; the data master holds its request, as a stalled Wishbone pipelined master does, and the store lands one cycle later. The fetch therefore sees the old word under every `RAM`, and a store waits one cycle only when it collides. The store then comes one clock period after the read of the same address, well above the minimum separation the macro requires between its ports for one address. Reads on both ports never conflict. A store would wait as long as port B kept reading its word in every cycle; this core's fetch unit moves to the next word after every fetch it issues, so a store waits one cycle at most, but a master that repeated the same fetch every cycle could hold it back. The prefetch window still matters: a store into one of the few words after the PC may land after the fetch took the old word, which then executes. After writing code, jump to it, since a jump discards what was fetched, and do not rely on `FENCE.I`, which the core executes as a no-op ([leaf#8](https://github.com/daniel-santos-7/leaf/issues/8)). `wb_ram_dp_sim` (`RAM=BEHAV`) does not stall: it returns the old word and prints a warning when it happens.
-
-`COLL=1` checks it with `sw/asm/coll-test`, a three-instruction loop in RAM1 that counts in RAM0: the debug bridge rewrites the loop's first word with its own value 300 times while the loop runs, then checks that the word is unchanged and that the count still advances. Under `RAM=MACRO` and `RAM=TECH` it runs with no collision warning; with the detection removed, `sram_dp(sim)` warns, the fetch takes an unknown word and the core traps (`! 00000002 90000008 ...`), and the check fails:
-
-```bash
-make -C sw/asm/coll-test
-make run PROGRAM=sw/asm/coll-test/coll-test.bin COLL=1 RAM=MACRO RUN_CYCLES=1000
-```
+`sw/c/ram_test` checks RAM1 end to end and prints `checksum 52E41464`, `errors 00000000` under every `RAM` (about 6M cycles).
 
 ### System Controller
-`wb_syscon` generates the SoC reset from the `rst_n` pin, which is active low. It passes the clock through unchanged; the clock tree is left to the physical design flow. The reset goes through a three-flip-flop synchroniser that asserts asynchronously and deasserts synchronously:
+`wb_syscon` passes the clock through and generates two resets from the active-low `rst_n` pin:
 
-- **Assertion:** while `rst_n = '0'` all three flip-flops are set, so `sys_rst_o` is high from power-up and from the moment the pin goes low, with or without a clock. Asserting out of step with the clock is safe: a register that misses the first edge sees `sys_rst_o` at the next one, and the state being lost would be discarded anyway.
-- **Deassertion:** once the pin is released, a `'0'` shifts through the three stages, so `sys_rst_o` falls three edges later and always right after a clock edge, and every register leaves reset on the same cycle. If the release violates the first stage's recovery time, that stage may go metastable, but the second still holds `'1'` and the first has a whole cycle to settle before it is sampled; the third stage, `sys_rst_reg`, which drives `sys_rst_o`, gives the second the same margin, and so does `cpu_rst_reg` beside it (below): both sample a settled value and leave reset on the same edge.
+- **`sys_rst_o`**, the system reset: `rst_n` through a three-flip-flop synchroniser. It asserts asynchronously, with or without a clock, and releases on the third rising edge of `clk` after `rst_n` rises.
+- **`cpu_rst_o`**, the CPU reset: the same, and also held while the debug bridge's `HALT` is set. It comes from a flip-flop, so the CPU enters and leaves a halt one cycle after `HALT` changes.
 
-Every other register in the SoC and in the IPs resets synchronously, so it only takes its reset value once the clock runs with `sys_rst_o` high; the board must supply the clock while reset is held. Since the assertion is asynchronous, any pulse on the pin resets the chip, so the pin must be filtered in the pad or on the board.
-
-`wb_syscon` also produces the CPU's reset, `cpu_rst_o`, from `cpu_rst_reg`, a flip-flop beside `sys_rst_reg` that takes the second stage OR `halt_i` on every clock edge, with `halt_i` driven by the debug bridge's `HALT` bit (see Debug Bridge). The flip-flop is set asynchronously by `rst_n` like the synchroniser, so the CPU is held in reset from power-up and from the moment the pin goes low. Driving the CPU's high-fanout reset net straight from a flip-flop, instead of through an OR gate, leaves the whole cycle to the reset tree. The CPU leaves reset on the same edge as the rest of the SoC, the third rising edge of `clk` after `rst_n` rises; the cost is one cycle on the halt, which the CPU enters and leaves one cycle after `HALT` changes.
+Every other register resets synchronously, so the clock must run while reset is held. Any pulse on `rst_n` resets the chip, so the pin must be filtered in the pad or on the board.
 
 ### SPI Pins
-XIP and the debug bridge share one set of four SPI pins, with the SoC as master for XIP and as slave for debug. `spi_port` (`soc_spi`), from the [`ips/spi`](ips/spi/) IP, holds the control for both roles (`spi_ctrl`), the shared shift core (`spi_trx`) and the pin logic, with a single `tx_*`/`rx_*` client interface; `spi_mux` (`soc_spi_mux`) routes it to `wb_xip_ctrl` while the role in effect (`role_ack_o`) is master and to `wb_dbg_ctrl` while it is slave, so XIP traffic never reaches the debug bridge and the other way round. The `EN` bit of the XIP configuration register (see XIP Controller) picks the role:
+XIP and the debug bridge share one set of four SPI pins: the SoC is the master for XIP and a slave for debug. Both roles use one `spi_port` from the [`ips/spi`](ips/spi/) IP, and `spi_mux` connects it to `wb_xip_ctrl` or `wb_dbg_ctrl` according to the role in effect. The `EN` bit of the XIP configuration register picks the role:
 
 | `EN` | Role | SCK, `CS#`, MOSI | MISO |
 |------|------|------------------|------|
 | 1 | master (XIP) | driven by the SoC | input from the flash |
-| 0 | slave (debug) | inputs from the debug host | driven by the SoC while `CS#` is low, released otherwise |
+| 0 | slave (debug) | inputs from the debug host | driven by the SoC while `CS#` is low |
 
-There is no tri-state inside the SoC: each pin leaves `leaf_soc` as `_i`, `_o` and `_oe` (`sclk_*`, `cs_n_*`, `mosi_*`, `miso_*`), as the GPIO does, and the pads or the board resolve them. `EN` drives the IP's `role_req_i` directly. It resets to 0, so after a reset the port belongs to the debug bridge and a host can always reach the SoC; software sets it to run from the flash, and clears it to hand the port back. The IP changes role only between frames, so the role follows `EN` a few cycles later, or after the host's frame in progress; software that sets `EN` waits for `ACT` before jumping into XIP. A cleared `EN` takes effect only in an `IDLE` cycle with no fetch, so code running from XIP may clear it: the write is taken at once, the code goes on running from XIP, and the port goes back to the debug bridge once the code jumps to RAM and the XIP fetches stop. The IP holds no word between frames, and its `rx_valid` pulse comes in the first cycle after a frame, before `role_ack` can change, so a received word always reaches the client of the role that received it. The IP asks its client to change `role_req` only while `tx_valid` is low, and to hold `tx_valid` until `tx_ready`: with one client for both roles, a word left pending across a role change would be taken by the next frame of the new role, e.g. a debug reply sent to the flash as a master frame. The SoC does not follow the letter of that rule. `wb_dbg_ctrl` offers its reply in `S_REPLY` whenever no frame is in progress, which is when software sets `EN`, and only a host frame can take it, so the role changes with the debug side's `tx_valid` high. The rule's purpose holds by construction instead: there is one client per role, and `spi_mux` shows the port only the `tx_valid` of the client of the role in effect, chosen by `role_ack`, which changes on the same edge on which the port enters the new role. A debug reply therefore never reaches a master frame and an XIP word never reaches a slave frame; `wb_dbg_ctrl` keeps the status and the result of its last command while it waits in `S_INIT`, offers them again from `S_REPLY` once the port is a slave again, and they go out in the first debug frame (`ROLE=1` checks it), with `HALT` clear. In the other direction `wb_xip_ctrl` lowers `role_req` only in `IDLE` with no fetch, so the XIP side's `tx_valid` is low whenever `role_req` falls. While `EN` is 0, `wb_xip_ctrl` answers every fetch with `ERR` one cycle later, so a jump into XIP takes an access fault instead of hanging. A fetch that arrives after `EN` is set but before the master role is in effect (`ACT` still clear) answers `ERR`, like one with `EN` clear, so software waits for `ACT` before jumping into XIP, and `ACT` clear after it clears `EN` means the controller has stopped taking fetches. While `EN` is 1 the debug bridge cannot be reached, so a program that hangs with the flash enabled can only be recovered by a reset; and a debug WRITE that sets `EN` hands the port to the flash, cutting the link it came through, and releases a halted CPU (see Debug Bridge).
+`EN` resets to 0, so after a reset the port belongs to the debug bridge and a host can always reach the SoC. The role changes only between frames. Each pin leaves `leaf_soc` as `_i`, `_o` and `_oe`; there is no tri-state inside the SoC.
 
-`CS#` is shared too, so in debug mode the flash would see the host's frames: the board must pass `CS#` to the flash only while `cs_n_oe` is 1, i.e. while the SoC drives it as master, and hold the flash deselected otherwise, or the flash will decode debug commands and fight the SoC on MISO. The testbench does the same: it gates the flash model's `CS#` with `cs_n_oe` and resolves each pin from the `_oe` outputs, with a pull-down on MISO, so the bits the flash leaves undriven (its `'Z'` during the command phase) read as 0, as on a board with a pull-down.
+`CS#` is shared too, so the board must pass it to the flash only while `cs_n_oe` is 1, and hold the flash deselected otherwise; if not, the flash decodes debug frames and fights the SoC on MISO. The testbench does the same, with a pull-down on MISO.
 
 ### Debug Bridge
-The debug bridge is an SPI slave on the same four pins as XIP (see SPI Pins) that turns SPI frames into Wishbone transfers on the data channel. It needs nothing from the core: it can read and write every slave the data master reaches (UART, IO1, GPIO, the XIP configuration register, RAM0 and RAM1 through port A) while a program runs, and it can hold the CPU in reset to load a program. It cannot see the CPU's registers or PC, nor set breakpoints, since the core has no debug port.
+The debug bridge is an SPI slave on the shared pins that turns each frame into a Wishbone transfer on the data channel. It reaches everything the data master reaches (UART, IO1, GPIO, the XIP configuration register, RAM0 and RAM1) while a program runs, and can hold the CPU in reset to load a program. It cannot see the CPU's registers or PC, nor set breakpoints: the core has no debug port.
 
-It is two modules: the slave role of the [`ips/spi`](ips/spi/) IP (`spi_port`, on the same `SPI_WIDTH` (64-bit) shift core as the XIP master; both roles use the one width, so the debug word costs no extra registers), and `wb_dbg_ctrl` (`soc_dbg_ctrl`). The slave side handles the pins and frames: it carries one 64-bit word each way per `CS#` low. One cycle after `CS#` rises it reports the received word, with the number of bits that arrived (`rx_bits`), by pulsing `rx_valid` for one cycle; there is no receive buffer and no `rx_ready`, so `wb_dbg_ctrl` has to see the word in that cycle, and the word stays on `rx_data` until the next frame starts. As the slave sees `CS#` fall it loads the reply `wb_dbg_ctrl` offers on `tx_valid`/`tx_data`, shifts it out MSB first, and pulses `tx_ready` in the next cycle; with `tx_valid` low it sends zeros and does not pulse (an underrun). `wb_dbg_ctrl` is one FSM. Between frames it waits in `S_REPLY`, with the reply offered; as a frame starts it moves to `S_CMD`, which waits for that frame to end and its command. Every frame carries the reply to the frame before it, so the first frame after reset carries the initial status (`READY` set, `ACK`, `ERR` and `HALT` clear, result 0) offered from `S_INIT`, not the reply to a command. It takes commands only in `S_CMD`, and registers everything it needs from the frame in the cycle of `rx_valid`: the address of a READ or WRITE (and the data of a WRITE) go straight into the Wishbone address and data registers, idle while `CYC` is low, and a CTRL runs in that cycle itself. A READ or WRITE also raises `CYC`, `STB` and, for a WRITE, `WE` in that same cycle, so the request is on the bus in the cycle after `rx_valid`; both then go through `S_SEND` (`STB` raised until the bus takes it) and `S_BUSY` (waiting for `ACK` or `ERR`; `WE` tells whether to keep the read data); a CTRL sets `HALT`, `ACK`/`ERR` and the result and goes straight to `S_REPLY`, as does a NOP. A frame shorter than 64 bits is handled like a command that fails: it goes straight to `S_REPLY` with `ERR`. An empty frame (`CS#` with no SCK) goes straight to `S_REPLY` without touching the status or the result: the port takes a reply in every frame, an empty one too, so the same reply has to be offered again for the next frame. A frame that arrives in any state other than `S_CMD` is dropped, since its `rx_valid` pulse goes by unseen. Nothing reads the received word after the `rx_valid` cycle, so a frame that starts right after it cannot change the command: the port clears the word as a frame starts. The FSM holds `HALT`, `ACK`, `ERR`, the result register and every Wishbone output. `tx_valid` is high only in `S_REPLY`: the FSM offers the reply there and moves to `S_CMD` on the `tx_ready` pulse, i.e. as the frame that carries the reply starts. `S_INIT` is the state in which the port is not the bridge's: the FSM waits there, with `tx_valid` low, until `role_ack` is low, and then moves to `S_REPLY`. Out of reset that takes one cycle (the port starts as a slave, and `tx_valid` is low during reset as the port requires), so a reply is ready before the first frame. When the port becomes a master, `S_REPLY` moves back to `S_INIT`, clearing `HALT` (see below) and lowering `tx_valid`, and the FSM stays there until XIP hands the port back. `wb_dbg_ctrl` decodes the frame, holds `HALT`, the status and the reply, and is the Wishbone master. Every frame is a whole command, so there is no state between frames, no byte counting and no deadline inside a frame: a command runs after its frame ends, and its result goes out in the next frame.
+**SPI:** mode 0, MSB first, one 64-bit frame per `CS#` low. The pins are oversampled by the system clock, so SCK must stay at least 5 cycles high and 5 low (SCK ≤ clk/10), the first SCK rise must come at least 5 cycles after `CS#` falls, and `CS#` must stay high for at least 2 cycles between frames. A shorter frame reports `ERR`, bits past the 64th are ignored, and an empty frame (`CS#` with no SCK) is ignored.
 
-**SPI:** mode 0 (SCK idle low, MOSI sampled on the rising edge, MISO changes on the falling edge), MSB first, one 64-bit frame per `CS#` low. SCK, `CS#` and MOSI are oversampled by the system clock through two-flip-flop synchronisers, so there is no second clock domain; the price is that SCK must stay at least 5 system cycles high and 5 low (SCK ≤ clk/10, 10 MHz at 100 MHz), and the host must leave at least 5 system cycles between `CS#` falling and the first SCK rise, and keep `CS#` high for at least 2 system cycles between frames for the next frame to be taken. With a shorter gap the next frame starts before `wb_dbg_ctrl` offers a reply: it gets zeros (`READY` clear) and is dropped, so the host sends it again; the command of the frame before still runs as sent. Bits past the 64th are ignored, so a longer frame counts as its first 64 bits. A shorter frame that arrives in `S_CMD` is not run and reports `ERR`, so the host learns that a bit went missing; an empty one, a `CS#` pulse with no SCK edge, is ignored.
+A frame is a command word (bits 63–32) followed by a data word (bits 31–0):
 
-A frame is a command word (bits 63–32) followed by a data word (bits 31–0). Transfers are whole words, so the two low address bits are free and carry the operation:
-
-| Command word | Op | Data word | Action when the frame ends |
-|--------------|----|-----------|----------------------------|
+| Command word | Op | Data word | Action |
+|--------------|----|-----------|--------|
 | `addr[31:2]` & `00` | READ | — | word read at `addr`; the result is the data (0 on `ERR`) |
 | `addr[31:2]` & `01` | WRITE | data | word write at `addr`; the result is 0 |
 | `0` & `00` & `10` | CTRL RUN | — | `HALT` = 0; the result is 0 |
 | `0` & `01` & `10` | CTRL HALT | — | `HALT` = 1; the result is 0 |
-| `0` & `10` & `10` | CTRL ID | — | the result is `0x4C454146` (`DBG_ID` in `leaf_soc_pkg`) |
+| `0` & `10` & `10` | CTRL ID | — | the result is `0x4C454146` (`DBG_ID`) |
 | `x` & `11` | NOP | — | nothing; the result is left alone |
 
-CTRL carries its subcommand in bits 3–2 of the command word; bits 31–4 are reserved and must be 0, but they are not checked. Subcommand `11` is reserved: it does nothing and reports `ERR`.
+CTRL subcommand `11` is reserved and reports `ERR`. Transfers are whole words (`SEL = 1111`), so a byte register needs a read-modify-write.
 
-The bus address, write data and `WE` are registered when the transfer starts, like `CYC` and `STB`, so every Wishbone output of the bridge comes straight from a flip-flop and a new frame cannot disturb a transfer still in progress. `WE` drops again when the transfer ends.
+**Reply:** every frame carries the reply to the frame before it, so reads are pipelined: send READ `addr`, then any command (NOP if nothing else), whose reply holds the data. The first frame after reset carries the initial status. The reply is the status word (bits 63–32) followed by the result word (bits 31–0):
 
-The reply is 64 bits: the status word (bits 63–32), taken when the reply is written, after the command of the previous frame has run, and the result word (bits 31–0), a register that every command but NOP writes (see the table). The status comes first so that its top bit, `READY`, is the first bit on MISO. Reading is pipelined: the frame after a READ or ID carries the answer, provided nothing else was sent in between, while the host already sends the next command, the way JTAG/SWD debug ports work, and NOP is the filler when there is nothing else to send. A read with its status is two frames: READ `addr`, then any command (the reply has the data and the status). Every reply carries the status, so there is no separate status command.
+| Bit | Status | Meaning |
+|-----|--------|---------|
+| 31 | `READY` | 1: this frame's command runs. 0: it arrived too early, while a READ or WRITE was still in progress, and was dropped; send it again |
+| 30 | `ACK` | the last command completed |
+| 29 | `ERR` | the last command failed (short frame, reserved CTRL, or a bus `ERR` such as an unmapped address or the ROM) |
+| 28 | `HALT` | the CPU is held in reset |
 
-Status word: bit 31 `READY`, bit 30 `ACK` (the last command completed: a READ or WRITE ended with `ACK`, or a CTRL ran), bit 29 `ERR` (the last command failed: a frame shorter than 64 bits, a CTRL with the reserved subcommand, or a READ or WRITE that ended with `ERR`, e.g. an unmapped address or the ROM, which the data channel does not reach), bit 28 `HALT`; bits 27–0 read 0. The flags sit at the top so that `READY` is the first bit on MISO. `SEL` is always `1111`, so a byte or halfword register has to be updated by read-modify-write. The transfer starts about 4 cycles after `CS#` rises (synchroniser, edge detection, `rx_valid`, then `CYC` from a flip-flop) and takes a few more, and the reply has to be offered before the slave sees `CS#` fall, about 3 cycles after it does, so a host that keeps `CS#` high for one SCK period (10 cycles at the maximum SCK) gets the READ data in the very next frame. `READY` is a constant 1 in every reply the FSM offers, and the FSM offers one only in `S_REPLY`: a frame that starts while no reply is offered (during a READ or WRITE, or in the cycle right after a frame) gets the port's zeros (an underrun), so `READY` reads 0 there; `HALT` reads 0 in it too. Every frame but a READ or WRITE reaches `S_REPLY` in the cycle after `rx_valid`. The FSM reaches `S_CMD` only when the port takes the real reply, which happens only as a frame starts, so it is in `S_CMD` exactly while a frame whose reply it offered is in progress, and `READY` in a frame's own reply says exactly whether its command will run: with `READY` set it runs, with `READY` clear it is dropped and the reply of the previous command goes out in the next frame instead, so the host sends the dropped command again.
+A host that keeps `CS#` high for one SCK period between frames gets READ data in the very next frame.
 
-**Arbitration:** `wb_arbiter` merges the CPU data master (`m0`) and the bridge (`m1`) into the data `wb_channel`. The grant is combinational and held while the owner's `CYC` is high; when the bus is free and both raise `CYC` in the same cycle the bridge wins, which cannot starve the CPU because the bridge issues at most one transfer per SPI frame. The master without the grant sees `STALL` and keeps its request pending (the core's `dmls_block` waits in `REQUEST` on `STALL`). `ACK` and `ERR` go only to the owner. The bridge only looks for its `ACK` from the cycle after its strobe was accepted, so a late response to a CPU request cut short by `HALT` cannot be taken for its own.
+**Arbitration:** `wb_arbiter` shares the data channel between the CPU and the bridge. The bridge wins ties, which cannot starve the CPU since it issues at most one transfer per frame.
 
-**HALT:** OR-ed into the CPU's reset inside `wb_syscon` (`cpu_rst_o`, signal `soc_cpu_rst`). In COP mode that also resets the pulse generator inside `leaf_qpe`; the peripherals, the RAMs, the bus and the bridge itself keep running, and so does the UART's transmit FIFO, which drains what the program had queued. `HALT` resets to 0, and is also cleared once the port leaves the slave role (`role_ack` rises, as `S_REPLY` moves to `S_INIT`): with the port a master the bridge cannot be reached, so a CPU left halted could never be released and could not clear `EN` itself. Leaving debug mode therefore always lets the CPU run. To load a program: `HALT = 1`, WRITE the image into RAM1, `HALT = 0`; the boot ROM then runs and waits for `RAM_JUMP_CMD` (`0x4A`) on the UART, as after a power-up.
-
-The testbench checks the bridge with `DBG=1`: after the program starts it reads the ID, writes and reads back a RAM0 word while the CPU is printing, checks that a short frame reports `ERR` and an empty one (`CS#` with no SCK) is ignored, that a CTRL with the reserved subcommand reports `ERR`, sends a WRITE 2 cycles after an empty frame and checks that it runs, sends a READ only 2 cycles after a WRITE and checks that it gets zeros and is dropped, sends a frame 1 cycle after a WRITE and checks that the WRITE still runs and the frame is dropped, reads the ROM and expects `ERR`, halts, reads RAM1, releases and sends `RAM_JUMP_CMD` again, so the program's output appears twice, then halts again, writes `EN` through the bridge and checks that the boot ROM answers `RAM_JUMP_CMD`, i.e. that leaving debug mode released the CPU; the run ends with `DBG ok`:
-
-```bash
-make run PROGRAM=sw/c/hello_world/hello_world.bin DBG=1 RUN_CYCLES=300000
-```
-
-`ROLE=1` checks a role change with `sw/c/role_test`. The program waits for a flag in RAM0; the host reads the ID and writes the flag, so the reply to that WRITE is the one the bridge still offers when the port changes role. The program then sets `EN`, calls a function through its XIP alias, clears `EN`, stores the result in RAM0 and prints `ROLE xip=0efff9dc`. Once the `R` arrives, the host checks that the first frame after XIP gets the WRITE's reply with `READY` set, and that the READ it carries runs (the next frame returns the XIP result). A flash word taken by the bridge as a command, or an XIP frame that took the bridge's reply, would change that reply; with `spi_mux` passing the debug side's `tx_ready` and `rx_valid` regardless of `role_ack`, the check fails. A second phase checks a fetch taken before the master role is in effect: once the program's line is out, the host writes a second flag and holds `CS#` low for 20000 cycles; the program meanwhile sets `EN` and jumps into XIP at once, without waiting for `ACT`. The port cannot change role during the host's frame, so the fetch arrives in `EN_WAIT` and must answer `ERR`; the program's own `mtvec` handler records `mcause` (1, instruction access fault) and returns to the caller, the configuration register reads `EN` set and `ACT` clear, and once the host releases `CS#` and `ACT` rises the same call returns the XIP result. The host reads the three values back through the bridge. The run ends with `ROLE ok`:
-
-```bash
-make run PROGRAM=sw/c/role_test/role_test.bin ROLE=1 RUN_CYCLES=100000
-```
+**HALT** holds the CPU in reset, and in COP mode the pulse generator with it; the peripherals, the RAMs and the bus keep running. It is cleared when the port leaves the slave role, so setting `EN` (from software or by a debug WRITE) always releases the CPU. To load a program: `HALT = 1`, WRITE the image into RAM1, `HALT = 0`; the boot ROM then waits for `RAM1_JUMP_CMD` on the UART.
 
 ## :zap: Pulse Generator (QPE)
 
-The waveform generator can be reached through two mutually exclusive interfaces, selected at elaboration time by the `WGEN_IF_COP` generic of `leaf_soc`, which picks between two `generate` blocks. The testbench passes it through, and the Makefile sets it from the `WGEN_IF` variable (`-gWGEN_IF_COP=false` for `MMIO`) when the simulation starts, so both modes are built into the same executable and switching recompiles nothing.
+The waveform generator ([`ips/wgen`](ips/wgen/)) is reached through one of two interfaces, chosen by the `leaf_soc` generic `WGEN_IF_COP` (Makefile `WGEN_IF`):
 
-- **`COP` (default):** `leaf_qpe` replaces the plain core, instantiating `leaf` + `qpe_csrs` + `sig_gen`. Pulse parameters live in the CPU's custom CSR window `0x7C0`–`0x7FF`, so a trigger costs no bus transaction. Nothing is attached to IO1, which answers every access with `ERR`, so a stray MMIO access traps instead of hanging.
-- **`MMIO`:** the plain core plus `wb_sig_gen` hung off IO1 as an ordinary Wishbone peripheral.
+- **`COP` (default):** `leaf_qpe` replaces the plain core and exposes the parameters in the CPU's custom CSR window `0x7C0`–`0x7FF`, so a trigger costs no bus transaction. IO1 answers every access with `ERR`.
+- **`MMIO`:** the plain core plus `wb_sig_gen` on IO1 as an ordinary Wishbone peripheral.
 
 Seven parameters, in the same order in both modes — CSR `0x7C0 + n` in COP, word `IO1_BASE + 4n` in MMIO:
 
@@ -255,13 +216,24 @@ Seven parameters, in the same order in both modes — CSR `0x7C0 + n` in COP, wo
 | 5 | DELAY | Inter-pulse delay in clock cycles (24-bit) |
 | 6 | TRIG  | Write bit 0 to fire; read for ready/valid status |
 
-QPE, the pulse generator as software sees it, has one API per interface, because the two work differently: `sw/c/common/qpe.c`/`qpe.h` (`qpe_*`) for COP and `sw/c/common/qpe_mmio.c`/`qpe_mmio.h` (`qpe_mmio_*`) for MMIO. A program names the one it needs in its Makefile, so the source says which SoC it targets. Both offer `*_set_*` setters, `*_trigger`, `*_wait_ready`, `*_init` and `*_pulse` with a parameter struct. Only `qpe_mmio` has getters (`qpe_mmio_get_*`), since a COP parameter CSR reads back the pointer, not the value. `rabi`, `ramsey`, `t1` and `wgen_demo` use `qpe`; `wgen_demo_mmio` is `wgen_demo` on `qpe_mmio` and emits the same I/Q samples. Assembly has the same split: `sw/asm/common/qpe.inc` (`qpe.*`, symbols `QPE_CSR_*`) and `sw/asm/common/qpe_mmio.inc` (`qpe_mmio.*`, symbols `QPE_MMIO_*`). A `qpe_mmio.*` setter takes the register holding the *value* and stores it with `sw`, using `t6` for the base; `qpe_mmio.trigger` and `qpe_mmio.wait` also use `t0`. `sw/asm/xwg-test-mmio` is `xwg-test` on `qpe_mmio.*` and emits the same samples. In the RTL, `qpe` names only the COP path (`leaf_qpe`, `qpe_csrs`); the MMIO path is `wb_sig_gen`.
+Software has one API per interface: `sw/c/common/qpe.c`/`qpe.h` and `sw/asm/common/qpe.inc` for COP, `qpe_mmio.c`/`qpe_mmio.h` and `qpe_mmio.inc` for MMIO. A program names the one it needs in its Makefile. `rabi`, `ramsey`, `t1` and `wgen_demo` use `qpe`; `wgen_demo_mmio` and `xwg-test-mmio` are the MMIO versions and emit the same samples.
 
-A program only works on a SoC built for the same interface. An MMIO program on a COP SoC traps on its first IO1 access, since nothing answers there but `ERR`. A COP program on an MMIO SoC raises no fault at all: the core forwards the CSR window whether or not a coprocessor is attached, and the MMIO SoC ties that port off, so parameter writes vanish, every read returns 0 and a wait on `TRIG` never ends. `qpe_init()` catches this: it reads `TRIG`, whose bit 1 (ready) is 1 whenever the generator is idle and 0 when nothing answers the CSR window; when it is 0 it prints `QPE: no coprocessor, is this an MMIO SoC?` and stops. `qpe_mmio_init()` does the same check on IO1 and prints `QPE MMIO: no pulse generator on IO1, is this a COP SoC?`, although on a COP SoC that access traps first. The pulse programs call it first, while the generator is still idle. A write followed by a read-back cannot serve as the probe: the core forwards a CSR write to a `csrr` of the same address in the very next instruction, so the read returns the written value even with no coprocessor attached ([leaf#7](https://github.com/daniel-santos-7/leaf/issues/7)).
+A program only works on a SoC built for the same interface: an MMIO program on a COP SoC traps on IO1, and a COP program on an MMIO SoC would wait forever. `qpe_init()` and `qpe_mmio_init()` detect the mismatch and print a message instead; the pulse programs call them first.
 
-**DAC port:** `leaf_soc` has a 10-bit input `dac_dat` (`OUT_RES_BITS` wide). While `active` is 1, `sig_i` and `sig_q` carry the pulse generator's samples; while it is 0 they both carry `dac_dat`. A pulse therefore always takes the pins, and an external source gets them back as soon as it ends; it is cut off without warning if a pulse starts while it is using them. With the generator idle the pins show `dac_dat`, not 0, so the board must drive it (with 0 or its own rest level). This works because `active` comes from a flip-flop in `sig_gen` and is aligned with the samples: on `xwg-test` the 176 non-zero samples fall inside the 201-cycle `active` window and the envelope's centroid is within 0.3 cycles of the window's centre. The select and the registers live in `dac_out` (`soc_dac_out`): `sig_i` and `sig_q` leave the chip from its flip-flops, so every sample pin has the same clock-to-output delay and no input reaches an output without crossing a flip-flop. That costs one cycle. `active` stays a port of `leaf_soc`, registered with the samples and aligned with them, but it is for integration and test only and does not go to a pad: the testbench uses it, and in the chip it is left unconnected, so synthesis drops its flip-flop. Without it the board cannot tell a pulse sample from `dac_dat`, nor know when an external source has lost the pins. `dac_dat` is sampled on the rising edge of `clk` with no synchroniser: a board that drives it must meet the input setup and hold around that edge, or a sample can be wrong for one cycle. The system reset clears the flip-flops, so the pins read 0 during reset and take `dac_dat` on the fourth rising edge of `clk` after `rst_n` rises (the release goes through `wb_syscon`'s three-flip-flop synchroniser). The testbench drives `dac_dat` with `0x123`, checks that the pins are 0 during reset and, at every `dac_clk` capture edge after it, that both pins carry `dac_dat` while `active` is 0.
+> **Note — the COP registers hold pointers, not values.** Writing a parameter CSR stores `wdata[4:0]` as a *GPR index*, and `qpe_csrs` mirrors every later write to that GPR by snooping the register-file write port, which saves the register file extra read ports. Bind first, then load the register. The `qpe.*` macros take the register *number*:
+>
+> ```asm
+> qpe.amp 22            # AMP now tracks x22
+> li  x22, 0x0000FFFF  # picked up through the register-file snoop
+> ```
+>
+> A bound register must not be reused until the pulse it feeds has launched, since `sig_gen` latches the parameters when the trigger is accepted. In C, the `qpe_set_*` setters bind the parameter to `t0`, load it and bind it back to `x0`, which is never written and so freezes the value. Reading a parameter CSR returns the pointer, so `qpe` has no getters.
 
-**Sample clock:** `dac_clk` is the system clock inverted (`not clk`), generated in `dac_out` (`dac_clk_o`), next to the flip-flops that drive the samples, and forwarded so the DAC can capture `sig_i` and `sig_q` with a clock that leaves the chip next to them. The samples change just after the rising edge of `clk`, and `dac_clk` rises on its falling edge, half a period later, in the middle of the data eye: about half a period of setup and half of hold. Clock and data cross the same kind of pad, so pad and temperature variation largely cancel, and what is left is the pin-to-pin skew, which the board controls with matched traces. It assumes a DAC that captures one sample per cycle on the rising edge of a data clock; a DAC with only a conversion clock, a DDR interface, a half-rate interface or I and Q interleaved on one bus needs a different scheme. In an ASIC the inverter sits on the clock network, so clock-tree synthesis must handle it, and the constraints declare the pin a generated clock, with the DAC's setup and hold as output delays:
+**DAC port:** while a pulse is active, `sig_i` and `sig_q` carry its samples; otherwise both carry the `dac_dat` input, which the board must drive (with 0 or its own rest level). A pulse always takes the pins. The outputs come from flip-flops in `dac_out` (one cycle of latency) and read 0 during reset. `dac_dat` is sampled on the rising edge of `clk` with no synchroniser, so the board must meet setup and hold there. `active` stays a `leaf_soc` port for integration and test; it does not go to a pad.
+
+The I/Q width follows `OUT_RES_BITS` in the generated `ips/wgen/rtl/sine_lut_pkg.vhd` (currently 10 bits); do not hardcode it in `leaf_soc_pkg`.
+
+**Sample clock:** `dac_clk` is the system clock inverted, generated in `dac_out`. The samples change just after the rising edge of `clk`, so `dac_clk` rises half a period later, in the middle of the data eye. It assumes a DAC that captures one sample per cycle on the rising edge of a data clock. In an ASIC the pin is a generated clock, with the DAC's setup and hold as output delays:
 
 ```tcl
 create_generated_clock -name dac_clk -source [get_ports clk] -invert -divide_by 1 [get_ports dac_clk]
@@ -269,42 +241,16 @@ set_output_delay -clock dac_clk -max <DAC tSU> [get_ports {sig_i[*] sig_q[*]}]
 set_output_delay -clock dac_clk -min -<DAC tH>  [get_ports {sig_i[*] sig_q[*]}]
 ```
 
-The testbench captures the CSV samples (`SAMPLES=1`) on the rising edge of `dac_clk`, and at every such edge checks that `sig_i`, `sig_q` and `active` have been stable for almost half a period; with `dac_clk` not inverted the check fails.
-
-The I/Q output width is **not** fixed by the SoC: it follows `OUT_RES_BITS` in the generated `ips/wgen/rtl/sine_lut_pkg.vhd` (currently 10 bits), which `leaf_soc_pkg.vhdl` derives its own constant from. Do not hardcode it in the package, or the SoC ports stop matching `sig_gen`'s.
-
-> **Note — the COP registers hold pointers, not values.** Writing a parameter CSR stores `wdata[4:0]` as a *GPR index*; `qpe_csrs` then snoops the register-file write port and mirrors whatever lands in that GPR from then on. Binding does not copy the register's current value, so bind first, then load the register. The `qpe.*` macros in `sw/asm/common/qpe.inc` take the register *number* and bind with `csrwi`, which needs no scratch register:
->
-> ```asm
-> qpe.amp 22            # AMP now tracks x22
-> li  x22, 0x0000FFFF  # picked up through the register-file snoop
-> ```
->
-> The assembly examples bind every parameter once at the start and then only write the registers; a sweep is just an `addi` on the bound register. A bound register must not be reused for anything else until the pulse it feeds has launched: `sig_gen` latches the parameters when a trigger is accepted, not when it is written, so a queued `TRIG` launches with whatever the registers hold at that moment.
->
-> The pointer scheme avoids giving the register file extra read ports for the pulse parameters: each one costs a full 32-way read mux, and they synthesised poorly. `x0` is never mirrored, since the register file discards writes to it, so a parameter bound to `x0` keeps its last value (0 after reset).
->
-> C cannot keep a GPR to itself, since the compiler reuses every register. The `qpe_set_*` setters therefore bind, fill and release: `csrwi <reg>, 5` binds the parameter to `t0`, `mv t0, <value>` loads it, and `csrwi <reg>, 0` binds it back to `x0`, which freezes the mirror at that value. This is safe because the core writes CSRs and the register file in the same stage, in program order. Reading a parameter CSR returns the pointer, so `qpe` has no getters.
->
-> A `TRIG` write reaches `sig_gen` combinationally: when the generator is idle (`ready` high) the pulse starts in the same cycle and nothing is stored. When it is busy, `qpe_csrs` latches the request in `valid_reg` until `ready` rises.
-
 ## :file_folder: Project Structure
 
-The repository is organized into the following main directories:
-
-- [`ips/`](ips/): Intellectual Property blocks (Git submodules, each with its own Makefile and tests).
-  - [`cpu/`](ips/cpu/): The Leaf RISC-V processor core.
-  - [`uart/`](ips/uart/): UART controller with Wishbone interface.
-  - [`wgen/`](ips/wgen/): DDS-based signal generator.
-  - [`gpio/`](ips/gpio/): GPIO with Wishbone interface.
-  - [`spi/`](ips/spi/): Dual-role SPI (master and slave on shared pins).
-- [`soc/`](soc/): SoC-level RTL implementation and top-level testbenches.
-- [`sw/`](sw/): RISC-V software, including bootloaders, libraries, and C/Assembly examples.
-- [`waves/`](waves/): Output directory for simulation waveforms (generated at runtime).
-
-Changes under `ips/` belong to the submodule repositories, not to this one.
-
-Instances are written as `entity work.<name>`, so each interface is declared only once, in its entity. `leaf_soc_pkg` keeps component declarations only where a binding has to stay open: `wb_ram_dp`, which the testbench configurations rebind for `soc_ram1`, `leaf_soc`, the instance they descend through, and `sram_dp`, whose architecture a configuration picks per macro (see Macro-based RAM). A hard macro or a Verilog cell instantiated from VHDL also needs a component, since it has no VHDL entity to name.
+- [`ips/`](ips/): IP blocks, as Git submodules with their own Makefiles and tests. Changes there belong to the submodule repositories.
+  - [`cpu/`](ips/cpu/): the Leaf RISC-V core.
+  - [`uart/`](ips/uart/): UART with a Wishbone interface.
+  - [`wgen/`](ips/wgen/): DDS signal generator.
+  - [`gpio/`](ips/gpio/): GPIO with a Wishbone interface.
+  - [`spi/`](ips/spi/): dual-role SPI (master and slave on shared pins).
+- [`soc/`](soc/): SoC RTL and testbenches.
+- [`sw/`](sw/): bootloader, libraries and C/assembly examples.
 
 ## :test_tube: Simulation
 
@@ -350,20 +296,20 @@ To build and simulate the project, ensure the following tools are installed:
 |----------|---------|-------------|
 | `PROGRAM` | `sw/asm/hello-world/hello-world.bin` | `.bin` to run; also names the waveform and CSV outputs |
 | `RUN_CYCLES` | `500000` | Simulated cycles after load; CoreMark needs tens of millions |
-| `WGEN_IF` | `COP` | `COP` or `MMIO` — see the Pulse Generator section |
+| `WGEN_IF` | `COP` | `COP` or `MMIO` — see Pulse Generator |
 | `RAM` | `BEHAV` | `BEHAV`, `MACRO` or `TECH` — see Macro-based RAM |
 | `TECH_DIR` | `tech` | Directory with the technology sources for `RAM=TECH` |
 | `WAVEFORM` | *(none)* | `ghw` or `fst`; written to `waves/<program>.<ext>` |
-| `SAMPLES` | *(none)* | `1` dumps every active I/Q sample, taken on the rising edge of `dac_clk`, to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
-| `DBG` | *(none)* | `1` runs the SPI debug bridge check after the program starts — see Debug Bridge |
-| `ROLE` | *(none)* | `1` runs the debug → XIP → debug role change check with `sw/c/role_test` — see Debug Bridge |
-| `COLL` | *(none)* | `1` runs the RAM1 store/fetch collision check with `sw/asm/coll-test` — see Macro-based RAM |
-| `TRAP` | *(none)* | `1` runs the boot ROM trap handler check with `sw/asm/trap-test` — see Memory Map |
-| `BOOT_RAM0` | *(none)* | `1` uploads `PROGRAM` over the UART into RAM0 and starts it there, instead of preloading RAM1 — see Memory Map |
-| `RAM0` | *(none)* | `0` builds the SoC without RAM0 (`-gRAM0_EN=false`); refused with `BOOT_RAM0=1`, `DBG=1`, `ROLE=1` or `COLL=1`, which use RAM0 |
-| `RAM1` | *(none)* | `0` builds the SoC without RAM1 (`-gRAM1_EN=false`); needs `BOOT_RAM0=1`, since there is no RAM left to preload |
+| `SAMPLES` | *(none)* | `1` dumps every active I/Q sample to `waves/<program>.csv` as `cycle,sig_i,sig_q` |
+| `DBG` | *(none)* | `1` runs the debug bridge check (with `sw/c/hello_world`, ends with `DBG ok`) |
+| `ROLE` | *(none)* | `1` runs the debug → XIP → debug role change check with `sw/c/role_test` (ends with `ROLE ok`) |
+| `COLL` | *(none)* | `1` runs the RAM1 store/fetch collision check with `sw/asm/coll-test` |
+| `TRAP` | *(none)* | `1` runs the boot ROM trap handler check with `sw/asm/trap-test` (ends with `TRAP ok`) |
+| `BOOT_RAM0` | *(none)* | `1` uploads `PROGRAM` over the UART into RAM0 and starts it there, instead of preloading RAM1 (slow) |
+| `RAM0` | *(none)* | `0` builds the SoC without RAM0; refused with `BOOT_RAM0`, `DBG`, `ROLE` or `COLL` |
+| `RAM1` | *(none)* | `0` builds the SoC without RAM1; needs `BOOT_RAM0=1` |
 
-`make clean` runs `ghdl clean` and drops `work/` and `waves/`. The build globs the RTL directories and records the import in a stamp file, so *adding* a source is picked up automatically — but *renaming or deleting* one leaves a stale unit behind and needs a `make clean`.
+`make clean` drops `work/` and `waves/`. Adding a source is picked up automatically, but renaming or deleting one needs a `make clean`.
 
 ### Other Targets
 
@@ -372,26 +318,20 @@ make -C ips/cpu/verif/tests compare                       # CPU differential sui
 make -C ips/wgen run                                      # pulse generator IP testbench
 make -C sw run-quick                                      # build CoreMark + simulate, log to sw/logs/
 make -C sw upload BIN=./c/hello_world/hello_world.bin PORT=/dev/ttyUSB0
+make rtl-tar                                              # synthesisable sources in dist/leaf_soc_rtl.tar
 make area                                                 # per-module area estimate (needs Yosys with the GHDL plugin)
 ```
 
-`make rtl-tar` packs the synthesisable sources of the SoC into `dist/leaf_soc_rtl.tar`: every file under `soc/rtl` and the IPs' `rtl` directories, with no testbenches and nothing from `TECH_DIR`. The archive is flat: it holds only the files, with no directories, and the build fails if two sources share a file name. Next to them it writes `files.f`, the files in analysis order. GHDL derives that order from the `RTL_TOP` elaboration (default `leaf_soc`), and appends the files that are outside that closure, `sram_dp`. The target analyses the list once in a scratch library before packing, so an order that does not analyse fails the build instead of producing the tar. The sources are VHDL-93 and need no `--ieee=synopsys`:
+`make rtl-tar` packs the synthesisable sources, flat, with a `files.f` in analysis order:
 
 ```bash
-make rtl-tar
 mkdir rtl && tar -xf dist/leaf_soc_rtl.tar -C rtl && cd rtl
 ghdl -a $(cat files.f) && ghdl --synth --out=none leaf_soc
 ```
 
-That archive synthesises RAM0 as an inferred array, and RAM1 as well when the integration sets `RAM1_EN => true`. `make rtl-tar RAM=TECH` builds `dist/leaf_soc_tech_rtl.tar` for the macro RAM instead: it adds the technology's synthesis sources, which `TECH_DIR` lists in a file `syn.f` (names relative to `TECH_DIR`, no simulation models), and takes its order from the configuration `leaf_soc_tech`, which that directory must provide and which is the unit to synthesise. The macro cell itself stays unbound, a black box whose views come from the memory compiler, so GHDL's "not bound" warning on it is expected. This archive carries the technology files and follows their licence terms, not this repository's. `RAM=MACRO` is refused, since `sram_dp(sim)` is not synthesisable.
+`make rtl-tar RAM=TECH` builds `dist/leaf_soc_tech_rtl.tar` with the technology files listed in `TECH_DIR/syn.f` and the top `leaf_soc_tech`; it follows the technology's licence terms, not this repository's.
 
-`make area` estimates how the area of the SoC splits among its modules. It analyses the same sources as `rtl-tar` in a scratch library under `work/area`, synthesises `RTL_TOP` with Yosys down to generic gates (`synth`, then `abc -g cmos2`, keeping the hierarchy), and `scripts/area_report.py` turns the log into a table of transistors, share of the total and flip-flops per module, each module counted with its submodules. Gates take the transistor counts of Yosys's `stat -tech cmos`; flip-flops, which that estimate leaves out, take 24 transistors, plus 12 with an enable and 6 with a synchronous reset (`--ff`, `--ff-en`, `--ff-srst` on the script). It is a way to compare blocks, not the area of a cell library: there is no mapping to real cells and no routing, and black boxes such as hard macros count as zero. `WGEN_IF=MMIO` synthesises the MMIO variant, `RAM1=1` or `RAM1=0` sets `RAM1_EN` (default: the `leaf_soc` default, `false`), `RAM0=0` sets `RAM0_EN` to `false` (default `true`), `RAM=TECH` uses the technology configuration with RAM1 on unless `RAM1=0`, and `AREA_DEPTH` (default 3) sets how many levels the table shows. A run takes about two minutes:
-
-```bash
-make area
-make area WGEN_IF=MMIO AREA_DEPTH=1
-python3 scripts/area_report.py work/area/area.log --depth 5 --ff 20
-```
+`make area` synthesises the SoC with Yosys down to generic gates and reports transistors and flip-flops per module, to compare blocks (not a cell-library area). It takes `WGEN_IF`, `RAM`, `RAM0`, `RAM1` and `AREA_DEPTH` (default 3).
 
 ## :balance_scale: License
 
