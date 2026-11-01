@@ -209,6 +209,7 @@ begin
         rst_n     => rst_n,
         halt_i    => soc_dbg_halt,
         clk_o     => soc_syscon_clk,
+        dac_clk_o => dac_clk,
         sys_rst_o => soc_syscon_rst,
         cpu_rst_o => soc_cpu_rst
     );
@@ -317,8 +318,6 @@ begin
         sig_q_o   => sig_q,
         active_o  => active
     );
-
-    dac_clk <= not soc_syscon_clk;
 
     soc_intercon: entity work.wb_intercon port map (
         clk_i        => soc_syscon_clk,
