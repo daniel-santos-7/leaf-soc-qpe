@@ -289,6 +289,7 @@ begin
         wait until rising_edge(clk);
         wait until rising_edge(clk);
         wait until rising_edge(clk);
+        wait until rising_edge(clk);
         dac_chk <= '1';
 
         for i in 0 to 511 loop

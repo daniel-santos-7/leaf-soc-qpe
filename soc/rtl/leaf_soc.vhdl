@@ -205,13 +205,13 @@ architecture rtl of leaf_soc is
 begin
 
     soc_syscon: entity work.wb_syscon port map (
-        clk   => clk,
-        rst_n => rst_n,
-        clk_o => soc_syscon_clk,
-        rst_o => soc_syscon_rst
+        clk       => clk,
+        rst_n     => rst_n,
+        halt_i    => soc_dbg_halt,
+        clk_o     => soc_syscon_clk,
+        sys_rst_o => soc_syscon_rst,
+        cpu_rst_o => soc_cpu_rst
     );
-
-    soc_cpu_rst <= soc_syscon_rst or soc_dbg_halt;
 
     cop_qpe_gen: if WGEN_IF_COP generate
         soc_cpu: entity work.leaf_qpe generic map (
