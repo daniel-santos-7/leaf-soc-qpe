@@ -1,6 +1,18 @@
 # Memory
 
-The memory map is in the [README](../README.md#gears-microarchitecture); [`soc/rtl/leaf_soc_pkg.vhdl`](../soc/rtl/leaf_soc_pkg.vhdl) is the source of truth for bases and widths.
+## Memory Map
+
+| Peripheral | Base Address | Size | Description |
+|------------|--------------|------|-------------|
+| **ROM**    | `0x00001000` | 512 B | Bootloader |
+| **UART**   | `0x10000000` | 16 B | Serial communication (IO0) |
+| **IO1**    | `0x10001000` | 32 B | Pulse generator registers (MMIO mode only) |
+| **GPIO**   | `0x10002000` | 64 B | General-purpose I/O, 8 pins (IO2) |
+| **XIP**    | `0x20000000` | 16 MB | External SPI flash, execute-in-place |
+| **RAM0**   | `0x80000000` | 1 KB | Scratch memory, flip-flops |
+| **RAM1**   | `0x90000000` | 32 KB | Program memory, SRAM macros |
+
+[`soc/rtl/leaf_soc_pkg.vhdl`](../soc/rtl/leaf_soc_pkg.vhdl) is the source of truth for bases and widths.
 
 ## RAMs
 
