@@ -11,6 +11,7 @@ Portas da entidade `leaf_soc` (`soc/rtl/leaf_soc.vhdl`), com `OUT_RES_BITS = 10`
 | Pulsos (QPE) | `sig_i` | out | 10 | amostra I (do gerador com `active = 1`, senão `dac_dat`), registrada: 1 ciclo de atraso, 0 no reset |
 | | `sig_q` | out | 10 | amostra Q (idem) |
 | | `active` | out | 1 | gerador emitindo um pulso, alinhado com as amostras; só para integração e teste, não vai a pad |
+| | `dac_clk` | out | 1 | clock de amostragem do DAC: `clk` invertido, sobe no meio do olho dos dados |
 | Entrada externa do DAC | `dac_dat` | in | 10 | valor posto em `sig_i` e `sig_q` com `active = 0`, amostrado na subida de `clk` |
 | SPI (XIP / debug) | `sclk_i` | in | 1 | SCK vindo do host de debug (papel slave) |
 | | `sclk_o` | out | 1 | SCK gerado pelo SoC (papel master, XIP) |
@@ -30,7 +31,7 @@ Portas da entidade `leaf_soc` (`soc/rtl/leaf_soc.vhdl`), com `OUT_RES_BITS = 10`
 
 ## Totais
 
-- Sinais de porta: 26 bits de entrada e 47 de saída, 73 no total.
-- Pads físicos, contando cada trio `_i`/`_o`/`_oe` como um pad bidirecional: 4 de sistema e UART, 21 de pulsos, 11 do DAC externo, 4 de SPI e 8 de GPIO, 48 pads no total.
+- Sinais de porta: 25 bits de entrada e 47 de saída, 72 no total.
+- Pads físicos, contando cada trio `_i`/`_o`/`_oe` como um pad bidirecional: 4 de sistema e UART, 21 de pulsos (`sig_i`, `sig_q` e `dac_clk`; `active` não vai a pad), 10 do DAC externo, 4 de SPI e 8 de GPIO, 47 pads no total.
 
 Não há tri-state dentro do SoC: os pinos de SPI e GPIO saem separados em `_i`/`_o`/`_oe`, e os pads ou a placa fazem a resolução. O papel da porta SPI (master para a flash ou slave para o debug) vem do bit `EN` do registrador de configuração do XIP, em `0x20FFFFFC`.
